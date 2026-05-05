@@ -2265,7 +2265,7 @@ export default function SitePage() {
           <span style={{ color: "var(--color-text-secondary)", margin: "0 8px" }}>/</span>
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`https://icons.duckduckgo.com/ip3/${domain}.ico`} width={14} height={14} alt="" style={{ borderRadius: "2px" }} onError={e => ((e.target as HTMLImageElement).style.display = "none")} />
+            <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`} width={14} height={14} alt="" style={{ borderRadius: "2px" }} />
             <span style={{ fontSize: "14px", fontWeight: 600, ...blurStyle }}>{domain}</span>
           </div>
           <span style={{ margin: "0 24px", color: "var(--color-border)" }}>|</span>

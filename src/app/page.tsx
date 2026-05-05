@@ -847,8 +847,8 @@ export default function PortfolioPage() {
           {/* Domain */}
           <div style={{display:"flex",alignItems:"center",gap:"6px",minWidth:0}}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`https://icons.duckduckgo.com/ip3/${domain}.ico`} width={16} height={16} alt=""
-              style={{borderRadius:"3px",flexShrink:0,filter:blur?"blur(5px)":"none",transition:"filter 0.25s"}} onError={e=>((e.target as HTMLImageElement).style.display="none")} />
+            <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`} width={16} height={16} alt=""
+              style={{borderRadius:"3px",flexShrink:0,filter:blur?"blur(5px)":"none",transition:"filter 0.25s"}} />
             <span style={{fontWeight:500,fontSize:"13px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",filter:blur?"blur(5px)":"none",transition:"filter 0.25s"}}>
               {domain}
             </span>
