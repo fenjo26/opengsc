@@ -319,7 +319,7 @@ function ChromeExtensionModal({ onClose }: { onClose: () => void }) {
     {
       icon: "🚀",
       title: "One-Click Dashboard",
-      desc: "Jump instantly to your full SEO Gets dashboard for comprehensive data, reporting, and advanced analysis.",
+      desc: "Jump instantly to your full OpenGSC dashboard for comprehensive data, reporting, and advanced analysis.",
     },
   ];
 
@@ -366,7 +366,7 @@ function ChromeExtensionModal({ onClose }: { onClose: () => void }) {
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <span style={{ fontSize: "17px", fontWeight: 700, color: "var(--color-text-primary)" }}>
-                  SEO Gets Extension
+                  OpenGSC Extension
                 </span>
                 <span style={{
                   fontSize: "10px", fontWeight: 700,
@@ -382,7 +382,7 @@ function ChromeExtensionModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: "1.6", margin: 0 }}>
-            Stop interrupting your workflow. The official SEO Gets Chrome Extension brings the power of our SEO analysis platform directly to your browser.
+            Stop interrupting your workflow. The official OpenGSC Chrome Extension brings the power of our SEO analysis platform directly to your browser.
           </p>
         </div>
 
@@ -477,7 +477,7 @@ function TopBar() {
         background: "none", border: "none",
       }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo.svg" alt="SEO Gets" height={28} style={{ display: "block" }} />
+        <img src="/logo.svg" alt="OpenGSC" height={28} style={{ display: "block" }} />
       </button>
 
       {/* Avatar */}

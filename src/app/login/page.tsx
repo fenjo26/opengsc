@@ -143,7 +143,7 @@ export default function LoginPage() {
         {/* Logo */}
         <div style={{ marginBottom: "56px" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.svg" alt="SEO Gets" height={36} style={{ display: "block" }} />
+          <img src="/logo.svg" alt="OpenGSC" height={36} style={{ display: "block" }} />
         </div>
 
         {/* Headline */}

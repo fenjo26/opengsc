@@ -496,6 +496,7 @@ function PreferencesSection({ user }: { user: any }) {
         </div>
       </SectionCard>
       <AIConfigSection />
+      <HealthApiKeysSection />
     </div>
   );
 }
@@ -693,6 +694,121 @@ function AIConfigSection() {
 }
 
 
+
+// ─── Section: Health API Keys ─────────────────────────────────────────────────
+const HEALTH_PROVIDERS = [
+  {
+    id: "safeBrowsing",
+    name: "Google Safe Browsing",
+    placeholder: "AIzaSy...",
+    hint: "Detects malware, phishing, and harmful content on your site.",
+    docsUrl: "https://developers.google.com/safe-browsing/v4/get-started",
+    color: "#4285F4",
+    logo: "SB",
+    storageKey: "healthKey_safeBrowsing",
+  },
+  {
+    id: "google",
+    name: "PageSpeed Insights (Core Web Vitals)",
+    placeholder: "AIzaSy...",
+    hint: "Fetches LCP, CLS, TTFB and overall Performance score via PageSpeed Insights API.",
+    docsUrl: "https://developers.google.com/speed/docs/insights/v5/get-started",
+    color: "#34A853",
+    logo: "PS",
+    storageKey: "healthKey_google",
+  },
+  {
+    id: "virusTotal",
+    name: "VirusTotal",
+    placeholder: "abc123...",
+    hint: "Scans domain against 70+ antivirus engines and URL scanners.",
+    docsUrl: "https://www.virustotal.com/gui/my-apikey",
+    color: "#1565C0",
+    logo: "VT",
+    storageKey: "healthKey_virusTotal",
+  },
+] as const;
+
+function HealthKeyCard({ provider }: { provider: typeof HEALTH_PROVIDERS[number] }) {
+  const [key, setKey]       = useState("");
+  const [visible, setVisible] = useState(false);
+  const [saved, setSaved]   = useState(false);
+  const isConfigured = key.trim().length > 6;
+
+  useEffect(() => { setKey(localStorage.getItem(provider.storageKey) || ""); }, [provider.storageKey]);
+
+  const handleSave = () => {
+    localStorage.setItem(provider.storageKey, key.trim());
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+  const handleClear = () => { setKey(""); localStorage.removeItem(provider.storageKey); };
+
+  return (
+    <div style={{ padding: "16px", borderRadius: "10px", border: `1px solid ${isConfigured ? `${provider.color}40` : "var(--color-border)"}`, background: isConfigured ? `${provider.color}08` : "rgba(255,255,255,0.02)", transition: "all 0.2s" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+        <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: `${provider.color}20`, border: `1px solid ${provider.color}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: 700, color: provider.color, flexShrink: 0 }}>
+          {provider.logo}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: "#fff" }}>{provider.name}</div>
+        </div>
+        {isConfigured ? (
+          <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", color: "#10B981", fontWeight: 600, flexShrink: 0 }}>
+            <CheckCircle size={12} color="#10B981" /> Connected
+          </span>
+        ) : (
+          <span style={{ fontSize: "11px", color: "var(--color-text-secondary)", flexShrink: 0 }}>Not set</span>
+        )}
+      </div>
+      <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+        <div style={{ flex: 1, position: "relative" }}>
+          <input
+            type={visible ? "text" : "password"}
+            placeholder={provider.placeholder}
+            value={key}
+            onChange={e => setKey(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleSave()}
+            style={{ width: "100%", padding: "8px 36px 8px 12px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-primary)", fontSize: "12px", outline: "none", boxSizing: "border-box", fontFamily: "monospace" }}
+          />
+          <button onClick={() => setVisible(v => !v)} style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--color-text-secondary)", padding: 0, display: "flex", alignItems: "center" }}>
+            <Eye size={14} style={{ opacity: visible ? 1 : 0.5 }} />
+          </button>
+        </div>
+        {isConfigured && (
+          <button onClick={handleClear} style={{ padding: "8px 10px", borderRadius: "8px", border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.08)", color: "#f87171", fontSize: "12px", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center" }} title="Remove key">
+            <X size={13} />
+          </button>
+        )}
+        <button onClick={handleSave} disabled={!key.trim()} style={{ padding: "8px 14px", borderRadius: "8px", border: "none", background: saved ? "rgba(16,185,129,0.2)" : key.trim() ? `${provider.color}25` : "rgba(255,255,255,0.06)", color: saved ? "#10B981" : key.trim() ? provider.color : "var(--color-text-secondary)", fontSize: "12px", fontWeight: 600, cursor: key.trim() ? "pointer" : "not-allowed", flexShrink: 0, transition: "all 0.15s", display: "flex", alignItems: "center", gap: "4px" }}>
+          {saved ? <><CheckCircle size={12} /> Saved</> : "Save"}
+        </button>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{provider.hint}</span>
+        <a href={provider.docsUrl} target="_blank" rel="noreferrer" style={{ fontSize: "11px", color: "var(--color-accent-blue)", display: "flex", alignItems: "center", gap: "3px", textDecoration: "none", flexShrink: 0 }}>Get key ↗</a>
+      </div>
+    </div>
+  );
+}
+
+function HealthApiKeysSection() {
+  return (
+    <SectionCard>
+      <SectionTitle
+        icon={<CheckCircle size={17} color="#10B981" />}
+        title="Health Check API Keys"
+        sub="Used in the Health tab on each site page. SSL is always checked for free. Add keys below to enable Safe Browsing, Core Web Vitals, and VirusTotal checks."
+      />
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        {HEALTH_PROVIDERS.map(p => <HealthKeyCard key={p.id} provider={p} />)}
+      </div>
+      <div style={{ marginTop: "14px", padding: "11px 14px", borderRadius: "8px", background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.18)", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+        💡 Keys are stored in your browser only and sent to the respective APIs when you run a health check. They are never stored on the server.
+      </div>
+    </SectionCard>
+  );
+}
 
 // ─── Section: Super Sites ─────────────────────────────────────────────────────
 interface GscSite { id: string; url: string; siteId: string; }
@@ -995,7 +1111,7 @@ export default function SettingsPage() {
         <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <div style={{ width: "18px", height: "18px", borderRadius: "4px", background: "#8B5CF6" }} />
-            <span style={{ fontSize: "13px", fontWeight: 700, color: "#fff" }}>SEO Gets</span>
+            <span style={{ fontSize: "13px", fontWeight: 700, color: "#fff" }}>OpenGSC</span>
           </div>
           <button style={{ fontSize: "13px", color: "var(--color-text-secondary)", background: "none", border: "none", cursor: "pointer" }}
             onMouseOver={e => e.currentTarget.style.color = "#fff"} onMouseOut={e => e.currentTarget.style.color = "var(--color-text-secondary)"}>

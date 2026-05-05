@@ -8,7 +8,7 @@ import { ThemeProvider } from "@/lib/ThemeContext";
 import { LayoutProvider } from "@/lib/LayoutContext";
 
 export const metadata: Metadata = {
-  title: "SEO Gets Dashboard",
+  title: "OpenGSC Dashboard",
   description: "Advanced Search Console Analytics without Limits",
   icons: {
     icon: "/favicon.svg",

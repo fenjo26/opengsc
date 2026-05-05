@@ -30,7 +30,7 @@ ask_secret() {
 
 echo ""
 echo -e "${CYAN}╔══════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║      SEO Gets — VPS Installer v1.0       ║${NC}"
+echo -e "${CYAN}║      OpenGSC — VPS Installer v1.0        ║${NC}"
 echo -e "${CYAN}╚══════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -46,8 +46,8 @@ fi
 
 # ─── Auto-clone if running via curl | bash ────────────────────────────────────
 # Detect: if package.json is missing we're not inside the repo yet
-REPO_URL="https://github.com/fenjo26/seogets.git"
-INSTALL_DIR="/root/seogets"
+REPO_URL="https://github.com/fenjo26/opengsc.git"
+INSTALL_DIR="/root/opengsc"
 
 if [ ! -f "package.json" ]; then
   header "Cloning repository"
@@ -200,12 +200,12 @@ success "Build complete"
 # ─── PM2 start ────────────────────────────────────────────────────────────────
 header "Starting app with PM2"
 
-pm2 delete seogets 2>/dev/null || true
-pm2 start npm --name seogets -- start -- -p "$APP_PORT"
+pm2 delete opengsc 2>/dev/null || true
+pm2 start npm --name opengsc -- start -- -p "$APP_PORT"
 pm2 save
 pm2 startup | tail -1 | bash 2>/dev/null || true
 
-success "App running on port ${APP_PORT} (pm2 name: seogets)"
+success "App running on port ${APP_PORT} (pm2 name: opengsc)"
 
 # ─── Nginx ────────────────────────────────────────────────────────────────────
 if [[ "${INSTALL_NGINX^^}" == "Y" ]]; then
@@ -217,7 +217,7 @@ if [[ "${INSTALL_NGINX^^}" == "Y" ]]; then
     apt-get install -y -qq nginx
   fi
 
-  NGINX_CONF="/etc/nginx/sites-available/seogets"
+  NGINX_CONF="/etc/nginx/sites-available/opengsc"
 
   cat > "$NGINX_CONF" <<EOF
 server {
@@ -240,7 +240,7 @@ server {
 }
 EOF
 
-  ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/seogets
+  ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/opengsc
   rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
   nginx -t && systemctl reload nginx
 
@@ -294,7 +294,7 @@ echo -e "  The first account becomes the owner of the dashboard."
 echo -e "  Add more Google accounts via Settings to pull GSC data from all of them."
 echo ""
 echo -e "  PM2 commands:"
-echo -e "    ${CYAN}pm2 logs seogets${NC}     — view logs"
-echo -e "    ${CYAN}pm2 restart seogets${NC}  — restart"
-echo -e "    ${CYAN}pm2 stop seogets${NC}     — stop"
+echo -e "    ${CYAN}pm2 logs opengsc${NC}     — view logs"
+echo -e "    ${CYAN}pm2 restart opengsc${NC}  — restart"
+echo -e "    ${CYAN}pm2 stop opengsc${NC}     — stop"
 echo ""

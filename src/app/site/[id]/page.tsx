@@ -6,6 +6,7 @@ import KeywordCannibalization from "@/components/KeywordCannibalization";
 import StrikingDistanceKeywords from "@/components/StrikingDistanceKeywords";
 import SiteSettingsTab from "@/components/SiteSettingsTab";
 import CtrBenchmark from "@/components/CtrBenchmark";
+import { SiteHealthPanel } from "@/components/SiteHealthPanel";
 import { useParams, useRouter } from "next/navigation";
 import { usePrivacy } from "@/lib/PrivacyContext";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
@@ -1194,7 +1195,7 @@ function GA4Tab({ domain, period, setPeriod, periodOptions }: {
               Link your GA4 property
             </h2>
             <p style={{ fontSize: "14px", color: "var(--color-text-secondary)", lineHeight: "1.6" }}>
-              Unlock the Google Analytics data you know and love, right here in SEO Gets.
+              Unlock the Google Analytics data you know and love, right here in OpenGSC.
             </p>
           </div>
 
@@ -1849,32 +1850,6 @@ function AnnotationsTab({ period, setPeriod, periodOptions }: {
             <h2 style={{ fontSize: "22px", fontWeight: 700, color: "var(--color-text-primary)", textAlign: "center", marginBottom: "6px" }}>{t("tabAnnotations")}</h2>
             <p style={{ fontSize: "14px", color: "var(--color-text-secondary)", textAlign: "center", marginBottom: "24px" }}>{t("annCreateFirstNote")}</p>
 
-            {/* YouTube preview */}
-            <div style={{ borderRadius: "12px", overflow: "hidden", aspectRatio: "16/9", background: "#0f172a", cursor: "pointer", marginBottom: "24px", position: "relative" }}
-              onClick={() => window.open("https://www.youtube.com/@seogets", "_blank")}>
-              <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "12px", background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)", position: "relative" }}>
-                {/* Mock screenshot bg */}
-                <div style={{ position: "absolute", inset: 0, opacity: 0.15, background: "repeating-linear-gradient(0deg, rgba(59,130,246,0.4) 0, rgba(59,130,246,0.4) 1px, transparent 1px, transparent 30px)" }} />
-                {/* SEO Gets logo area */}
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", background: "rgba(0,0,0,0.5)", borderRadius: "8px", padding: "8px 16px", zIndex: 1 }}>
-                  <div style={{ width: "32px", height: "32px", borderRadius: "6px", background: "#8B5CF6", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", fontWeight: 800, color: "#fff" }}>S</div>
-                  <div>
-                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#fff" }}>Google Core Updates and Annotations</div>
-                    <div style={{ fontSize: "11px", color: "#94a3b8" }}>SEO Gets</div>
-                  </div>
-                </div>
-                {/* Play button */}
-                <div style={{ width: "56px", height: "56px", borderRadius: "50%", background: "#EF4444", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1, boxShadow: "0 4px 20px rgba(239,68,68,0.5)" }}>
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
-                </div>
-                {/* YouTube watermark */}
-                <div style={{ position: "absolute", bottom: "12px", right: "12px", display: "flex", alignItems: "center", gap: "6px", background: "rgba(0,0,0,0.6)", borderRadius: "6px", padding: "4px 10px", zIndex: 1 }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="#EF4444"><path d="M23 7s-.3-2-1.2-2.8c-1.1-1.2-2.4-1.2-3-1.3C16.4 2.8 12 2.8 12 2.8s-4.4 0-6.8.1c-.6.1-1.9.1-3 1.3C1.3 5 1 7 1 7S.7 9.1.7 11.2v2c0 2.1.3 4.2.3 4.2s.3 2 1.2 2.8c1.1 1.2 2.6 1.1 3.3 1.2C7.5 21.6 12 21.7 12 21.7s4.4 0 6.8-.2c.6-.1 1.9-.1 3-1.3.9-.8 1.2-2.8 1.2-2.8s.3-2.1.3-4.2v-2C23.3 9.1 23 7 23 7zM9.7 15.5V8.3l8.1 3.6-8.1 3.6z"/></svg>
-                  <span style={{ fontSize: "11px", color: "#fff", fontWeight: 600 }}>YouTube</span>
-                </div>
-              </div>
-            </div>
-
             {/* CTA */}
             <button
               onClick={() => { setOnboarding(false); setShowAddNote(true); }}
@@ -2131,7 +2106,7 @@ export default function SitePage() {
     : { transition: "filter 0.25s" };
 
   // Use index so tab state doesn't break on language change
-  const TAB_KEYS = ["dashboard", "ga4", "indexing", "annotations", "optimize", "settings"] as const;
+  const TAB_KEYS = ["dashboard", "ga4", "indexing", "annotations", "optimize", "health", "settings"] as const;
   type TabKey = typeof TAB_KEYS[number];
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [period, setPeriod]       = useState("7d");
@@ -2144,6 +2119,7 @@ export default function SitePage() {
     { key: "indexing",    label: t("tabIndexing") },
     { key: "annotations", label: t("tabAnnotations") },
     { key: "optimize",    label: t("tabOptimize") },
+    { key: "health",      label: "Health" },
     { key: "settings",    label: t("tabSettings") },
   ];
 
@@ -2284,7 +2260,7 @@ export default function SitePage() {
         <div style={{ display: "flex", alignItems: "center", gap: "0" }}>
           {/* Breadcrumb */}
           <button onClick={() => router.push("/")} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "16px 0", color: "var(--color-text-secondary)", fontSize: "14px", fontWeight: 600, cursor: "pointer", border: "none", background: "none" }}>
-            <span style={{ opacity: 0.6 }}>SEO Gets</span>
+            <span style={{ opacity: 0.6 }}>OpenGSC</span>
           </button>
           <span style={{ color: "var(--color-text-secondary)", margin: "0 8px" }}>/</span>
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
@@ -2393,6 +2369,9 @@ export default function SitePage() {
 
       {/* ── Optimize tab ── */}
       {activeTab === "optimize" && <OptimizeTab siteDbId={siteDbId} />}
+
+      {/* ── Health tab ── */}
+      {activeTab === "health" && <SiteHealthPanel siteDbId={siteDbId} />}
 
       {/* ── Settings tab ── */}
       {activeTab === "settings" && (
@@ -2567,7 +2546,7 @@ export default function SitePage() {
           <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
               <div style={{ width: "20px", height: "20px", borderRadius: "4px", background: "#8B5CF6" }} />
-              <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)" }}>SEO Gets</span>
+              <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)" }}>OpenGSC</span>
             </div>
             <span style={{ fontSize: "13px", color: "var(--color-text-secondary)", cursor: "pointer" }}>{t("changelog")}</span>
           </div>

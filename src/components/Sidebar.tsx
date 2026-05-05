@@ -92,7 +92,7 @@ export default function Sidebar() {
         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "40px" }}>
           <div style={{ width: "28px", height: "28px", borderRadius: "6px", background: "var(--color-accent-purple)" }} />
           <h1 style={{ fontSize: "18px", fontWeight: 600, letterSpacing: "-0.02em", color: "#fff" }}>
-            SEO Gets
+            OpenGSC
           </h1>
         </div>
 

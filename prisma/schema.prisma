@@ -67,6 +67,7 @@ model Site {
   topicClusters         TopicCluster[]
   pageInspections       PageInspection[]
   pageInspectionHistories PageInspectionHistory[]
+  siteHealth            SiteHealth?
 
   @@unique([userId, siteId])
 }
@@ -131,4 +132,16 @@ model PageInspectionHistory {
 
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
   @@unique([siteId, url, date])
+}
+
+model SiteHealth {
+  id           String   @id @default(cuid())
+  siteId       String   @unique
+  checkedAt    DateTime @default(now())
+  sslData      String?  // JSON: { valid, daysLeft, issuer, grade, error? }
+  safeBrowsing String?  // JSON: { safe, threats?, error? }
+  vitals       String?  // JSON: { lcp, fid, cls, ttfb, score, error? }
+  virusTotal   String?  // JSON: { clean, malicious, suspicious, error? }
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 }

@@ -12,6 +12,7 @@ import {
 import { AreaChart, Area, ResponsiveContainer, Tooltip } from "recharts";
 import { usePrivacy } from "@/lib/PrivacyContext";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
+import { useHealthStatus } from "@/components/SiteHealthPanel";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Metric = "clicks" | "impressions" | "ctr" | "position";
@@ -836,6 +837,7 @@ export default function PortfolioPage() {
     const domain = getDomain(site.url);
     const isFav  = favorites.has(site.id);
     const sum: Record<Metric,{value:number;change:number}> = site.summary;
+    const healthStatus = useHealthStatus(site.siteDbId ?? null);
 
     return (
       <div className="card" style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:"8px",cursor:"pointer"}}
@@ -853,6 +855,17 @@ export default function PortfolioPage() {
             <a href={`https://${domain}`} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} style={{color:"var(--color-text-secondary)",flexShrink:0}}>
               <ExternalLink size={10}/>
             </a>
+            {/* Health dot */}
+            {healthStatus && (
+              <span
+                title={healthStatus === "error" ? "Health issue detected" : healthStatus === "warn" ? "Health warning" : "All checks passed"}
+                style={{
+                  width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
+                  background: healthStatus === "error" ? "#EF4444" : healthStatus === "warn" ? "#F59E0B" : "#10B981",
+                  boxShadow: `0 0 0 2px ${healthStatus === "error" ? "rgba(239,68,68,0.25)" : healthStatus === "warn" ? "rgba(245,158,11,0.25)" : "rgba(16,185,129,0.25)"}`,
+                }}
+              />
+            )}
           </div>
 
           {/* Metrics 2×2 */}

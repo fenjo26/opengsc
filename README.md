@@ -1,4 +1,4 @@
-# SEO Gets — Personal GSC Dashboard
+# OpenGSC — Personal GSC Dashboard
 
 Личная панель управления Google Search Console. Все сайты со всех Google аккаунтов — в одном месте. Устанавливается на VPS одной командой.
 
@@ -86,10 +86,10 @@ APIs & Services → Credentials → Create Credentials → **OAuth 2.0 Client ID
 ### 2. Запусти установщик одной командой
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/fenjo26/seogets/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/fenjo26/opengsc/main/install.sh | sudo bash
 ```
 
-Скрипт сам склонирует репозиторий в `/root/seogets`, затем задаст несколько вопросов:
+Скрипт сам склонирует репозиторий в `/root/opengsc`, затем задаст несколько вопросов:
 - Домен (например: `seo.example.com`)
 - Порт приложения (по умолчанию 3000)
 - Устанавливать ли Nginx (рекомендуется — да)
@@ -98,7 +98,7 @@ curl -fsSL https://raw.githubusercontent.com/fenjo26/seogets/main/install.sh | s
 - Google Client ID и Client Secret
 
 После этого автоматически:
-- Клонирует репозиторий в `/root/seogets`
+- Клонирует репозиторий в `/root/opengsc`
 - Установит Node.js 20 LTS
 - Установит PM2 и запустит приложение как системный сервис
 - Настроит Nginx как reverse proxy
@@ -121,8 +121,8 @@ https://твой-домен.com
 
 ```bash
 # Клонируй репозиторий
-git clone https://github.com/fenjo26/seogets.git
-cd seogets
+git clone https://github.com/fenjo26/opengsc.git
+cd opengsc
 
 # Node.js 20
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
@@ -144,7 +144,7 @@ npx prisma db push
 npm run build
 
 # Запуск
-pm2 start npm --name seogets -- start
+pm2 start npm --name opengsc -- start
 pm2 save
 pm2 startup
 ```
@@ -155,7 +155,7 @@ pm2 startup
 
 | Переменная | Описание | Пример |
 |---|---|---|
-| `DATABASE_URL` | Путь к SQLite базе данных | `file:/root/seogets/data/prod.db` |
+| `DATABASE_URL` | Путь к SQLite базе данных | `file:/root/opengsc/data/prod.db` |
 | `NEXTAUTH_SECRET` | Случайный секрет для шифрования сессий | `openssl rand -base64 32` |
 | `NEXTAUTH_URL` | Полный URL приложения с доменом | `https://твой-домен.com` |
 | `GOOGLE_CLIENT_ID` | Из Google Cloud Console | `123...apps.googleusercontent.com` |
@@ -173,21 +173,21 @@ openssl rand -base64 32
 ## Управление приложением
 
 ```bash
-pm2 logs seogets       # просмотр логов
-pm2 restart seogets    # перезапуск
-pm2 stop seogets       # остановка
+pm2 logs opengsc       # просмотр логов
+pm2 restart opengsc    # перезапуск
+pm2 stop opengsc       # остановка
 pm2 status             # статус всех процессов
 ```
 
 ### Обновление до новой версии
 
 ```bash
-cd /root/seogets
+cd /root/opengsc
 git pull
 npm install
 npx prisma migrate deploy
 npm run build
-pm2 restart seogets
+pm2 restart opengsc
 ```
 
 ---
@@ -204,13 +204,13 @@ pm2 restart seogets
 
 **База данных пропала после перезапуска**
 
-Используй абсолютный путь в `DATABASE_URL`, не относительный. Установщик делает это автоматически: `file:/root/seogets/data/prod.db`. При ручной установке задай путь явно.
+Используй абсолютный путь в `DATABASE_URL`, не относительный. Установщик делает это автоматически: `file:/root/opengsc/data/prod.db`. При ручной установке задай путь явно.
 
-**`pm2 restart seogets` не помогает после `git pull`**
+**`pm2 restart opengsc` не помогает после `git pull`**
 
 После обновления нужно пересобрать проект:
 ```bash
-npm run build && pm2 restart seogets
+npm run build && pm2 restart opengsc
 ```
 
 **Логотип не отображается на странице входа**
