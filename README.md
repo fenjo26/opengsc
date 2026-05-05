@@ -78,8 +78,8 @@ APIs & Services → Credentials → Create Credentials → **OAuth 2.0 Client ID
 
 | Поле | Значение |
 |---|---|
-| Authorized JavaScript origins | `https://твой-домен.com` |
-| Authorized redirect URIs | `https://твой-домен.com/api/auth/callback/google` |
+| Authorized JavaScript origins | `http://твой-домен.com` (или `https://` если будет SSL) |
+| Authorized redirect URIs | `http://твой-домен.com/api/auth/callback/google` (или `https://` если будет SSL) |
 
 **Шаг 4 — Скопируй Client ID и Client Secret** — установщик их запросит.
 
@@ -91,7 +91,6 @@ curl -fsSL https://raw.githubusercontent.com/fenjo26/opengsc/main/install.sh | s
 
 Скрипт сам склонирует репозиторий в `/root/opengsc`, затем задаст несколько вопросов:
 - Домен (например: `seo.example.com`)
-- Порт приложения (по умолчанию 3000)
 - Устанавливать ли Nginx (рекомендуется — да)
 - Настраивать ли SSL через Let's Encrypt (рекомендуется — да)
 - Email для SSL-сертификата
