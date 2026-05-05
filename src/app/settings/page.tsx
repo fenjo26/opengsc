@@ -948,7 +948,7 @@ function SuperSitesSection() {
                   onMouseOut={e => (e.currentTarget.style.background = "transparent")}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={`https://www.google.com/s2/favicons?domain=${cleanDomain(site.url)}&sz=32`} width={14} height={14} alt="" style={{ borderRadius: "3px", flexShrink: 0 }} />
+                  <img src={`/api/favicon?domain=${cleanDomain(site.url)}`} width={14} height={14} alt="" style={{ borderRadius: "3px", flexShrink: 0 }} onError={e=>((e.target as HTMLImageElement).style.display="none")} />
                   <span style={{ fontSize: "13px", color: "var(--color-text-primary)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {cleanDomain(site.url)}
                   </span>
@@ -982,7 +982,7 @@ function SuperSitesSection() {
                 borderRadius: "8px",
               }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={`https://www.google.com/s2/favicons?domain=${cleanDomain(site)}&sz=32`} width={16} height={16} alt="" style={{ borderRadius: "3px" }} />
+                <img src={`/api/favicon?domain=${cleanDomain(site)}`} width={16} height={16} alt="" style={{ borderRadius: "3px" }} onError={e=>((e.target as HTMLImageElement).style.display="none")} />
                 <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)", flex: 1 }}>{cleanDomain(site)}</span>
                 <Star size={12} color="#F59E0B" />
                 <button
