@@ -1,26 +1,44 @@
 # SEO Gets — Personal GSC Dashboard
 
-Личная панель управления Google Search Console. Все сайты со всех Google аккаунтов — в одном месте. Устанавливается на VPS за 5 минут.
+Личная панель управления Google Search Console. Все сайты со всех Google аккаунтов — в одном месте. Устанавливается на VPS одной командой.
 
 ---
 
 ## Что умеет
 
+**Дашборд**
 - **Единый дашборд** — все сайты со всех Google аккаунтов на одном экране
 - **Мини-графики трафика** — спарклайн для каждого сайта, сразу видно динамику
 - **Фильтр по периоду** — Yesterday / 7D / 14D / 28D / 3M / 6M / 1Y
 - **Сравнение периодов** — Previous / Year over Year / Custom
-- **Поиск** — быстро находить нужный домен среди сотен сайтов
+- **Поиск** — быстро найти нужный домен среди сотен сайтов
 - **Избранное** — закрепить важные проекты наверху
 - **Скрытие сайтов** — убрать неактивные из общего списка
 - **Экспорт в CSV** — выгрузка с выбором измерений
+
+**Детальная страница сайта**
+- Графики кликов, показов, CTR, позиции по периодам
+- Запросы, страницы, страны, устройства
+- **Striking Distance Keywords** — запросы на позициях 4–20, готовые к продвижению
+- **Keyword Cannibalization** — запросы, по которым конкурируют несколько страниц
+- **Content Decay Map** — тепловая карта страниц, теряющих трафик
+- **CTR Benchmark** — сравнение фактического CTR с отраслевыми стандартами
+- **Indexing Status** — статус индексации топовых страниц через Google Search Console API
+
+**AI-функции** (нужен API-ключ)
+- Автоматическая генерация тематических кластеров запросов
+- Автоматическая группировка контента по URL-структуре
+- Определение брендовых ключевых слов
+- Поддержка: Anthropic, OpenAI, Gemini, OpenRouter — используешь свой ключ
+
+**Интерфейс**
 - **Privacy Blur** — размыть домены для скриншотов и записи экрана
 - **Dark / Light Mode** — переключение темы
-- **Детальная страница сайта** — графики, запросы, страницы, страны, устройства
+- Широкий и стандартный layout
 
 ---
 
-## Требования к VPS
+## Требования
 
 | Параметр | Минимум | Рекомендуется |
 |---|---|---|
@@ -28,31 +46,21 @@
 | **CPU** | 1 vCPU | 2 vCPU |
 | **RAM** | 1 GB | 2 GB |
 | **Диск** | 10 GB SSD | 20 GB SSD |
+| **Домен** | **Обязателен** | С SSL (Let's Encrypt) |
 
 > Node.js, PM2, Nginx и все зависимости устанавливаются **автоматически** скриптом. Ничего ставить руками не нужно.
+
+> ⚠️ **Домен обязателен.** Google OAuth не работает с IP-адресами — только с доменами. Привяжи домен к IP сервера до установки.
 
 Протестировано на **Ubuntu 22.04 LTS**. Другие Debian-based дистрибутивы тоже работают. CentOS / RHEL — не поддерживаются.
 
 ---
 
-## Установка на VPS
+## Установка
 
-### 1. Подключись к серверу
+### 1. Подготовь Google OAuth приложение (~5 минут)
 
-```bash
-ssh root@YOUR_SERVER_IP
-```
-
-### 2. Клонируй репозиторий
-
-```bash
-git clone https://github.com/fenjo26/seogets.git
-cd seogets
-```
-
-### 3. Создай Google OAuth приложение
-
-Перед запуском установщика нужны Google OAuth credentials. Занимает ~5 минут.
+До установки нужны Google OAuth credentials.
 
 **Шаг 1 — Создай проект**
 
@@ -66,62 +74,56 @@ APIs & Services → Library → найди **Google Search Console API** → Ena
 
 APIs & Services → Credentials → Create Credentials → **OAuth 2.0 Client ID**, тип: **Web application**.
 
-Заполни два поля:
+Заполни поля:
 
 | Поле | Значение |
 |---|---|
 | Authorized JavaScript origins | `https://твой-домен.com` |
 | Authorized redirect URIs | `https://твой-домен.com/api/auth/callback/google` |
 
+**Шаг 4 — Скопируй Client ID и Client Secret** — установщик их запросит.
 
-**Шаг 4 — Скопируй credentials**
-
-После создания появятся **Client ID** и **Client Secret** — установщик их спросит.
-
-### 4. Запусти установщик
+### 2. Запусти установщик одной командой
 
 ```bash
-sudo bash install.sh
+curl -fsSL https://raw.githubusercontent.com/fenjo26/seogets/main/install.sh | sudo bash
 ```
 
-Скрипт спросит:
-- Домен или IP сервера
+Скрипт сам склонирует репозиторий в `/root/seogets`, затем задаст несколько вопросов:
+- Домен (например: `seo.example.com`)
 - Порт приложения (по умолчанию 3000)
 - Устанавливать ли Nginx (рекомендуется — да)
-- Настраивать ли SSL через Let's Encrypt (только если есть реальный домен)
+- Настраивать ли SSL через Let's Encrypt (рекомендуется — да)
 - Email для SSL-сертификата
 - Google Client ID и Client Secret
 
-После этого сам:
+После этого автоматически:
+- Клонирует репозиторий в `/root/seogets`
 - Установит Node.js 20 LTS
 - Установит PM2 и запустит приложение как системный сервис
 - Настроит Nginx как reverse proxy
-- Опционально выпустит SSL-сертификат через Certbot
+- Выпустит SSL-сертификат через Certbot
 - Настроит UFW firewall (порты 22, 80, 443)
+
+### 3. Открой в браузере
+
+```
+https://твой-домен.com
+```
+
+Войди через Google. Первый аккаунт становится владельцем дашборда. В **Settings → My Google Accounts** добавь остальные аккаунты — их сайты появятся на дашборде автоматически.
 
 ---
 
-## Варианты деплоя
-
-### Вариант A: Домен + HTTPS (рекомендуется)
-
-Лучший вариант для продакшна. Нужен домен, привязанный к IP сервера.
-
-В Google Console:
-```
-Authorized JavaScript origins:  https://твой-домен.com
-Authorized redirect URIs:        https://твой-домен.com/api/auth/callback/google
-```
-
-В установщике: домен → `твой-домен.com`, SSL → `Y`.
-
-Результат: `https://твой-домен.com`
-
-### Вариант B: Ручная установка
+## Ручная установка
 
 Если хочешь настроить всё самостоятельно без скрипта:
 
 ```bash
+# Клонируй репозиторий
+git clone https://github.com/fenjo26/seogets.git
+cd seogets
+
 # Node.js 20
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
 sudo apt-get install -y nodejs
@@ -153,28 +155,18 @@ pm2 startup
 
 | Переменная | Описание | Пример |
 |---|---|---|
-| `DATABASE_URL` | Путь к SQLite базе данных | `file:/home/user/seogets/data/prod.db` |
+| `DATABASE_URL` | Путь к SQLite базе данных | `file:/root/seogets/data/prod.db` |
 | `NEXTAUTH_SECRET` | Случайный секрет для шифрования сессий | `openssl rand -base64 32` |
-| `NEXTAUTH_URL` | Полный URL твоего приложения | `https://твой-домен.com` |
+| `NEXTAUTH_URL` | Полный URL приложения с доменом | `https://твой-домен.com` |
 | `GOOGLE_CLIENT_ID` | Из Google Cloud Console | `123...apps.googleusercontent.com` |
 | `GOOGLE_CLIENT_SECRET` | Из Google Cloud Console | `GOCSPX-...` |
 
-> `NEXTAUTH_URL` должен **точно совпадать** с тем, что указано в Google Console. Если там `https://` — здесь тоже `https://`. Несовпадение = ошибка `redirect_uri_mismatch`.
+> `NEXTAUTH_URL` должен **точно совпадать** с Authorized redirect URI в Google Console — вплоть до `http://` vs `https://`. Несовпадение = ошибка `redirect_uri_mismatch`.
 
 Сгенерировать секрет:
 ```bash
 openssl rand -base64 32
 ```
-
----
-
-## Как работает авторизация
-
-SEO Gets использует **только Google OAuth** — никаких паролей.
-
-- Первый вход → «Sign in with Google» → этот аккаунт становится **владельцем** дашборда
-- В **Settings → My Google Accounts** можно добавить дополнительные Google аккаунты
-- Сайты со всех добавленных аккаунтов автоматически появляются на дашборде
 
 ---
 
@@ -202,13 +194,9 @@ pm2 restart seogets
 
 ## Частые проблемы
 
-**Логотип не отображается на странице входа**
-
-В middleware не были исключены публичные файлы. Убедись что используешь актуальную версию `src/middleware.ts` из репозитория.
-
 **Ошибка `redirect_uri_mismatch` при входе через Google**
 
-URL в `.env` (`NEXTAUTH_URL`) не совпадает с Authorized redirect URI в Google Console. Они должны быть одинаковыми — вплоть до `http://` vs `https://`.
+`NEXTAUTH_URL` в `.env` не совпадает с Authorized redirect URI в Google Console. Должны быть идентичны — включая протокол (`http://` vs `https://`). Redirect URI должен быть `https://твой-домен.com/api/auth/callback/google`.
 
 **Бесконечный редирект на `/login` после входа**
 
@@ -216,7 +204,7 @@ URL в `.env` (`NEXTAUTH_URL`) не совпадает с Authorized redirect UR
 
 **База данных пропала после перезапуска**
 
-Используй абсолютный путь в `DATABASE_URL`, не относительный. Установщик делает это автоматически (`file:/root/seogets/data/prod.db`). При ручной установке задай путь явно.
+Используй абсолютный путь в `DATABASE_URL`, не относительный. Установщик делает это автоматически: `file:/root/seogets/data/prod.db`. При ручной установке задай путь явно.
 
 **`pm2 restart seogets` не помогает после `git pull`**
 
@@ -225,11 +213,15 @@ URL в `.env` (`NEXTAUTH_URL`) не совпадает с Authorized redirect UR
 npm run build && pm2 restart seogets
 ```
 
+**Логотип не отображается на странице входа**
+
+Убедись что используешь актуальную версию `src/middleware.ts` из репозитория.
+
 ---
 
 ## Стек
 
-- **Next.js 16** (App Router, Turbopack)
+- **Next.js 15** (App Router, Turbopack)
 - **Prisma 5** + SQLite
 - **NextAuth v4** — авторизация через Google OAuth
 - **Recharts** — графики
@@ -244,21 +236,36 @@ npm run build && pm2 restart seogets
 ```
 src/
   app/
-    page.tsx              # Главный дашборд — все сайты
-    site/[id]/page.tsx    # Детальная страница сайта
-    login/page.tsx        # Страница входа
-    settings/page.tsx     # Настройки и управление аккаунтами
+    page.tsx                    # Главный дашборд — все сайты
+    site/[id]/page.tsx          # Детальная страница сайта
+    login/page.tsx              # Страница входа
+    settings/page.tsx           # Настройки, AI-ключи, аккаунты
     api/
-      auth/               # NextAuth
-      gsc/sites/          # Получение сайтов из GSC
-      gsc/accounts/       # Управление Google аккаунтами
+      auth/                     # NextAuth
+      gsc/sites/                # Получение сайтов из GSC
+      gsc/accounts/             # Управление Google аккаунтами
+      gsc/setup/                # AI-генерация кластеров и групп
+      gsc/clusters/             # CRUD тематических кластеров
+      gsc/groups/               # CRUD групп контента
+      gsc/striking/             # Striking Distance Keywords
+      gsc/cannibalization/      # Keyword Cannibalization
+      gsc/decay/                # Content Decay Map
+      gsc/ctr/                  # CTR Benchmark
+      gsc/inspect/              # URL Indexing Status
+      gsc/branded/              # AI-определение брендовых ключей
+  components/
+    StrikingDistanceKeywords.tsx
+    KeywordCannibalization.tsx
+    ContentDecayMap.tsx
+    CtrBenchmark.tsx
+    SiteSettingsTab.tsx
   lib/
-    auth.ts               # Конфигурация NextAuth
-    prisma.ts             # Prisma клиент
-    PrivacyContext.tsx    # Глобальный Privacy Blur
-    ThemeContext.tsx      # Тема (dark / light)
-    LayoutContext.tsx     # Layout (wide / default)
+    auth.ts                     # Конфигурация NextAuth
+    prisma.ts                   # Prisma клиент
+    PrivacyContext.tsx           # Глобальный Privacy Blur
+    ThemeContext.tsx             # Тема (dark / light)
+    LayoutContext.tsx            # Layout (wide / default)
 prisma/
-  schema.prisma           # Схема БД
-install.sh                # Установщик для VPS (Ubuntu/Debian)
+  schema.prisma                 # Схема БД
+install.sh                      # Установщик для VPS (Ubuntu/Debian)
 ```

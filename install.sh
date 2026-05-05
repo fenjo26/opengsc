@@ -10,6 +10,24 @@ warn()    { echo -e "${YELLOW}⚠ $*${NC}"; }
 error()   { echo -e "${RED}✖ $*${NC}"; exit 1; }
 header()  { echo -e "\n${BOLD}${CYAN}── $* ──────────────────────────────────────${NC}"; }
 
+# read from /dev/tty so it works both when run directly AND via curl | bash
+ask() {
+  local __var="$1" __prompt="$2" __default="$3"
+  printf "  %s" "$__prompt" > /dev/tty
+  local __val
+  IFS= read -r __val < /dev/tty
+  __val="${__val:-$__default}"
+  printf -v "$__var" '%s' "$__val"
+}
+ask_secret() {
+  local __var="$1" __prompt="$2"
+  printf "  %s" "$__prompt" > /dev/tty
+  local __val
+  IFS= read -rs __val < /dev/tty
+  echo > /dev/tty
+  printf -v "$__var" '%s' "$__val"
+}
+
 echo ""
 echo -e "${CYAN}╔══════════════════════════════════════════╗${NC}"
 echo -e "${CYAN}║      SEO Gets — VPS Installer v1.0       ║${NC}"
@@ -26,20 +44,36 @@ if ! command -v apt-get &>/dev/null; then
   error "Only Debian/Ubuntu supported. For other distros install Node.js 20+ manually."
 fi
 
+# ─── Auto-clone if running via curl | bash ────────────────────────────────────
+# Detect: if package.json is missing we're not inside the repo yet
+REPO_URL="https://github.com/fenjo26/seogets.git"
+INSTALL_DIR="/root/seogets"
+
+if [ ! -f "package.json" ]; then
+  header "Cloning repository"
+  if ! command -v git &>/dev/null; then
+    info "Installing git..."
+    apt-get update -qq && apt-get install -y -qq git
+  fi
+  if [ -d "$INSTALL_DIR" ]; then
+    info "Directory $INSTALL_DIR already exists — pulling latest..."
+    git -C "$INSTALL_DIR" pull --ff-only
+  else
+    info "Cloning into $INSTALL_DIR ..."
+    git clone "$REPO_URL" "$INSTALL_DIR"
+  fi
+  success "Repository ready at $INSTALL_DIR"
+  # Re-exec install.sh from inside the cloned repo
+  exec bash "$INSTALL_DIR/install.sh" "$@"
+fi
+
 # ─── Collect config ───────────────────────────────────────────────────────────
 header "Configuration"
 
-read -rp "  Domain or server IP (e.g. seo.example.com or 1.2.3.4): " DOMAIN
-DOMAIN=${DOMAIN:-localhost}
-
-read -rp "  App port      [3000]: " APP_PORT
-APP_PORT=${APP_PORT:-3000}
-
-read -rp "  Install Nginx reverse proxy? [Y/n]: " INSTALL_NGINX
-INSTALL_NGINX=${INSTALL_NGINX:-Y}
-
-read -rp "  Setup SSL with Let's Encrypt? (only if real domain) [y/N]: " SETUP_SSL
-SETUP_SSL=${SETUP_SSL:-N}
+ask DOMAIN    "Domain or server IP (e.g. seo.example.com or 1.2.3.4): " "localhost"
+ask APP_PORT  "App port      [3000]: " "3000"
+ask INSTALL_NGINX "Install Nginx reverse proxy? [Y/n]: " "Y"
+ask SETUP_SSL "Setup SSL with Let's Encrypt? (only if real domain) [y/N]: " "N"
 
 echo ""
 
@@ -128,9 +162,8 @@ else
   echo -e "  APIs & Services → Credentials → Create OAuth 2.0 Client ID"
   echo -e "  Redirect URI: ${CYAN}${NEXTAUTH_URL}/api/auth/callback/google${NC}"
   echo ""
-  read -rp "  Google Client ID: " GOOGLE_CLIENT_ID
-  read -rsp "  Google Client Secret: " GOOGLE_CLIENT_SECRET
-  echo ""
+  ask        GOOGLE_CLIENT_ID     "Google Client ID: " ""
+  ask_secret GOOGLE_CLIENT_SECRET "Google Client Secret: "
 
   DB_PATH="$(pwd)/data/prod.db"
   mkdir -p "$(pwd)/data"
@@ -218,8 +251,7 @@ EOF
     header "SSL (Let's Encrypt)"
     wait_apt
     apt-get install -y -qq certbot python3-certbot-nginx
-    read -rp "  Email for SSL certificate (Let's Encrypt): " SSL_EMAIL
-    SSL_EMAIL=${SSL_EMAIL:-"admin@${DOMAIN}"}
+    ask SSL_EMAIL "Email for SSL certificate (Let's Encrypt): " "admin@${DOMAIN}"
     certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "${SSL_EMAIL}" || \
       warn "SSL setup failed — make sure the domain points to this server's IP"
     success "SSL certificate installed"
