@@ -72,9 +72,9 @@ fi
 header "Configuration"
 
 ask DOMAIN    "Domain or server IP (e.g. seo.example.com or 1.2.3.4): " "localhost"
-ask APP_PORT  "App port      [3000]: " "3000"
 ask INSTALL_NGINX "Install Nginx reverse proxy? [Y/n]: " "Y"
 ask SETUP_SSL "Setup SSL with Let's Encrypt? (only if real domain) [y/N]: " "N"
+APP_PORT=3000
 
 echo ""
 
