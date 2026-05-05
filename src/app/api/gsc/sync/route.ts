@@ -9,8 +9,11 @@ export async function POST() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Fire and forget (do not await)
-  runGscSync().catch(console.error);
-
-  return NextResponse.json({ success: true, message: 'Sync started in background' });
+  try {
+    await runGscSync();
+    return NextResponse.json({ success: true, message: 'Sync completed' });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ error: 'Sync failed' }, { status: 500 });
+  }
 }
