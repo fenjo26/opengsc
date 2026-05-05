@@ -63,7 +63,8 @@ if [ ! -f "package.json" ]; then
     git clone "$REPO_URL" "$INSTALL_DIR"
   fi
   success "Repository ready at $INSTALL_DIR"
-  # Re-exec install.sh from inside the cloned repo
+  # Re-exec install.sh from inside the cloned repo (cd first so package.json is found)
+  cd "$INSTALL_DIR"
   exec bash "$INSTALL_DIR/install.sh" "$@"
 fi
 
