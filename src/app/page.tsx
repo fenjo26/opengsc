@@ -16,7 +16,7 @@ import { useHealthStatus } from "@/components/SiteHealthPanel";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Metric = "clicks" | "impressions" | "ctr" | "position";
-type SortBy = "az" | "total" | "growth" | "growth_pct" | "tags";
+type SortBy = "az" | "total" | "growth" | "growth_pct" | "decline" | "decline_imp" | "decline_pos" | "tags";
 type Comparison = "disabled" | "previous" | "yoy" | "prev_month" | "custom";
 type PeriodView = "day" | "week" | "month";
 type SearchType = "web" | "discover" | "news" | "image" | "video";
@@ -561,6 +561,25 @@ export default function PortfolioPage() {
                - (a.summary.clicks.value * a.summary.clicks.change / 100);
         case "growth_pct":
           return b.summary.clicks.change - a.summary.clicks.change;
+        case "decline":
+          // Most negative clicks change first; sites with 0 clicks go last
+          if (a.summary.clicks.value === 0 && b.summary.clicks.value === 0) return 0;
+          if (a.summary.clicks.value === 0) return 1;
+          if (b.summary.clicks.value === 0) return -1;
+          return a.summary.clicks.change - b.summary.clicks.change;
+        case "decline_imp":
+          // Most negative impressions change first; sites with 0 impressions go last
+          if (a.summary.impressions.value === 0 && b.summary.impressions.value === 0) return 0;
+          if (a.summary.impressions.value === 0) return 1;
+          if (b.summary.impressions.value === 0) return -1;
+          return a.summary.impressions.change - b.summary.impressions.change;
+        case "decline_pos":
+          // Biggest position drop first (position increased = got worse); sites with no data go last
+          if (a.summary.position.value === 0 && b.summary.position.value === 0) return 0;
+          if (a.summary.position.value === 0) return 1;
+          if (b.summary.position.value === 0) return -1;
+          // Higher change = position got worse (e.g. +5 means dropped 5 spots)
+          return b.summary.position.change - a.summary.position.change;
         case "tags": {
           const aTag = siteTags[a.id]?.[0]?.toLowerCase() || "zzz";
           const bTag = siteTags[b.id]?.[0]?.toLowerCase() || "zzz";
@@ -632,17 +651,20 @@ export default function PortfolioPage() {
   };
 
   const sortLabels: Record<SortBy, string> = {
-    "az":         t("sortAZ"),
-    "total":      t("sortTotal"),
-    "growth":     t("sortGrowth"),
-    "growth_pct": t("sortGrowthPct"),
-    "tags":       t("sortTags"),
+    "az":          t("sortAZ"),
+    "total":       t("sortTotal"),
+    "growth":      t("sortGrowth"),
+    "growth_pct":  t("sortGrowthPct"),
+    "decline":     t("sortDecline"),
+    "decline_imp": t("sortDeclineImp"),
+    "decline_pos": t("sortDeclinePos"),
+    "tags":        t("sortTags"),
   };
 
   // Sort dropdown
   const SortDd = (
     <Dropdown trigger={<button style={tbBtn()}><ArrowUpDown size={13} /> {t("sort")}</button>}>
-      {(["az","total","growth","growth_pct","tags"] as SortBy[]).map(v => (
+      {(["az","total","growth","growth_pct","decline","decline_imp","decline_pos","tags"] as SortBy[]).map(v => (
         <button key={v} style={mi(sortBy===v)} onClick={() => setSortBy(v)}>
           {sortLabels[v]}{sortBy===v && <Check size={12} style={{marginLeft:"auto"}} />}
         </button>
@@ -839,8 +861,22 @@ export default function PortfolioPage() {
     const sum: Record<Metric,{value:number;change:number}> = site.summary;
     const healthStatus = useHealthStatus(site.siteDbId ?? null);
 
+    const declineChange =
+      sortBy === "decline"     ? sum.clicks.change :
+      sortBy === "decline_imp" ? sum.impressions.change :
+      sortBy === "decline_pos" ? sum.position.change :
+      0;
+    const isDeclineMode = sortBy === "decline" || sortBy === "decline_imp" || sortBy === "decline_pos";
+    // For position: positive change = got worse, so highlight when change > 0
+    const isFalling = isDeclineMode && (
+      sortBy === "decline_pos" ? declineChange > 0 : declineChange < 0
+    );
+    const declineBorder = isFalling
+      ? { borderColor: `rgba(239,68,68,${Math.min(0.75, 0.25 + Math.abs(declineChange) / 100 * 0.5)})` }
+      : {};
+
     return (
-      <div className="card" style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:"8px",cursor:"pointer"}}
+      <div className="card" style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:"8px",cursor:"pointer",...declineBorder}}
         onClick={() => router.push(`/site/${encodeURIComponent(domain)}`)}>
         {/* Header */}
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:"8px"}}>

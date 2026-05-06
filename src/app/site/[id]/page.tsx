@@ -34,8 +34,9 @@ const C = {
 
 // ─── Period options (module-level so all sub-components can reference) ────────
 const PERIOD_OPTIONS: { key: string; label: string }[] = [
-  { key: "7d",           label: "7 days"        },
-  { key: "14d",          label: "14 days"        },
+  { key: "yesterday",    label: "1 day (latest)" },
+  { key: "7d",           label: "7 days"         },
+  { key: "14d",          label: "14 days"         },
   { key: "28d",          label: "28 days"        },
   { key: "last_week",    label: "Last Week"      },
   { key: "this_month",   label: "This Month"     },
