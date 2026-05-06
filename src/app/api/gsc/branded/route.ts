@@ -6,15 +6,17 @@ import { prisma } from '@/lib/prisma';
 async function fetchLLM(prompt: string, provider: string, apiKey: string): Promise<string | null> {
   try {
     let text = '';
-    if (provider === 'anthropic') {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+    if (provider === 'anthropic' || provider === 'zai') {
+      const baseUrl = provider === 'zai' ? 'https://api.z.ai/api/anthropic' : 'https://api.anthropic.com';
+      const model   = provider === 'zai' ? 'glm-4.5-air' : 'claude-haiku-4-5-20251001';
+      const res = await fetch(`${baseUrl}/v1/messages`, {
         method: 'POST',
         headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-        body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 512, messages: [{ role: 'user', content: prompt }] }),
+        body: JSON.stringify({ model, max_tokens: 512, messages: [{ role: 'user', content: prompt }] }),
       });
       if (!res.ok) {
         const err = await res.text();
-        console.error('[Branded] Anthropic error:', res.status, err);
+        console.error(`[Branded] ${provider} error:`, res.status, err);
         return null;
       }
       const data = await res.json();

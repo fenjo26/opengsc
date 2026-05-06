@@ -47,15 +47,17 @@ async function fetchLLM(prompt: string, provider?: string, apiKey?: string) {
 
   try {
     let text = '';
-    if (p === 'anthropic' || (!provider && k.startsWith('sk-ant'))) {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+    if (p === 'anthropic' || p === 'zai' || (!provider && k.startsWith('sk-ant'))) {
+      const baseUrl = p === 'zai' ? 'https://api.z.ai/api/anthropic' : 'https://api.anthropic.com';
+      const model   = p === 'zai' ? 'glm-4.5-air' : 'claude-haiku-4-5-20251001';
+      const res = await fetch(`${baseUrl}/v1/messages`, {
         method: 'POST',
         headers: { 'x-api-key': k, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-        body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 2048, messages: [{ role: 'user', content: prompt }] }),
+        body: JSON.stringify({ model, max_tokens: 2048, messages: [{ role: 'user', content: prompt }] }),
       });
       if (!res.ok) {
         const err = await res.text();
-        console.log(`[Setup/LLM] Anthropic error ${res.status}: ${err}`);
+        console.log(`[Setup/LLM] ${p} error ${res.status}: ${err}`);
         return null;
       }
       const data = await res.json();

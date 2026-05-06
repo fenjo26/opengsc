@@ -547,6 +547,17 @@ const AI_PROVIDERS = [
     color: "#7C3AED",
     logo: "R",
   },
+  {
+    id: "zai",
+    name: "Z.AI",
+    model: "GLM-4.5-Air",
+    placeholder: "z-api-...",
+    hint: "Affordable GLM models, Anthropic-compatible API",
+    docsUrl: "https://z.ai/manage-apikey/apikey-list",
+    docsLabel: "z.ai",
+    color: "#0EA5E9",
+    logo: "Z",
+  },
 ] as const;
 
 function AIProviderCard({ provider }: { provider: typeof AI_PROVIDERS[number] }) {

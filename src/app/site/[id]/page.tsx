@@ -760,7 +760,7 @@ function SetupModal({ domain, siteDbId, onClose, onApplied }: {
 
     // Check all provider keys
     const statuses: Record<string, boolean> = {};
-    for (const id of ['anthropic','openai','gemini','openrouter']) {
+    for (const id of ['anthropic','openai','gemini','openrouter','zai']) {
       const k = localStorage.getItem(`aiKey_${id}`) || '';
       statuses[id] = k.trim().length > 6;
     }
@@ -849,6 +849,7 @@ function SetupModal({ domain, siteDbId, onClose, onApplied }: {
                   { id: 'openai',    name: 'OpenAI',    color: '#10A37F' },
                   { id: 'gemini',    name: 'Gemini',    color: '#4285F4' },
                   { id: 'openrouter',name: 'OpenRouter', color: '#7C3AED' },
+                  { id: 'zai',       name: 'Z.AI',      color: '#0EA5E9' },
                 ];
                 return (
                   <div style={{ border: `1px solid ${anyConfigured ? 'rgba(139,92,246,0.3)' : 'rgba(245,158,11,0.35)'}`, borderRadius: '10px', padding: '14px 16px', background: anyConfigured ? 'rgba(139,92,246,0.06)' : 'rgba(245,158,11,0.05)' }}>
