@@ -59,8 +59,9 @@ model Site {
   userId    String
   url       String
   siteId    String   // GSC property root (sc-domain: or url)
-  tags      String?  // JSON array string or comma separated
-  createdAt DateTime @default(now())
+  tags             String?  // JSON array string or comma separated
+  brandedKeywords  String?  // JSON array e.g. ["ikea","ikea chair"]
+  createdAt        DateTime @default(now())
 
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   metrics               DailyMetric[]

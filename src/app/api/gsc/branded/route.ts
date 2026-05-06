@@ -12,7 +12,11 @@ async function fetchLLM(prompt: string, provider: string, apiKey: string): Promi
         headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
         body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 512, messages: [{ role: 'user', content: prompt }] }),
       });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        const err = await res.text();
+        console.error('[Branded] Anthropic error:', res.status, err);
+        return null;
+      }
       const data = await res.json();
       text = data.content?.[0]?.text ?? '';
     } else if (provider === 'openai') {
@@ -44,10 +48,13 @@ async function fetchLLM(prompt: string, provider: string, apiKey: string): Promi
       text = data.choices?.[0]?.message?.content ?? '';
     }
     return text;
-  } catch { return null; }
+  } catch (e) {
+    console.error('[Branded] fetchLLM error:', e);
+    return null;
+  }
 }
 
-// GET /api/gsc/branded?siteId=&aiProvider=&aiApiKey=
+// GET /api/gsc/branded?siteId=  — returns saved keywords (+ AI suggest if ?suggest=1&aiProvider=&aiApiKey=)
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
   const userId = (session?.user as any)?.id as string | undefined;
@@ -55,13 +62,20 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const siteId   = searchParams.get('siteId') ?? '';
+  const suggest  = searchParams.get('suggest') === '1';
   const provider = searchParams.get('aiProvider') ?? 'anthropic';
   const apiKey   = searchParams.get('aiApiKey') ?? '';
 
   const site = await prisma.site.findFirst({ where: { id: siteId, userId } });
   if (!site) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  // Extract domain brand from siteId
+  // Return saved keywords if not asking for suggestions
+  if (!suggest) {
+    const saved = site.brandedKeywords ? JSON.parse(site.brandedKeywords) as string[] : [];
+    return NextResponse.json({ branded: saved, saved: true });
+  }
+
+  // AI suggestion mode
   const domainBrand = site.siteId
     .replace(/^https?:\/\//, '')
     .replace(/^sc-domain:/, '')
@@ -70,47 +84,83 @@ export async function GET(req: Request) {
     .split('.')[0]
     .toLowerCase();
 
-  if (!apiKey) {
-    return NextResponse.json({ branded: [domainBrand] });
-  }
+  // Use AI if key provided
+  if (apiKey) {
+    // Get top queries from last 90 days from GSC accounts
+    const accounts = await prisma.account.findMany({
+      where: { userId, provider: 'google' },
+      select: { id: true, access_token: true, refresh_token: true, expires_at: true },
+    });
 
-  // Fetch top 100 queries
-  const since = new Date();
-  since.setDate(since.getDate() - 90);
+    const { google } = await import('googleapis');
+    const since = new Date();
+    since.setDate(since.getDate() - 90);
+    const end = new Date(); end.setDate(end.getDate() - 3);
+    const startStr = since.toISOString().split('T')[0];
+    const endStr = end.toISOString().split('T')[0];
 
-  const rows = await prisma.dailyMetric.groupBy({
-    by: ['query'],
-    where: { siteId, date: { gte: since } },
-    _sum: { impressions: true },
-    orderBy: { _sum: { impressions: 'desc' } },
-    take: 100,
-  });
+    let queryRows: any[] = [];
+    for (const account of accounts) {
+      try {
+        const oauth2 = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET);
+        oauth2.setCredentials({ access_token: account.access_token, refresh_token: account.refresh_token });
+        const wm = google.webmasters({ version: 'v3', auth: oauth2 });
+        const res = await wm.searchanalytics.query({
+          siteUrl: site.siteId,
+          requestBody: { startDate: startStr, endDate: endStr, dimensions: ['query'], rowLimit: 100, dataState: 'final' },
+        });
+        queryRows = res.data.rows ?? [];
+        break;
+      } catch { continue; }
+    }
 
-  const queries = rows.map(r => r.query);
+    const queries = queryRows.map(r => r.keys?.[0] ?? '').filter(Boolean);
 
-  const prompt = `You are an SEO expert. The website domain is "${domainBrand}".
+    if (queries.length > 0) {
+      const prompt = `You are an SEO expert. The website domain is "${domainBrand}".
 
-Identify which of these search queries are branded (contain the brand name, company name, or branded product names).
+Identify brand terms from these search queries (brand name, company name, branded product names):
 
-Queries:
-${queries.map(q => `"${q}"`).join('\n')}
+${queries.slice(0, 80).map(q => `"${q}"`).join('\n')}
 
-Return ONLY a JSON array of the brand terms found (lowercase, max 10), no explanation:
+Return ONLY a JSON array of brand terms (lowercase, max 10), no explanation:
 ["brand1", "brand2"]
 
-If no clear brand terms found beyond the domain name, return: ["${domainBrand}"]`;
+If no clear brand terms found, return: ["${domainBrand}"]`;
 
-  const text = await fetchLLM(prompt, provider, apiKey);
-  if (!text) return NextResponse.json({ branded: [domainBrand] });
-
-  try {
-    const match = text.match(/\[[\s\S]*\]/);
-    if (match) {
-      const branded = JSON.parse(match[0]) as string[];
-      const unique = [...new Set([domainBrand, ...branded.map((b: string) => b.toLowerCase())])].slice(0, 15);
-      return NextResponse.json({ branded: unique });
+      const text = await fetchLLM(prompt, provider, apiKey);
+      if (text) {
+        const match = text.match(/\[[\s\S]*?\]/);
+        if (match) {
+          try {
+            const branded = JSON.parse(match[0]) as string[];
+            const unique = [...new Set([domainBrand, ...branded.map((b: string) => b.toLowerCase())])].slice(0, 15);
+            return NextResponse.json({ branded: unique, aiGenerated: true });
+          } catch {}
+        }
+      }
     }
-  } catch {}
+  }
 
-  return NextResponse.json({ branded: [domainBrand] });
+  return NextResponse.json({ branded: [domainBrand], aiGenerated: false });
+}
+
+// POST /api/gsc/branded — save branded keywords for a site
+export async function POST(req: Request) {
+  const session = await getServerSession(authOptions);
+  const userId = (session?.user as any)?.id as string | undefined;
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const body = await req.json();
+  const { siteId, keywords } = body as { siteId: string; keywords: string[] };
+
+  const site = await prisma.site.findFirst({ where: { id: siteId, userId } });
+  if (!site) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  await prisma.site.update({
+    where: { id: siteId },
+    data: { brandedKeywords: JSON.stringify(keywords) },
+  });
+
+  return NextResponse.json({ ok: true });
 }

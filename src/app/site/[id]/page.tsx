@@ -552,6 +552,110 @@ function updateRules(item: SetupItem, patternStr: string): SetupItem {
   }
 }
 
+// ─── Branded Keywords Modal ───────────────────────────────────────────────────
+function BrandedKeywordsModal({ siteDbId, domain, initial, onClose, onSaved }: {
+  siteDbId: string; domain: string; initial: string[];
+  onClose: () => void; onSaved: (kws: string[]) => void;
+}) {
+  const { t } = useLanguage();
+  const [keywords, setKeywords] = useState<string[]>(initial.length > 0 ? initial : [domain.split('.')[0].toLowerCase()]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [aiGenerated, setAiGenerated] = useState(false);
+
+  const addKeyword = (kw: string) => {
+    const clean = kw.trim().toLowerCase();
+    if (clean && !keywords.includes(clean)) setKeywords(p => [...p, clean]);
+    setInput('');
+  };
+
+  const removeKeyword = (kw: string) => setKeywords(p => p.filter(k => k !== kw));
+
+  const suggestWithAI = async () => {
+    setLoading(true);
+    const provider = localStorage.getItem('aiProvider') || 'anthropic';
+    const apiKey = localStorage.getItem(`aiKey_${provider}`) || localStorage.getItem('aiApiKey') || '';
+    try {
+      const res = await fetch(`/api/gsc/branded?siteId=${siteDbId}&suggest=1&aiProvider=${encodeURIComponent(provider)}&aiApiKey=${encodeURIComponent(apiKey)}`);
+      const data = await res.json();
+      if (data.branded?.length) {
+        setKeywords(data.branded);
+        setAiGenerated(!!data.aiGenerated);
+      }
+    } catch {}
+    setLoading(false);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    await fetch('/api/gsc/branded', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ siteId: siteDbId, keywords }),
+    });
+    setSaving(false);
+    onSaved(keywords);
+  };
+
+  const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 };
+  const box: React.CSSProperties = { background: 'var(--color-card)', borderRadius: '16px', width: '480px', maxWidth: '95vw', padding: '28px', display: 'flex', flexDirection: 'column', gap: '20px', border: '1px solid var(--color-border)' };
+
+  return (
+    <div style={overlay} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={box}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+            🏷️ {t('setBrandedKw')}
+          </h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}>×</button>
+        </div>
+
+        <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+          {t('setBrandedDesc3')}
+        </p>
+
+        {/* AI suggest button */}
+        <button onClick={suggestWithAI} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '10px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)', color: '#818cf8', cursor: loading ? 'wait' : 'pointer', fontSize: '13px', fontWeight: 600, width: 'fit-content' }}>
+          <span>✨</span>
+          {loading ? 'Анализирую запросы...' : 'Предложить ИИ'}
+        </button>
+        {aiGenerated && <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '-12px' }}>✓ Сгенерировано ИИ — проверьте и отредактируйте при необходимости</p>}
+
+        {/* Keyword chips */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', minHeight: '40px' }}>
+          {keywords.map(kw => (
+            <span key={kw} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', padding: '4px 12px', borderRadius: '20px', background: 'rgba(99,102,241,0.12)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.25)' }}>
+              {kw}
+              <button onClick={() => removeKeyword(kw)} style={{ background: 'none', border: 'none', color: '#818cf8', cursor: 'pointer', fontSize: '14px', lineHeight: 1, padding: '0 0 0 2px' }}>×</button>
+            </span>
+          ))}
+        </div>
+
+        {/* Manual input */}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <input
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKeyword(input); } }}
+            placeholder={t('setEnterKw')}
+            style={{ flex: 1, padding: '9px 14px', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text-primary)', fontSize: '13px' }}
+          />
+          <button onClick={() => addKeyword(input)} style={{ padding: '9px 16px', borderRadius: '8px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)', color: '#3B82F6', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>{t('setAdd')}</button>
+        </div>
+
+        {/* Save */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+          <button onClick={onClose} style={{ padding: '10px 20px', borderRadius: '10px', background: 'transparent', border: '1px solid var(--color-border)', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: '13px' }}>Отмена</button>
+          <button onClick={save} disabled={saving || keywords.length === 0} style={{ padding: '10px 24px', borderRadius: '10px', background: '#3B82F6', border: 'none', color: '#fff', cursor: saving ? 'wait' : 'pointer', fontSize: '13px', fontWeight: 600 }}>
+            {saving ? 'Сохранение...' : 'Сохранить'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SetupModal({ domain, siteDbId, onClose, onApplied }: {
   domain: string; siteDbId: string;
   onClose: () => void; onApplied: () => void;
@@ -2134,6 +2238,8 @@ export default function SitePage() {
   const [googleUpdates, setGoogleUpdates] = useState(false);
   const [siteNotesOn, setSiteNotesOn] = useState(false);
   const [showSetupModal, setShowSetupModal] = useState(false);
+  const [showBrandedModal, setShowBrandedModal] = useState(false);
+  const [brandedKeywords, setBrandedKeywords] = useState<string[]>([]);
   const [clusterMetrics, setClusterMetrics] = useState<{ clusters: ClusterRow[]; groups: ClusterRow[] } | null>(null);
   const [clusterLoading, setClusterLoading] = useState(false);
   const siteDbId = siteData?.siteDbId ?? '';
@@ -2201,6 +2307,15 @@ export default function SitePage() {
   useEffect(() => {
     if (siteDbId) fetchClusterMetrics(period);
   }, [siteDbId, period]);
+
+  // Fetch branded keywords whenever siteDbId changes
+  useEffect(() => {
+    if (!siteDbId) return;
+    fetch(`/api/gsc/branded?siteId=${siteDbId}`)
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d.branded)) setBrandedKeywords(d.branded); })
+      .catch(() => {});
+  }, [siteDbId]);
 
   // Real data or empty fallback
   const chartData = useMemo(() => {
@@ -2350,6 +2465,17 @@ export default function SitePage() {
           </div>
         )}
       </div>
+
+      {/* ── Branded Keywords modal ── */}
+      {showBrandedModal && siteDbId && (
+        <BrandedKeywordsModal
+          siteDbId={siteDbId}
+          domain={domain}
+          initial={brandedKeywords}
+          onClose={() => setShowBrandedModal(false)}
+          onSaved={(kws) => { setBrandedKeywords(kws); setShowBrandedModal(false); }}
+        />
+      )}
 
       {/* ── One Click Setup modal ── */}
       {showSetupModal && siteDbId && (
@@ -2511,9 +2637,23 @@ export default function SitePage() {
               <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>{t("brandedVsNonBranded")}</h3>
               <TabBar tabs={["Trend", "Comparison"]} active="Trend" onChange={() => {}} />
             </div>
-            <Placeholder icon={
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="9"/><path d="M9 9h1.5a1.5 1.5 0 0 1 0 3H9v3m3-6h1.5"/></svg>
-            } title={t("missingBrandedKeywords")} desc={`${t("define")} ${t("activateReportDesc")}`} onClick={() => setShowSetupModal(true)} />
+            {brandedKeywords.length > 0 ? (
+              <div style={{ border: "1px solid var(--color-border)", borderRadius: "12px", padding: "16px", background: "var(--color-card)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+                  <span style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>{t("setBrandedKw")}:</span>
+                  <button onClick={() => setShowBrandedModal(true)} style={{ fontSize: "12px", color: "#3B82F6", background: "none", border: "none", cursor: "pointer", padding: "2px 6px" }}>✎ {t("edit") ?? "Edit"}</button>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                  {brandedKeywords.map(kw => (
+                    <span key={kw} style={{ fontSize: "12px", padding: "3px 10px", borderRadius: "20px", background: "rgba(99,102,241,0.12)", color: "#818cf8", border: "1px solid rgba(99,102,241,0.2)" }}>{kw}</span>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <Placeholder icon={
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="9"/><path d="M9 9h1.5a1.5 1.5 0 0 1 0 3H9v3m3-6h1.5"/></svg>
+              } title={t("missingBrandedKeywords")} desc={`${t("define")} ${t("activateReportDesc")}`} onClick={() => setShowBrandedModal(true)} />
+            )}
           </div>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
