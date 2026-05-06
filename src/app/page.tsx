@@ -821,7 +821,7 @@ export default function PortfolioPage() {
           ))}
         </div>
         {/* Right: periods */}
-        <div>
+        <div style={{minWidth:0,display:"flex",flexDirection:"column"}}>
           <div style={{display:"flex",borderBottom:"1px solid var(--color-border)",padding:"6px 8px",gap:"4px"}}>
             {([
               {v:"day",   l: t("periodDay")},
@@ -833,7 +833,7 @@ export default function PortfolioPage() {
               </button>
             ))}
           </div>
-          <div style={{maxHeight:"420px",overflowY:"auto"}}>
+          <div className="period-scroll" style={{maxHeight:"420px",overflowY:"auto",scrollbarGutter:"stable",width:"100%"}}>
             {periodGroups.map((grp, gi) => (
               <div key={gi}>
                 {grp.map(({label,value,desc}) => {
@@ -1031,7 +1031,13 @@ export default function PortfolioPage() {
               <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
             </svg>
           )}
-          <style>{`@keyframes gsc-spin { to { transform: rotate(360deg); } }`}</style>
+          <style>{`
+            @keyframes gsc-spin { to { transform: rotate(360deg); } }
+            .period-scroll::-webkit-scrollbar { width: 6px; }
+            .period-scroll::-webkit-scrollbar-track { background: var(--color-bg-secondary, #1e2130); border-radius: 3px; }
+            .period-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 3px; }
+            .period-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.32); }
+          `}</style>
           {syncStatus === "syncing" ? "Синхронизация…"
             : syncStatus === "done" ? `Готово · ${syncedAt?.toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" })}`
             : syncedAt ? syncedAt.toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" })
