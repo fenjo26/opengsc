@@ -17,7 +17,7 @@ import {
   FileText, Globe, Search, ArrowLeftRight, BookmarkCheck, Calendar, X,
 } from "lucide-react";
 import {
-  ComposedChart, AreaChart, Area, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  ComposedChart, LineChart, AreaChart, Area, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend, ReferenceLine,
 } from "recharts";
 
