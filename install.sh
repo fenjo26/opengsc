@@ -191,7 +191,7 @@ info "Generating Prisma client..."
 npx prisma generate 2>/dev/null
 
 info "Pushing database schema..."
-npx prisma db push --skip-generate 2>/dev/null
+npx prisma db push 2>/dev/null
 
 info "Building Next.js..."
 npm run build
