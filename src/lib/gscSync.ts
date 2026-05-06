@@ -175,38 +175,33 @@ export async function runGscSync() {
           const rows = res.data.rows ?? [];
           console.log(`[GSC Sync]     ${rows.length} days of data`);
 
-          for (const row of rows) {
-            if (!row.keys?.[0]) continue;
-            const dateObj = new Date(row.keys[0]);
+          if (rows.length > 0) {
+            const rangeStart = new Date(startDateStr);
 
-            const existing = await prisma.dailyMetric.findFirst({
-              where: { siteId: dbSite.id, date: dateObj, url: '', query: '' },
+            // Delete existing records for this range in one query, then bulk-insert
+            await prisma.dailyMetric.deleteMany({
+              where: {
+                siteId: dbSite.id,
+                url:    '',
+                query:  '',
+                date:   { gte: rangeStart, lte: endDate },
+              },
             });
 
-            if (!existing) {
-              await prisma.dailyMetric.create({
-                data: {
+            await prisma.dailyMetric.createMany({
+              data: rows
+                .filter(row => row.keys?.[0])
+                .map(row => ({
                   siteId:      dbSite.id,
-                  date:        dateObj,
+                  date:        new Date(row.keys![0]),
                   url:         '',
                   query:       '',
                   clicks:      row.clicks      ?? 0,
                   impressions: row.impressions ?? 0,
                   ctr:         row.ctr         ?? 0,
                   position:    row.position    ?? 0,
-                },
-              });
-            } else {
-              await prisma.dailyMetric.update({
-                where: { id: existing.id },
-                data: {
-                  clicks:      row.clicks      ?? 0,
-                  impressions: row.impressions ?? 0,
-                  ctr:         row.ctr         ?? 0,
-                  position:    row.position    ?? 0,
-                },
-              });
-            }
+                })),
+            });
           }
         } catch (err: any) {
           console.error(`[GSC Sync]     Error syncing ${hostname}: ${err.message}`);
