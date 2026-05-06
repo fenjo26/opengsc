@@ -380,13 +380,13 @@ function DeviceTable({ rows }: { rows: DeviceRow[] }) {
   );
 }
 
-function Placeholder({ icon, title, desc }: { icon: React.ReactNode; title: string; desc: string }) {
+function Placeholder({ icon, title, desc, onClick }: { icon: React.ReactNode; title: string; desc: string; onClick?: () => void }) {
   return (
     <div style={{ border: "1px dashed var(--color-border)", borderRadius: "12px", padding: "40px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", background: "var(--color-card)" }}>
       <div style={{ color: "var(--color-text-secondary)" }}>{icon}</div>
       <p style={{ fontWeight: 600, color: "var(--color-text-primary)", fontSize: "14px" }}>{title}</p>
       <p style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>
-        <span style={{ color: "#3B82F6", cursor: "pointer" }}>{desc}</span>
+        <span style={{ color: "#3B82F6", cursor: onClick ? "pointer" : "default" }} onClick={onClick}>{desc}</span>
       </p>
     </div>
   );
@@ -1516,7 +1516,7 @@ function GoogleIcon({ size = 14 }: { size?: number }) {
 }
 
 // ─── Annotations Filter Dropdown ──────────────────────────────────────────────
-function AnnotationsFilterDd() {
+function AnnotationsFilterDd({ onSetupBranded }: { onSetupBranded?: () => void }) {
   const [open, setOpen] = useState(false);
   const [activeDim, setActiveDim] = useState<string | null>("Query");
   const ref = useRef<HTMLDivElement>(null);
@@ -1558,7 +1558,7 @@ function AnnotationsFilterDd() {
           {divider}
           {sec("Branded Queries")}
           <div style={{ padding: "4px 14px 10px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.5 }}>
-            <span style={{ color: "#3B82F6", cursor: "pointer" }}>Define</span> branded keywords<br />to enable branded filters.
+            <span style={{ color: "#3B82F6", cursor: "pointer" }} onClick={onSetupBranded}>Define</span> branded keywords<br />to enable branded filters.
           </div>
 
           {divider}
@@ -1726,7 +1726,7 @@ function AnnotationsTab({ period, setPeriod, periodOptions }: {
     <div style={{ position: "relative" }}>
       {/* ── Sub-header controls ── */}
       <div style={{ padding: "10px 32px", borderBottom: "1px solid var(--color-border)", display: "flex", alignItems: "center", gap: "8px", background: "var(--color-card)", flexWrap: "wrap" }}>
-        <AnnotationsFilterDd />
+        <AnnotationsFilterDd onSetupBranded={() => setShowSetupModal(true)} />
 
         {/* Notes / Updates toggle */}
         <div style={{ display: "flex", gap: "4px" }}>
@@ -2513,7 +2513,7 @@ export default function SitePage() {
             </div>
             <Placeholder icon={
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="9"/><path d="M9 9h1.5a1.5 1.5 0 0 1 0 3H9v3m3-6h1.5"/></svg>
-            } title={t("missingBrandedKeywords")} desc={`${t("define")} ${t("activateReportDesc")}`} />
+            } title={t("missingBrandedKeywords")} desc={`${t("define")} ${t("activateReportDesc")}`} onClick={() => setShowSetupModal(true)} />
           </div>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
