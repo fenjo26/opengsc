@@ -1706,8 +1706,8 @@ const getMockAnnotations = (t: any): AnnotationNote[] => [
   { date: "Aug 5, 2024",  title: t("annUpdatedBrandedKw"),      scope: t("annSpecificPages"), cBefore: 4,    cAfter: 32,    cPct: 700, iBefore: 2000,  iAfter: 11200,  iPct: 456, tBefore: 0.2, tAfter: 0.3, tPct: 0.1,  pBefore: 51.3, pAfter: 48.8, pDelta: 2.5,  dateRange: "Jun 6 to Aug 4 → Aug 5 to Oct 3",    sparkBefore: [2,3,2,3,2,3,2,3],        sparkAfter: [4,8,12,18,22,26,30,32]   },
 ];
 
-function AnnotationsTab({ period, setPeriod, periodOptions }: {
-  period: string; setPeriod: (p: string) => void; periodOptions: string[];
+function AnnotationsTab({ period, setPeriod, periodOptions, onSetupBranded }: {
+  period: string; setPeriod: (p: string) => void; periodOptions: string[]; onSetupBranded?: () => void;
 }) {
   const { t } = useLanguage();
   const [viewMode, setViewMode] = useState<"notes" | "updates">("notes");
@@ -1726,7 +1726,7 @@ function AnnotationsTab({ period, setPeriod, periodOptions }: {
     <div style={{ position: "relative" }}>
       {/* ── Sub-header controls ── */}
       <div style={{ padding: "10px 32px", borderBottom: "1px solid var(--color-border)", display: "flex", alignItems: "center", gap: "8px", background: "var(--color-card)", flexWrap: "wrap" }}>
-        <AnnotationsFilterDd onSetupBranded={() => setShowSetupModal(true)} />
+        <AnnotationsFilterDd onSetupBranded={onSetupBranded} />
 
         {/* Notes / Updates toggle */}
         <div style={{ display: "flex", gap: "4px" }}>
@@ -2380,7 +2380,7 @@ export default function SitePage() {
 
       {/* ── Annotations tab ── */}
       {activeTab === "annotations" && (
-        <AnnotationsTab period={period} setPeriod={setPeriod} periodOptions={periodOptions} />
+        <AnnotationsTab period={period} setPeriod={setPeriod} periodOptions={periodOptions} onSetupBranded={() => setShowSetupModal(true)} />
       )}
 
       {/* ── Optimize tab ── */}
