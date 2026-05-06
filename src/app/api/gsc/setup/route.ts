@@ -42,7 +42,8 @@ async function queryGSC(
 async function fetchLLM(prompt: string, provider?: string, apiKey?: string) {
   const p = provider || 'anthropic';
   const k = apiKey || process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY;
-  if (!k) return null;
+  console.log(`[Setup/LLM] provider=${p} keyLen=${k?.length ?? 0} keyPrefix=${k?.slice(0,12) ?? 'none'}`);
+  if (!k) { console.log('[Setup/LLM] No API key — using algorithmic fallback'); return null; }
 
   try {
     let text = '';
@@ -52,7 +53,11 @@ async function fetchLLM(prompt: string, provider?: string, apiKey?: string) {
         headers: { 'x-api-key': k, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
         body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 2048, messages: [{ role: 'user', content: prompt }] }),
       });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        const err = await res.text();
+        console.log(`[Setup/LLM] Anthropic error ${res.status}: ${err}`);
+        return null;
+      }
       const data = await res.json();
       text = data.content?.[0]?.text ?? '';
     } else if (p === 'openai' || (!provider && k.startsWith('sk-'))) {
