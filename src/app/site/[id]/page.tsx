@@ -610,7 +610,7 @@ function BrandedChart({ siteDbId, period, keywords }: { siteDbId: string; period
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
             <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--color-text-secondary)' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
             <YAxis tick={{ fontSize: 10, fill: 'var(--color-text-secondary)' }} axisLine={false} tickLine={false} width={32} />
-            <Tooltip formatter={(v: any, name: string) => [v, name === 'branded' ? 'Брендовые' : 'Небрендовые']} contentStyle={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 8, fontSize: 12 }} />
+            <Tooltip formatter={(v: any, name: any) => [v, name === 'branded' ? 'Брендовые' : 'Небрендовые']} contentStyle={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 8, fontSize: 12 }} />
             <Line type="monotone" dataKey="branded" stroke="#818cf8" strokeWidth={2} dot={false} name="branded" />
             <Line type="monotone" dataKey="nonBranded" stroke="#10b981" strokeWidth={2} dot={false} name="nonBranded" />
           </LineChart>
@@ -621,7 +621,7 @@ function BrandedChart({ siteDbId, period, keywords }: { siteDbId: string; period
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
             <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--color-text-secondary)' }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fontSize: 10, fill: 'var(--color-text-secondary)' }} axisLine={false} tickLine={false} width={40} />
-            <Tooltip formatter={(v: any, name: string) => [v.toLocaleString(), name === 'branded' ? 'Брендовые' : 'Небрендовые']} contentStyle={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 8, fontSize: 12 }} />
+            <Tooltip formatter={(v: any, name: any) => [v.toLocaleString(), name === 'branded' ? 'Брендовые' : 'Небрендовые']} contentStyle={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 8, fontSize: 12 }} />
             <Bar dataKey="branded" fill="#818cf8" name="branded" radius={[4,4,0,0]} />
             <Bar dataKey="nonBranded" fill="#10b981" name="nonBranded" radius={[4,4,0,0]} />
           </BarChart>
