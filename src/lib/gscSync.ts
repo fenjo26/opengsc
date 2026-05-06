@@ -3,6 +3,10 @@ import { google } from 'googleapis';
 
 let isSyncing = false;
 
+export function isSyncInProgress() {
+  return isSyncing;
+}
+
 function cleanSiteUrl(siteUrl: string): string {
   if (siteUrl.startsWith('sc-domain:')) {
     return siteUrl.slice('sc-domain:'.length);

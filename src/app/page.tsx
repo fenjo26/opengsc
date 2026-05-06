@@ -460,14 +460,30 @@ export default function PortfolioPage() {
   const handleSync = () => {
     if (syncStatus === "syncing") return;
     setSyncStatus("syncing");
+
     fetch('/api/gsc/sync', { method: 'POST' })
-      .then(() => refetchPortfolio())
+      .then(r => r.json())
       .then(() => {
-        const now = new Date();
-        setSyncedAt(now);
-        localStorage.setItem('gsc_synced_at', now.toISOString());
-        setSyncStatus("done");
-        setTimeout(() => setSyncStatus("idle"), 5_000);
+        // Poll status every 15s until sync finishes, then refresh data
+        const poll = setInterval(() => {
+          fetch('/api/gsc/sync')
+            .then(r => r.json())
+            .then(s => {
+              if (!s.syncing) {
+                clearInterval(poll);
+                refetchPortfolio().then(() => {
+                  const now = new Date();
+                  setSyncedAt(now);
+                  localStorage.setItem('gsc_synced_at', now.toISOString());
+                  setSyncStatus("done");
+                  setTimeout(() => setSyncStatus("idle"), 5_000);
+                });
+              }
+            })
+            .catch(() => {});
+        }, 15_000);
+        // Safety: stop polling after 15 min
+        setTimeout(() => { clearInterval(poll); setSyncStatus("idle"); }, 15 * 60_000);
       })
       .catch(() => setSyncStatus("idle"));
   };

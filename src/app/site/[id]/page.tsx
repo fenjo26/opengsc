@@ -2158,18 +2158,33 @@ export default function SitePage() {
   const handleSync = () => {
     if (syncing) return;
     setSyncing(true);
+
     fetch('/api/gsc/sync', { method: 'POST' })
+      .then(r => r.json())
       .then(() => {
-        const now = new Date();
-        setSyncedAt(now);
-        localStorage.setItem('gsc_synced_at', now.toISOString());
-        // Refetch data after sync
-        return fetch(`/api/gsc/site?domain=${encodeURIComponent(domain)}&period=${period}`);
+        // Poll until done, then refresh site data
+        const poll = setInterval(() => {
+          fetch('/api/gsc/sync')
+            .then(r => r.json())
+            .then(s => {
+              if (!s.syncing) {
+                clearInterval(poll);
+                const now = new Date();
+                setSyncedAt(now);
+                localStorage.setItem('gsc_synced_at', now.toISOString());
+                fetch(`/api/gsc/site?domain=${encodeURIComponent(domain)}&period=${period}`)
+                  .then(r => r.json())
+                  .then(d => { if (d?.chartData) setSiteData(d); })
+                  .catch(() => {})
+                  .finally(() => setSyncing(false));
+              }
+            })
+            .catch(() => {});
+        }, 15_000);
+        // Safety: stop after 15 min
+        setTimeout(() => { clearInterval(poll); setSyncing(false); }, 15 * 60_000);
       })
-      .then(r => r?.json())
-      .then(d => { if (d?.chartData) setSiteData(d); })
-      .catch(() => {})
-      .finally(() => setSyncing(false));
+      .catch(() => setSyncing(false));
   };
 
   // Fetch data from DB whenever domain or period changes
