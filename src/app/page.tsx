@@ -361,7 +361,7 @@ function Dropdown({ trigger, children, align = "left" }: { trigger: React.ReactN
     <div ref={ref} style={{ position: "relative" }}>
       <div onClick={() => setOpen(o => !o)}>{trigger}</div>
       {open && (
-        <div style={{ position: "absolute", top: "calc(100% + 6px)", [align === "right" ? "right" : "left"]: 0, background: "#1a1a1a", border: "1px solid var(--color-border)", borderRadius: "12px", boxShadow: "0 8px 32px rgba(0,0,0,0.6)", zIndex: 100, minWidth: "200px", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: "calc(100% + 6px)", [align === "right" ? "right" : "left"]: 0, background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "12px", boxShadow: "0 8px 32px rgba(0,0,0,0.25)", zIndex: 100, minWidth: "200px", overflow: "hidden" }}>
           {children}
         </div>
       )}
@@ -745,7 +745,7 @@ export default function PortfolioPage() {
             value={filterText}
             onChange={e => setFilterText(e.target.value)}
             placeholder={filterPlaceholders[filterDimension]}
-            style={{ width: "100%", padding: "7px 10px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "rgba(255,255,255,0.06)", color: "var(--color-text-primary)", fontSize: "12px", outline: "none", boxSizing: "border-box" }}
+            style={{ width: "100%", padding: "7px 10px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-bg-secondary)", color: "var(--color-text-primary)", fontSize: "12px", outline: "none", boxSizing: "border-box" }}
           />
         </div>
       )}
@@ -809,7 +809,7 @@ export default function PortfolioPage() {
             {l: t("compPrevMonth"),  v:"prev_month"},
             {l: t("custom"),         v:"custom"},
           ] as {l:string;v:Comparison}[]).map(({l,v}) => (
-            <button key={v} style={{...mi(comparison===v),fontWeight:comparison===v?600:400,color:comparison===v?"#fff":"var(--color-text-secondary)"}} onClick={()=>setComparison(v)}>{l}</button>
+            <button key={v} style={{...mi(comparison===v),fontWeight:comparison===v?600:400,color:comparison===v?"#3B82F6":"var(--color-text-secondary)"}} onClick={()=>setComparison(v)}>{l}</button>
           ))}
           {md}{ms(t("comparisonSettings"))}
           {([
@@ -843,7 +843,7 @@ export default function PortfolioPage() {
               {v:"week",  l: t("periodWeek")},
               {v:"month", l: t("periodMonth")},
             ] as {v:PeriodView;l:string}[]).map(({v,l}) => (
-              <button key={v} onClick={()=>setPeriodView(v)} style={{flex:1,padding:"5px 0",borderRadius:"6px",fontSize:"13px",fontWeight:periodView===v?600:400,cursor:"pointer",background:periodView===v?"#fff":"transparent",color:periodView===v?"#111":"var(--color-text-secondary)",border:"none",transition:"all 0.15s"}}>
+              <button key={v} onClick={()=>setPeriodView(v)} style={{flex:1,padding:"5px 0",borderRadius:"6px",fontSize:"13px",fontWeight:periodView===v?600:400,cursor:"pointer",background:periodView===v?"rgba(59,130,246,0.12)":"transparent",color:periodView===v?"#3B82F6":"var(--color-text-secondary)",border:"none",transition:"all 0.15s"}}>
                 {l}
               </button>
             ))}
@@ -1050,8 +1050,8 @@ export default function PortfolioPage() {
             @keyframes gsc-spin { to { transform: rotate(360deg); } }
             .period-scroll::-webkit-scrollbar { width: 6px; }
             .period-scroll::-webkit-scrollbar-track { background: var(--color-bg-secondary, #1e2130); border-radius: 3px; }
-            .period-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 3px; }
-            .period-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.32); }
+            .period-scroll::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+            .period-scroll::-webkit-scrollbar-thumb:hover { background: var(--color-text-secondary); }
           `}</style>
           {syncStatus === "syncing" ? "Синхронизация…"
             : syncStatus === "done" ? `Готово · ${syncedAt?.toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" })}`
