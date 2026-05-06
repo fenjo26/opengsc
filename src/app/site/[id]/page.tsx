@@ -552,6 +552,85 @@ function updateRules(item: SetupItem, patternStr: string): SetupItem {
   }
 }
 
+// ─── Branded Chart ────────────────────────────────────────────────────────────
+function BrandedChart({ siteDbId, period, keywords }: { siteDbId: string; period: string; keywords: string[] }) {
+  const [tab, setTab] = useState<'Trend' | 'Comparison'>('Trend');
+  const [rows, setRows] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!siteDbId) return;
+    setLoading(true);
+    fetch(`/api/gsc/branded-report?siteId=${siteDbId}&period=${period}`)
+      .then(r => r.json())
+      .then(d => setRows(d.rows ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [siteDbId, period]);
+
+  const fmt = (d: string) => { const dt = new Date(d); return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); };
+
+  const totalBranded = rows.reduce((s, r) => s + r.branded, 0);
+  const totalNon = rows.reduce((s, r) => s + r.nonBranded, 0);
+  const total = totalBranded + totalNon;
+  const brandedPct = total > 0 ? Math.round((totalBranded / total) * 100) : 0;
+
+  if (loading) return <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-secondary)', fontSize: 13 }}>Загрузка данных GSC…</div>;
+
+  if (rows.length === 0) return (
+    <div style={{ border: '1px dashed var(--color-border)', borderRadius: 12, padding: '32px 24px', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 13 }}>
+      Нет данных за этот период.<br/>Ключи: {keywords.join(', ')}
+    </div>
+  );
+
+  const chartData = rows.map(r => ({ date: fmt(r.date), branded: r.branded, nonBranded: r.nonBranded }));
+
+  return (
+    <div style={{ border: '1px solid var(--color-border)', borderRadius: 12, padding: '16px', background: 'var(--color-card)' }}>
+      {/* Summary */}
+      <div style={{ display: 'flex', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+          <span style={{ color: '#818cf8', fontWeight: 700 }}>{totalBranded.toLocaleString()}</span> брендовых кликов ({brandedPct}%)
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+          <span style={{ color: '#10b981', fontWeight: 700 }}>{totalNon.toLocaleString()}</span> небрендовых ({100 - brandedPct}%)
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
+        {(['Trend', 'Comparison'] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)} style={{ padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', border: `1px solid ${tab === t ? '#3B82F6' : 'var(--color-border)'}`, background: tab === t ? 'rgba(59,130,246,0.1)' : 'transparent', color: tab === t ? '#3B82F6' : 'var(--color-text-secondary)' }}>{t}</button>
+        ))}
+      </div>
+
+      {tab === 'Trend' ? (
+        <ResponsiveContainer width="100%" height={180}>
+          <LineChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
+            <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--color-text-secondary)' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+            <YAxis tick={{ fontSize: 10, fill: 'var(--color-text-secondary)' }} axisLine={false} tickLine={false} width={32} />
+            <Tooltip formatter={(v: any, name: string) => [v, name === 'branded' ? 'Брендовые' : 'Небрендовые']} contentStyle={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 8, fontSize: 12 }} />
+            <Line type="monotone" dataKey="branded" stroke="#818cf8" strokeWidth={2} dot={false} name="branded" />
+            <Line type="monotone" dataKey="nonBranded" stroke="#10b981" strokeWidth={2} dot={false} name="nonBranded" />
+          </LineChart>
+        </ResponsiveContainer>
+      ) : (
+        <ResponsiveContainer width="100%" height={180}>
+          <BarChart data={[{ name: 'Клики', branded: totalBranded, nonBranded: totalNon }]} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--color-text-secondary)' }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: 'var(--color-text-secondary)' }} axisLine={false} tickLine={false} width={40} />
+            <Tooltip formatter={(v: any, name: string) => [v.toLocaleString(), name === 'branded' ? 'Брендовые' : 'Небрендовые']} contentStyle={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 8, fontSize: 12 }} />
+            <Bar dataKey="branded" fill="#818cf8" name="branded" radius={[4,4,0,0]} />
+            <Bar dataKey="nonBranded" fill="#10b981" name="nonBranded" radius={[4,4,0,0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+    </div>
+  );
+}
+
 // ─── Branded Keywords Modal ───────────────────────────────────────────────────
 function BrandedKeywordsModal({ siteDbId, domain, initial, onClose, onSaved }: {
   siteDbId: string; domain: string; initial: string[];
@@ -2635,20 +2714,12 @@ export default function SitePage() {
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
               <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>{t("brandedVsNonBranded")}</h3>
-              <TabBar tabs={["Trend", "Comparison"]} active="Trend" onChange={() => {}} />
+              {brandedKeywords.length > 0 && (
+                <button onClick={() => setShowBrandedModal(true)} style={{ fontSize: "11px", color: "#3B82F6", background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.2)", borderRadius: "6px", cursor: "pointer", padding: "2px 8px" }}>✎ ключи</button>
+              )}
             </div>
             {brandedKeywords.length > 0 ? (
-              <div style={{ border: "1px solid var(--color-border)", borderRadius: "12px", padding: "16px", background: "var(--color-card)" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-                  <span style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>{t("setBrandedKw")}:</span>
-                  <button onClick={() => setShowBrandedModal(true)} style={{ fontSize: "12px", color: "#3B82F6", background: "none", border: "none", cursor: "pointer", padding: "2px 6px" }}>✎ {t("edit") ?? "Edit"}</button>
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                  {brandedKeywords.map(kw => (
-                    <span key={kw} style={{ fontSize: "12px", padding: "3px 10px", borderRadius: "20px", background: "rgba(99,102,241,0.12)", color: "#818cf8", border: "1px solid rgba(99,102,241,0.2)" }}>{kw}</span>
-                  ))}
-                </div>
-              </div>
+              <BrandedChart siteDbId={siteDbId} period={period} keywords={brandedKeywords} />
             ) : (
               <Placeholder icon={
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="9"/><path d="M9 9h1.5a1.5 1.5 0 0 1 0 3H9v3m3-6h1.5"/></svg>
