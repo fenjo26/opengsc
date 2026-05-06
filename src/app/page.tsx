@@ -471,13 +471,12 @@ export default function PortfolioPage() {
             .then(s => {
               if (!s.syncing) {
                 clearInterval(poll);
-                refetchPortfolio().then(() => {
-                  const now = new Date();
-                  setSyncedAt(now);
-                  localStorage.setItem('gsc_synced_at', now.toISOString());
-                  setSyncStatus("done");
-                  setTimeout(() => setSyncStatus("idle"), 5_000);
-                });
+                const now = new Date();
+                setSyncedAt(now);
+                localStorage.setItem('gsc_synced_at', now.toISOString());
+                refetchPortfolio();
+                setSyncStatus("done");
+                setTimeout(() => setSyncStatus("idle"), 5_000);
               }
             })
             .catch(() => {});
