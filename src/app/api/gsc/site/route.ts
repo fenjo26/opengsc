@@ -96,9 +96,9 @@ export async function GET(req: Request) {
   if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
 
   // ── Date windows ──────────────────────────────────────────────────────────────
-  // GSC 'final' data lags ~3 days
+  // GSC 'final' data lags ~2 days
   const endDate = new Date();
-  endDate.setDate(endDate.getDate() - 3);
+  endDate.setDate(endDate.getDate() - 2);
   endDate.setHours(23, 59, 59, 999);
 
   const startDate = new Date(endDate);

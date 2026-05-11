@@ -14,7 +14,8 @@ import {
   ArrowLeft, Sparkles, Eye, Percent, MoveUp,
   SlidersHorizontal, ChevronDown, Smartphone, Monitor, Tablet,
   Users, Activity, Zap, DollarSign, Link2, Check,
-  FileText, Globe, Search, ArrowLeftRight, BookmarkCheck, Calendar, X,
+  FileText, Globe, Search, ArrowLeftRight, BookmarkCheck, Calendar, X, Download,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 import {
   ComposedChart, LineChart, AreaChart, Area, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -232,30 +233,91 @@ function TabBar({ tabs, active, onChange }: { tabs: string[]; active: string; on
   );
 }
 
-function DataTable({ title, rows, tabs, blur = false }: {
+const PAGE_SIZE = 10;
+
+function exportCSV(filename: string, headers: string[], rows: (string | number)[][]) {
+  const lines = [headers.join(","), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(","))];
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function Pagination({ page, total, pageSize, onChange }: { page: number; total: number; pageSize: number; onChange: (p: number) => void }) {
+  const totalPages = Math.ceil(total / pageSize);
+  if (totalPages <= 1) return null;
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "10px", fontSize: "12px", color: "var(--color-text-secondary)" }}>
+      <span>{(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} of {total}</span>
+      <div style={{ display: "flex", gap: "4px" }}>
+        <button onClick={() => onChange(page - 1)} disabled={page === 1}
+          style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: page === 1 ? "var(--color-text-secondary)" : "var(--color-text-primary)", cursor: page === 1 ? "default" : "pointer", opacity: page === 1 ? 0.4 : 1, display: "flex", alignItems: "center" }}>
+          <ChevronLeft size={13} />
+        </button>
+        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+          let p = i + 1;
+          if (totalPages > 5) {
+            if (page <= 3) p = i + 1;
+            else if (page >= totalPages - 2) p = totalPages - 4 + i;
+            else p = page - 2 + i;
+          }
+          return (
+            <button key={p} onClick={() => onChange(p)}
+              style={{ padding: "4px 8px", borderRadius: "6px", border: `1px solid ${p === page ? "#3B82F6" : "var(--color-border)"}`, background: p === page ? "rgba(59,130,246,0.12)" : "var(--color-card)", color: p === page ? "#3B82F6" : "var(--color-text-primary)", cursor: "pointer", fontWeight: p === page ? 600 : 400, minWidth: "28px" }}>
+              {p}
+            </button>
+          );
+        })}
+        <button onClick={() => onChange(page + 1)} disabled={page === totalPages}
+          style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: page === totalPages ? "var(--color-text-secondary)" : "var(--color-text-primary)", cursor: page === totalPages ? "default" : "pointer", opacity: page === totalPages ? 0.4 : 1, display: "flex", alignItems: "center" }}>
+          <ChevronRight size={13} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DataTable({ title, rows, tabs, blur = false, csvFilename }: {
   title: string;
   rows: { label: string; clicks: number; impr: number; ctr: number; pos: number; cPct: number; iPct: number }[];
   tabs?: string[];
   blur?: boolean;
+  csvFilename?: string;
 }) {
   const { t } = useLanguage();
   const [tab, setTab] = useState("All");
+  const [page, setPage] = useState(1);
   const sorted = tab === "Growing"
     ? [...rows].sort((a, b) => b.cPct - a.cPct)
     : tab === "Decaying"
     ? [...rows].sort((a, b) => a.cPct - b.cPct)
     : rows;
+  const paged = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const handleTabChange = (t: string) => { setTab(t); setPage(1); };
+
+  const handleCSV = () => {
+    exportCSV(
+      csvFilename ?? `${title.toLowerCase().replace(/\s+/g, "-")}.csv`,
+      ["Query/Page", "Clicks", "Impressions", "CTR%", "Position", "Clicks%Change", "Impr%Change"],
+      sorted.map(r => [r.label, r.clicks, r.impr, r.ctr, r.pos, r.cPct, r.iPct])
+    );
+  };
 
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
         <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>{title}</h3>
-        {tabs && <TabBar tabs={tabs} active={tab} onChange={setTab} />}
+        {tabs && <TabBar tabs={tabs} active={tab} onChange={handleTabChange} />}
+        <button onClick={handleCSV} title="Export CSV"
+          style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "4px", padding: "4px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-secondary)", fontSize: "12px", cursor: "pointer" }}>
+          <Download size={12} /> CSV
+        </button>
       </div>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
         <thead>
           <tr style={{ borderBottom: "1px solid var(--color-border)" }}>
-            {/* first column: label (no header text) */}
             <th style={{ textAlign: "left", padding: "8px 0", color: "var(--color-text-secondary)", fontWeight: 500 }}></th>
             <th style={{ textAlign: "left", padding: "8px 8px", color: C.clicks, fontWeight: 600 }}>{t("clicks")}</th>
             <th style={{ textAlign: "left", padding: "8px 8px", color: C.impressions, fontWeight: 600 }}>{t("impressions")}</th>
@@ -264,7 +326,7 @@ function DataTable({ title, rows, tabs, blur = false }: {
           </tr>
         </thead>
         <tbody>
-          {sorted.slice(0, 8).map((r, i) => (
+          {paged.map((r, i) => (
             <tr key={i} style={{ borderBottom: "1px solid var(--color-border)", background: i % 2 === 0 ? "rgba(255,255,255,0.03)" : "transparent" }}>
               <td style={{ padding: "8px 8px 8px 0", color: "var(--color-text-primary)", maxWidth: "220px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 <span style={blur ? { filter: "blur(5px)", userSelect: "none", transition: "filter 0.25s", display: "inline-block" } : { transition: "filter 0.25s" }}>
@@ -281,6 +343,7 @@ function DataTable({ title, rows, tabs, blur = false }: {
           ))}
         </tbody>
       </table>
+      <Pagination page={page} total={sorted.length} pageSize={PAGE_SIZE} onChange={setPage} />
     </div>
   );
 }
@@ -289,13 +352,32 @@ type CountryRow = { name: string; flag?: string; clicks: number; impr: number; c
 function CountryTable({ rows }: { rows: CountryRow[] }) {
   const { t } = useLanguage();
   const [tab, setTab] = useState("All");
+  const [page, setPage] = useState(1);
   const sorted = tab === "Growing" ? [...rows].sort((a, b) => b.cPct - a.cPct)
     : tab === "Decaying" ? [...rows].sort((a, b) => a.cPct - b.cPct) : rows;
+  const paged = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const handleTabChange = (t: string) => { setTab(t); setPage(1); };
+
+  const handleCSV = () => {
+    exportCSV("countries.csv",
+      ["Country", "Clicks", "Impressions", "CTR%", "Position", "Clicks%Change", "Impr%Change"],
+      sorted.map(r => {
+        const label = r.flag ? r.name : iso3ToName(r.name);
+        return [label, r.clicks, r.impr, r.ctr, r.pos, r.cPct, r.iPct];
+      })
+    );
+  };
+
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
         <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>{t("countries")}</h3>
-        <TabBar tabs={["All", "Growing", "Decaying"]} active={tab} onChange={setTab} />
+        <TabBar tabs={["All", "Growing", "Decaying"]} active={tab} onChange={handleTabChange} />
+        <button onClick={handleCSV} title="Export CSV"
+          style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "4px", padding: "4px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-secondary)", fontSize: "12px", cursor: "pointer" }}>
+          <Download size={12} /> CSV
+        </button>
       </div>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
         <thead>
@@ -308,8 +390,7 @@ function CountryTable({ rows }: { rows: CountryRow[] }) {
           </tr>
         </thead>
         <tbody>
-          {sorted.map((r, i) => {
-            // Support both pre-resolved (flag + name) and raw GSC ISO-3 codes
+          {paged.map((r, i) => {
             const flag = r.flag || iso3ToFlag(r.name);
             const label = r.flag ? r.name : iso3ToName(r.name);
             return (
@@ -324,6 +405,7 @@ function CountryTable({ rows }: { rows: CountryRow[] }) {
           })}
         </tbody>
       </table>
+      <Pagination page={page} total={sorted.length} pageSize={PAGE_SIZE} onChange={setPage} />
     </div>
   );
 }
@@ -2223,46 +2305,64 @@ type RankRow = { label: string; clicks: number; impr: number; ctr: number; pos: 
 function NewRankingsTable({ queryRows, pageRows, blur }: { queryRows: RankRow[]; pageRows: RankRow[]; blur: boolean }) {
   const { t } = useLanguage();
   const [tab, setTab] = useState<"Queries" | "Pages">("Queries");
+  const [page, setPage] = useState(1);
   const rows = tab === "Queries" ? queryRows : pageRows;
+  const paged = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const handleTabChange = (v: string) => { setTab(v as "Queries" | "Pages"); setPage(1); };
+
+  const handleCSV = () => {
+    exportCSV(`new-rankings-${tab.toLowerCase()}.csv`,
+      [tab === "Queries" ? "Query" : "Page", "Clicks", "Impressions", "CTR%", "Position"],
+      rows.map(r => [r.label, r.clicks, r.impr, r.ctr, r.pos])
+    );
+  };
 
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
         <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>{t("newRankings")}</h3>
-        <TabBar tabs={["Queries", "Pages"]} active={tab} onChange={v => setTab(v as "Queries" | "Pages")} />
+        <TabBar tabs={["Queries", "Pages"]} active={tab} onChange={handleTabChange} />
+        <button onClick={handleCSV} title="Export CSV"
+          style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "4px", padding: "4px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-secondary)", fontSize: "12px", cursor: "pointer" }}>
+          <Download size={12} /> CSV
+        </button>
       </div>
       {rows.length === 0 ? (
         <div style={{ padding: "32px 0", textAlign: "center", color: "var(--color-text-secondary)", fontSize: "13px" }}>
           No new rankings this period
         </div>
       ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-          <thead>
-            <tr style={{ borderBottom: "1px solid var(--color-border)" }}>
-              <th style={{ textAlign: "left", padding: "8px 0", color: "var(--color-text-secondary)", fontWeight: 500 }}></th>
-              <th style={{ textAlign: "left", padding: "8px 8px", color: C.clicks,      fontWeight: 600, fontSize: "12px" }}>{t("clicks")}</th>
-              <th style={{ textAlign: "left", padding: "8px 8px", color: C.impressions, fontWeight: 600, fontSize: "12px" }}>{t("impressions")}</th>
-              <th style={{ textAlign: "left", padding: "8px 8px", color: C.ctr,         fontWeight: 600, fontSize: "12px" }}>CTR</th>
-              <th style={{ textAlign: "left", padding: "8px 0",  color: C.position,     fontWeight: 600, fontSize: "12px" }}>{t("position")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.slice(0, 8).map((r, i) => (
-              <tr key={i} style={{ borderBottom: "1px solid var(--color-border)", background: i % 2 === 0 ? "rgba(255,255,255,0.03)" : "transparent" }}>
-                <td style={{ padding: "7px 8px 7px 0", maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "12px", color: "var(--color-text-primary)" }}>
-                  <span style={blur ? { filter: "blur(5px)", userSelect: "none", display: "inline-block" } : {}}>
-                    <span style={{ fontSize: "10px", background: "#10B981", color: "#fff", borderRadius: "4px", padding: "1px 5px", marginRight: "5px", fontWeight: 700 }}>NEW</span>
-                    {r.label}
-                  </span>
-                </td>
-                <td style={{ padding: "7px 8px", fontSize: "12px", color: "var(--color-text-primary)", fontWeight: 500 }}>{r.clicks}</td>
-                <td style={{ padding: "7px 8px", fontSize: "12px", color: "var(--color-text-secondary)" }}>{fmtK(r.impr)}</td>
-                <td style={{ padding: "7px 8px", fontSize: "12px", color: "var(--color-text-secondary)" }}>{r.ctr}%</td>
-                <td style={{ padding: "7px 0",  fontSize: "12px", color: "var(--color-text-secondary)" }}>{r.pos}</td>
+        <>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid var(--color-border)" }}>
+                <th style={{ textAlign: "left", padding: "8px 0", color: "var(--color-text-secondary)", fontWeight: 500 }}></th>
+                <th style={{ textAlign: "left", padding: "8px 8px", color: C.clicks,      fontWeight: 600, fontSize: "12px" }}>{t("clicks")}</th>
+                <th style={{ textAlign: "left", padding: "8px 8px", color: C.impressions, fontWeight: 600, fontSize: "12px" }}>{t("impressions")}</th>
+                <th style={{ textAlign: "left", padding: "8px 8px", color: C.ctr,         fontWeight: 600, fontSize: "12px" }}>CTR</th>
+                <th style={{ textAlign: "left", padding: "8px 0",  color: C.position,     fontWeight: 600, fontSize: "12px" }}>{t("position")}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {paged.map((r, i) => (
+                <tr key={i} style={{ borderBottom: "1px solid var(--color-border)", background: i % 2 === 0 ? "rgba(255,255,255,0.03)" : "transparent" }}>
+                  <td style={{ padding: "7px 8px 7px 0", maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "12px", color: "var(--color-text-primary)" }}>
+                    <span style={blur ? { filter: "blur(5px)", userSelect: "none", display: "inline-block" } : {}}>
+                      <span style={{ fontSize: "10px", background: "#10B981", color: "#fff", borderRadius: "4px", padding: "1px 5px", marginRight: "5px", fontWeight: 700 }}>NEW</span>
+                      {r.label}
+                    </span>
+                  </td>
+                  <td style={{ padding: "7px 8px", fontSize: "12px", color: "var(--color-text-primary)", fontWeight: 500 }}>{r.clicks}</td>
+                  <td style={{ padding: "7px 8px", fontSize: "12px", color: "var(--color-text-secondary)" }}>{fmtK(r.impr)}</td>
+                  <td style={{ padding: "7px 8px", fontSize: "12px", color: "var(--color-text-secondary)" }}>{r.ctr}%</td>
+                  <td style={{ padding: "7px 0",  fontSize: "12px", color: "var(--color-text-secondary)" }}>{r.pos}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <Pagination page={page} total={rows.length} pageSize={PAGE_SIZE} onChange={setPage} />
+        </>
       )}
     </div>
   );
@@ -2706,8 +2806,8 @@ export default function SitePage() {
 
         {/* Queries + Pages */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "32px" }}>
-          <DataTable title={t("queriesTable")} rows={queryRows} tabs={["All", "Growing", "Decaying"]} blur={blur} />
-          <DataTable title={t("pagesTable")}   rows={pageRows}  tabs={["All", "Growing", "Decaying"]} blur={blur} />
+          <DataTable title={t("queriesTable")} rows={queryRows} tabs={["All", "Growing", "Decaying"]} blur={blur} csvFilename="queries.csv" />
+          <DataTable title={t("pagesTable")}   rows={pageRows}  tabs={["All", "Growing", "Decaying"]} blur={blur} csvFilename="pages.csv" />
         </div>
 
         {/* Branded + Query Counting */}

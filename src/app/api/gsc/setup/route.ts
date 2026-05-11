@@ -240,7 +240,7 @@ export async function POST(req: Request) {
     select: { id: true, access_token: true, refresh_token: true, expires_at: true },
   });
 
-  const end = new Date(); end.setDate(end.getDate() - 3);
+  const end = new Date(); end.setDate(end.getDate() - 2);
   const start = new Date(end); start.setDate(end.getDate() - 89);
   const endStr   = end.toISOString().split('T')[0];
   const startStr = start.toISOString().split('T')[0];

@@ -125,7 +125,7 @@ export async function GET(req: Request) {
 
   // Date windows
   const days = periodToDays(period);
-  const endDate = new Date(); endDate.setDate(endDate.getDate() - 3);
+  const endDate = new Date(); endDate.setDate(endDate.getDate() - 2);
   const startDate = new Date(endDate); startDate.setDate(endDate.getDate() - days + 1);
   const prevEnd = new Date(startDate); prevEnd.setDate(startDate.getDate() - 1);
   const prevStart = new Date(prevEnd); prevStart.setDate(prevEnd.getDate() - days + 1);

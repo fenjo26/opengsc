@@ -21,7 +21,7 @@ export async function GET(req: Request) {
 
   // Date range
   const days = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : period === '180d' ? 180 : 30;
-  const end = new Date(); end.setDate(end.getDate() - 3);
+  const end = new Date(); end.setDate(end.getDate() - 2);
   const start = new Date(end); start.setDate(end.getDate() - days);
   const startStr = start.toISOString().split('T')[0];
   const endStr = end.toISOString().split('T')[0];

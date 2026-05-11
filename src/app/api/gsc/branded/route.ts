@@ -97,7 +97,7 @@ export async function GET(req: Request) {
     const { google } = await import('googleapis');
     const since = new Date();
     since.setDate(since.getDate() - 90);
-    const end = new Date(); end.setDate(end.getDate() - 3);
+    const end = new Date(); end.setDate(end.getDate() - 2);
     const startStr = since.toISOString().split('T')[0];
     const endStr = end.toISOString().split('T')[0];
 

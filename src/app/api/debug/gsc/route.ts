@@ -115,7 +115,7 @@ export async function GET() {
         // Step 5: try a sample searchanalytics query
         if (sites.length > 0 && sites[0].siteUrl) {
           const testSite = sites[0].siteUrl;
-          const end = new Date(); end.setDate(end.getDate() - 3);
+          const end = new Date(); end.setDate(end.getDate() - 2);
           const start = new Date(end); start.setDate(end.getDate() - 7);
           try {
             const qres = await wm.searchanalytics.query({
