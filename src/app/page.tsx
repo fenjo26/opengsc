@@ -413,9 +413,10 @@ export default function PortfolioPage() {
   const [filterDimension, setFilterDimension] = useState<"query"|"page"|"country"|"device"|null>(null);
   const [filterText, setFilterText] = useState("");
 
-  type SyncStatus = "idle" | "syncing" | "done";
+  type SyncStatus = "idle" | "syncing" | "done" | "error" | "reauth";
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
   const [syncedAt, setSyncedAt] = useState<Date | null>(null);
+  const [syncWarning, setSyncWarning] = useState<string | null>(null);
 
   useEffect(() => {
     const s = localStorage.getItem('gsc_synced_at');
@@ -460,6 +461,7 @@ export default function PortfolioPage() {
   const handleSync = () => {
     if (syncStatus === "syncing") return;
     setSyncStatus("syncing");
+    setSyncWarning(null);
 
     fetch('/api/gsc/sync', { method: 'POST' })
       .then(r => r.json())
@@ -471,12 +473,24 @@ export default function PortfolioPage() {
             .then(s => {
               if (!s.syncing) {
                 clearInterval(poll);
-                const now = new Date();
-                setSyncedAt(now);
-                localStorage.setItem('gsc_synced_at', now.toISOString());
                 refetchPortfolio();
-                setSyncStatus("done");
-                setTimeout(() => setSyncStatus("idle"), 5_000);
+                // Check for auth errors in the result
+                if (s.lastResult?.needsReauth) {
+                  setSyncStatus("reauth");
+                  setSyncWarning("reauth");
+                  setTimeout(() => setSyncStatus("idle"), 30_000);
+                } else if (s.lastResult?.accountErrors > 0 && s.lastResult?.sitesSynced === 0) {
+                  setSyncStatus("error");
+                  setSyncWarning("error");
+                  setTimeout(() => setSyncStatus("idle"), 30_000);
+                } else {
+                  // Only mark as synced on actual success
+                  const now = new Date();
+                  setSyncedAt(now);
+                  localStorage.setItem('gsc_synced_at', now.toISOString());
+                  setSyncStatus("done");
+                  setTimeout(() => setSyncStatus("idle"), 5_000);
+                }
               }
             })
             .catch(() => {});
@@ -1030,8 +1044,8 @@ export default function PortfolioPage() {
             display: "flex", alignItems: "center", gap: "6px",
             padding: "6px 12px", borderRadius: "8px", fontSize: "12px", fontWeight: 500,
             border: "1px solid var(--color-border)",
-            background: syncStatus === "done" ? "rgba(16,185,129,0.08)" : syncStatus === "syncing" ? "rgba(59,130,246,0.08)" : "var(--color-card)",
-            color: syncStatus === "done" ? "#10B981" : syncStatus === "syncing" ? "#60a5fa" : "var(--color-text-secondary)",
+            background: syncStatus === "done" ? "rgba(16,185,129,0.08)" : syncStatus === "syncing" ? "rgba(59,130,246,0.08)" : (syncStatus === "reauth" || syncStatus === "error") ? "rgba(239,68,68,0.08)" : "var(--color-card)",
+            color: syncStatus === "done" ? "#10B981" : syncStatus === "syncing" ? "#60a5fa" : (syncStatus === "reauth" || syncStatus === "error") ? "#EF4444" : "var(--color-text-secondary)",
             cursor: syncStatus === "syncing" ? "not-allowed" : "pointer",
             whiteSpace: "nowrap", transition: "all 0.2s",
           }}
@@ -1039,6 +1053,10 @@ export default function PortfolioPage() {
           {syncStatus === "done" ? (
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
               <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          ) : (syncStatus === "reauth" || syncStatus === "error") ? (
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
             </svg>
           ) : (
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
@@ -1055,10 +1073,36 @@ export default function PortfolioPage() {
           `}</style>
           {syncStatus === "syncing" ? "Синхронизация…"
             : syncStatus === "done" ? `Готово · ${syncedAt?.toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" })}`
+            : syncStatus === "reauth" ? "Требуется вход"
+            : syncStatus === "error" ? "Ошибка синхр."
             : syncedAt ? syncedAt.toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" })
             : "Sync GSC"}
         </button>
       </div>
+
+      {/* ── Sync warning banner ── */}
+      {syncWarning && (
+        <div style={{ margin: "0 0 12px 0", padding: "10px 16px", borderRadius: "10px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", display: "flex", alignItems: "center", gap: "10px" }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <div style={{ flex: 1 }}>
+            {syncWarning === "reauth" ? (
+              <>
+                <span style={{ fontSize: "13px", fontWeight: 600, color: "#EF4444" }}>Синхронизация не выполнена — требуется повторная авторизация Google.</span>
+                <span style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginLeft: "6px" }}>
+                  Перейди в <a href="/settings" style={{ color: "#3B82F6", textDecoration: "underline" }}>Настройки</a> и переподключи Google аккаунт.
+                </span>
+              </>
+            ) : (
+              <span style={{ fontSize: "13px", fontWeight: 600, color: "#EF4444" }}>Синхронизация завершилась с ошибками. Проверь логи сервера.</span>
+            )}
+          </div>
+          <button onClick={() => setSyncWarning(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--color-text-secondary)", padding: "2px" }}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Active filter chips */}
       {activeFilterCount > 0 && (

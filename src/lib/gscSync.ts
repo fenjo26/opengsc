@@ -3,9 +3,22 @@ import { google } from 'googleapis';
 
 let isSyncing = false;
 
-export function isSyncInProgress() {
-  return isSyncing;
+export interface SyncResult {
+  completedAt: Date | null;
+  sitesSynced: number;
+  accountErrors: { accountId: string; error: string; needsReauth: boolean }[];
+  siteErrors: { site: string; error: string }[];
 }
+
+let lastSyncResult: SyncResult = {
+  completedAt: null,
+  sitesSynced: 0,
+  accountErrors: [],
+  siteErrors: [],
+};
+
+export function isSyncInProgress() { return isSyncing; }
+export function getLastSyncResult() { return lastSyncResult; }
 
 function cleanSiteUrl(siteUrl: string): string {
   if (siteUrl.startsWith('sc-domain:')) {
@@ -24,6 +37,13 @@ export async function runGscSync() {
     return;
   }
   isSyncing = true;
+
+  const result: SyncResult = {
+    completedAt: null,
+    sitesSynced: 0,
+    accountErrors: [],
+    siteErrors: [],
+  };
 
   try {
     console.log('[GSC Sync] Starting…');
@@ -96,6 +116,12 @@ export async function runGscSync() {
         console.log(`[GSC Sync]   Found ${siteList.length} sites in GSC`);
       } catch (err: any) {
         console.error(`[GSC Sync]   Failed to list sites: ${err.message}`);
+        const needsReauth = /invalid_grant|token.*expired|unauthorized|invalid.*token/i.test(err.message);
+        result.accountErrors.push({
+          accountId: account.providerAccountId,
+          error: err.message,
+          needsReauth,
+        });
         continue;
       }
 
@@ -202,16 +228,20 @@ export async function runGscSync() {
                   position:    row.position    ?? 0,
                 })),
             });
+            result.sitesSynced++;
           }
         } catch (err: any) {
           console.error(`[GSC Sync]     Error syncing ${hostname}: ${err.message}`);
+          result.siteErrors.push({ site: hostname, error: err.message });
         }
       }
     }
   } catch (e) {
     console.error('[GSC Sync] Fatal error:', e);
   } finally {
+    result.completedAt = new Date();
+    lastSyncResult = result;
     isSyncing = false;
-    console.log('[GSC Sync] Done.');
+    console.log(`[GSC Sync] Done. sites=${result.sitesSynced} accountErrors=${result.accountErrors.length} siteErrors=${result.siteErrors.length}`);
   }
 }

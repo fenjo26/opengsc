@@ -1,14 +1,24 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { runGscSync, isSyncInProgress } from '@/lib/gscSync';
+import { runGscSync, isSyncInProgress, getLastSyncResult } from '@/lib/gscSync';
 
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  return NextResponse.json({ syncing: isSyncInProgress() });
+  const result = getLastSyncResult();
+  return NextResponse.json({
+    syncing: isSyncInProgress(),
+    lastResult: result.completedAt ? {
+      sitesSynced: result.sitesSynced,
+      needsReauth: result.accountErrors.some(e => e.needsReauth),
+      accountErrors: result.accountErrors.length,
+      siteErrors: result.siteErrors.length,
+      completedAt: result.completedAt,
+    } : null,
+  });
 }
 
 export async function POST() {
