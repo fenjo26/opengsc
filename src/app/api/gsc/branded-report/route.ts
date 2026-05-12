@@ -44,7 +44,7 @@ export async function GET(req: Request) {
           startDate: startStr, endDate: endStr,
           dimensions: ['date', 'query'],
           rowLimit: 25000,
-          dataState: 'final',
+          dataState: 'all',
         },
       });
       rows = res.data.rows ?? [];

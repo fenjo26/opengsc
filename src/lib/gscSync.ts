@@ -168,7 +168,7 @@ export async function runGscSync() {
               endDate:    endDateStr,
               dimensions: ['date'],
               rowLimit:   25000,
-              dataState:  'final',
+              dataState:  'all',
             },
           });
 

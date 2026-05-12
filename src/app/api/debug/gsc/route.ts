@@ -125,7 +125,7 @@ export async function GET() {
                 endDate:    end.toISOString().split('T')[0],
                 dimensions: ['date'],
                 rowLimit:   5,
-                dataState:  'final',
+                dataState:  'all',
               },
             });
             const rows = qres.data.rows ?? [];

@@ -70,7 +70,7 @@ async function queryGSC(
           endDate,
           dimensions: [dimension],
           rowLimit,
-          dataState: 'final',
+          dataState: 'all',
         },
       });
       return res.data.rows ?? [];

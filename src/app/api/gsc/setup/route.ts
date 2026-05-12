@@ -30,7 +30,7 @@ async function queryGSC(
       const wm = google.webmasters({ version: 'v3', auth: oauth2 });
       const res = await wm.searchanalytics.query({
         siteUrl,
-        requestBody: { startDate, endDate, dimensions: [dimension], rowLimit, dataState: 'final' },
+        requestBody: { startDate, endDate, dimensions: [dimension], rowLimit, dataState: 'all' },
       });
       return res.data.rows ?? [];
     } catch { continue; }

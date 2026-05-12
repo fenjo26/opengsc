@@ -109,7 +109,7 @@ export async function GET(req: Request) {
         const wm = google.webmasters({ version: 'v3', auth: oauth2 });
         const res = await wm.searchanalytics.query({
           siteUrl: site.siteId,
-          requestBody: { startDate: startStr, endDate: endStr, dimensions: ['query'], rowLimit: 100, dataState: 'final' },
+          requestBody: { startDate: startStr, endDate: endStr, dimensions: ['query'], rowLimit: 100, dataState: 'all' },
         });
         queryRows = res.data.rows ?? [];
         break;
