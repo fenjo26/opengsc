@@ -234,6 +234,102 @@ export async function runGscSync() {
           console.error(`[GSC Sync]     Error syncing ${hostname}: ${err.message}`);
           result.siteErrors.push({ site: hostname, error: err.message });
         }
+
+        // ── Step 3: sync per-URL daily data (Content Decay Map) ─────────────
+        // 90-day window gives ~3 monthly or ~13 weekly buckets in the decay map
+        const url90Start = new Date(endDate);
+        url90Start.setDate(endDate.getDate() - 90);
+        url90Start.setHours(0, 0, 0, 0);
+        const url90StartStr = url90Start.toISOString().split('T')[0];
+
+        try {
+          const urlRes = await wm.searchanalytics.query({
+            siteUrl: gscUrl,
+            requestBody: {
+              startDate:  url90StartStr,
+              endDate:    endDateStr,
+              dimensions: ['date', 'page'],
+              rowLimit:   25000,
+              dataState:  'all',
+            },
+          });
+
+          const urlRows = urlRes.data.rows ?? [];
+          console.log(`[GSC Sync]     ${urlRows.length} url-day rows`);
+
+          if (urlRows.length > 0) {
+            await prisma.dailyMetric.deleteMany({
+              where: {
+                siteId: dbSite.id,
+                url:    { not: '' },
+                query:  '',
+                date:   { gte: url90Start, lte: endDate },
+              },
+            });
+            await prisma.dailyMetric.createMany({
+              data: urlRows
+                .filter(r => r.keys?.[0] && r.keys?.[1])
+                .map(r => ({
+                  siteId:      dbSite.id,
+                  date:        new Date(r.keys![0]),
+                  url:         r.keys![1],
+                  query:       '',
+                  clicks:      r.clicks      ?? 0,
+                  impressions: r.impressions ?? 0,
+                  ctr:         r.ctr         ?? 0,
+                  position:    r.position    ?? 0,
+                })),
+            });
+          }
+        } catch (err: any) {
+          console.error(`[GSC Sync]     Error syncing URL data for ${hostname}: ${err.message}`);
+        }
+
+        // ── Step 4: sync per-query+page data (Cannibalization/Striking/CTR) ──
+        // No date dimension — returns aggregated totals over the 90-day window.
+        // Stored with date=endDate so tools querying date>=since always find it.
+        try {
+          const qpRes = await wm.searchanalytics.query({
+            siteUrl: gscUrl,
+            requestBody: {
+              startDate:  url90StartStr,
+              endDate:    endDateStr,
+              dimensions: ['query', 'page'],
+              rowLimit:   25000,
+              dataState:  'all',
+            },
+          });
+
+          const qpRows = qpRes.data.rows ?? [];
+          console.log(`[GSC Sync]     ${qpRows.length} query+page rows`);
+
+          if (qpRows.length > 0) {
+            // Delete all prior query+url summary rows for this site, then re-insert
+            await prisma.dailyMetric.deleteMany({
+              where: {
+                siteId: dbSite.id,
+                url:    { not: '' },
+                query:  { not: '' },
+              },
+            });
+            await prisma.dailyMetric.createMany({
+              data: qpRows
+                .filter(r => r.keys?.[0] && r.keys?.[1])
+                .map(r => ({
+                  siteId:      dbSite.id,
+                  date:        endDate,        // summary date — always within any recent range
+                  url:         r.keys![1],     // page URL
+                  query:       r.keys![0],     // search query
+                  clicks:      r.clicks      ?? 0,
+                  impressions: r.impressions ?? 0,
+                  ctr:         r.ctr         ?? 0,
+                  position:    r.position    ?? 0,
+                })),
+            });
+          }
+        } catch (err: any) {
+          console.error(`[GSC Sync]     Error syncing query+page data for ${hostname}: ${err.message}`);
+        }
       }
     }
   } catch (e) {

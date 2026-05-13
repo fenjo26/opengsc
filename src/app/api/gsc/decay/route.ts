@@ -68,26 +68,29 @@ export async function GET(req: Request) {
   const rangeEnd   = buckets[buckets.length - 1].end;
 
   // ── Top N URLs by metric in range ─────────────────────────────────────────────
+  // query='' ensures we only get URL-level rows (not query+URL rows)
   const topUrls = await prisma.dailyMetric.groupBy({
     by: ['url'],
-    where: { siteId, date: { gte: rangeStart, lte: rangeEnd } },
+    where: { siteId, query: '', date: { gte: rangeStart, lte: rangeEnd } },
     _sum: { clicks: true, impressions: true },
     orderBy: { _sum: { [metric]: 'desc' } },
-    take: topN,
+    take: topN + 1, // +1 to account for possible url='' aggregate row we filter below
   });
 
-  const urls = topUrls.map(u => u.url);
+  // Exclude the site-level aggregate row (url='') — only keep actual page URLs
+  const urls = topUrls.map((u: any) => u.url as string).filter(u => u !== '');
   if (urls.length === 0) return NextResponse.json({ pages: [], cols: buckets.map(b => b.label), allVals: [], decay: [] });
+  const topNUrls = urls.slice(0, topN);
 
   // ── Fetch daily records for those URLs ───────────────────────────────────────
   const records = await prisma.dailyMetric.findMany({
-    where: { siteId, url: { in: urls }, date: { gte: rangeStart, lte: rangeEnd } },
+    where: { siteId, url: { in: topNUrls }, query: '', date: { gte: rangeStart, lte: rangeEnd } },
     select: { url: true, date: true, clicks: true, impressions: true },
   });
 
   // ── Bucket aggregation ────────────────────────────────────────────────────────
   const urlBuckets = new Map<string, number[]>();
-  for (const url of urls) urlBuckets.set(url, new Array(cols).fill(0));
+  for (const url of topNUrls) urlBuckets.set(url, new Array(cols).fill(0));
 
   for (const r of records) {
     const arr = urlBuckets.get(r.url);
@@ -97,7 +100,7 @@ export async function GET(req: Request) {
   }
 
   // ── Build page matrix ─────────────────────────────────────────────────────────
-  const pages = urls.map(url => ({
+  const pages = topNUrls.map(url => ({
     url,
     path: url.replace(/^https?:\/\/[^/]+/, '') || '/',
     vals: urlBuckets.get(url)!,

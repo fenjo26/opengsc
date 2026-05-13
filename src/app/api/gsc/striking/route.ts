@@ -24,7 +24,8 @@ export async function GET(req: Request) {
   since.setDate(since.getDate() - days);
 
   // Aggregate (query, url) pairs within position band
-  const rows = await prisma.dailyMetric.groupBy({
+  type StrikingRow = { url: string; query: string; _sum: { clicks: number | null; impressions: number | null }; _avg: { ctr: number | null; position: number | null } };
+  const rawRows = await prisma.dailyMetric.groupBy({
     by: ['query', 'url'],
     where: {
       siteId,
@@ -37,6 +38,8 @@ export async function GET(req: Request) {
     orderBy: { _sum: { impressions: 'desc' } },
     take: limit,
   });
+
+  const rows: StrikingRow[] = (rawRows as unknown as StrikingRow[]).filter(r => r.url !== '' && r.query !== '');
 
   const keywords = rows.map(r => ({
     query:       r.query,

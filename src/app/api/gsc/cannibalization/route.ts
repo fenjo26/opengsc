@@ -34,7 +34,8 @@ export async function GET(req: Request) {
   since.setDate(since.getDate() - days);
 
   // ── Aggregate (query, url) pairs ───────────────────────────────────────────────
-  const aggs = await prisma.dailyMetric.groupBy({
+  type AggRow = { url: string; query: string; _sum: { clicks: number | null; impressions: number | null }; _avg: { ctr: number | null; position: number | null } };
+  const aggsRaw = await prisma.dailyMetric.groupBy({
     by: ['query', 'url'],
     where: { siteId, date: { gte: since } },
     _sum: { clicks: true, impressions: true },
@@ -42,6 +43,8 @@ export async function GET(req: Request) {
     orderBy: { _sum: { impressions: 'desc' } },
     take: 10000,
   });
+  // Exclude site-level aggregate rows (url='' or query='') that have no per-URL meaning
+  const aggs: AggRow[] = (aggsRaw as unknown as AggRow[]).filter(a => a.url !== '' && a.query !== '');
 
   // ── Build URL → top query map (query bringing most impressions to that URL) ──
   const urlBest = new Map<string, { query: string; impr: number }>();

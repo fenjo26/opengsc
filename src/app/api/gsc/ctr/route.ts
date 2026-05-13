@@ -28,7 +28,8 @@ export async function GET(req: Request) {
   since.setDate(since.getDate() - days);
 
   // Only top-10 positions where CTR comparison makes sense
-  const rows = await prisma.dailyMetric.groupBy({
+  type CtrRow = { url: string; query: string; _sum: { clicks: number | null; impressions: number | null }; _avg: { ctr: number | null; position: number | null } };
+  const rawRows = await prisma.dailyMetric.groupBy({
     by: ['query', 'url'],
     where: {
       siteId,
@@ -41,6 +42,8 @@ export async function GET(req: Request) {
     orderBy: { _sum: { impressions: 'desc' } },
     take: limit,
   });
+
+  const rows: CtrRow[] = (rawRows as unknown as CtrRow[]).filter(r => r.url !== '' && r.query !== '');
 
   const keywords = rows.map(r => {
     const position   = Math.round((r._avg.position ?? 1) * 10) / 10;
