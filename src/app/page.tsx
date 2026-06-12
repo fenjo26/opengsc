@@ -1191,7 +1191,6 @@ export default function PortfolioPage() {
                 onClick={e => {
                   e.stopPropagation();
                   if (editingTagSiteId === site.id) { setEditingTagSiteId(null); return; }
-                  setEditingTagValue((siteTags[site.id] || []).join(", "));
                   setEditingTagSiteId(site.id);
                 }}
               >
