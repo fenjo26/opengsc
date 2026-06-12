@@ -333,7 +333,7 @@ function MultiMetricChart({ data, activeMetrics, prevTrend = true }: { data: Pt[
             </linearGradient>
           ))}
         </defs>
-        <Tooltip content={<ChartTooltip />} cursor={{ stroke: "#aaa", strokeWidth: 1, strokeDasharray: "3 2" }} />
+        <Tooltip content={<ChartTooltip />} wrapperStyle={{ zIndex: 300 }} cursor={{ stroke: "#aaa", strokeWidth: 1, strokeDasharray: "3 2" }} />
         {prevTrend && metrics.map(({ m, cKey }) => activeMetrics.has(m) && (
           <Area key={`c-${m}`} type="monotone" dataKey={cKey}
             stroke={MC[m].color} strokeWidth={1} strokeDasharray="4 3"
@@ -346,6 +346,47 @@ function MultiMetricChart({ data, activeMetrics, prevTrend = true }: { data: Pt[
         ))}
       </AreaChart>
     </ResponsiveContainer>
+  );
+}
+
+// ─── TagInput — isolated component so typing doesn't re-render parent ────────
+function TagInput({ initialValue, onSave, onCancel, placeholder }: {
+  initialValue: string;
+  onSave: (v: string) => void;
+  onCancel: () => void;
+  placeholder?: string;
+}) {
+  const [value, setValue] = useState(initialValue);
+  return (
+    <div
+      style={{ display: "flex", gap: "5px", alignItems: "center" }}
+      onClick={e => e.stopPropagation()}
+    >
+      <input
+        autoFocus
+        value={value}
+        onChange={e => setValue(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === "Enter") { e.preventDefault(); onSave(value); }
+          if (e.key === "Escape") { e.preventDefault(); onCancel(); }
+        }}
+        placeholder={placeholder || "тег1, тег2"}
+        style={{
+          flex: 1, minWidth: 0, padding: "5px 9px",
+          borderRadius: "7px", border: "1.5px solid var(--color-accent-blue)",
+          background: "var(--color-bg)", color: "var(--color-text-primary)",
+          fontSize: "13px", outline: "none",
+        }}
+      />
+      <button
+        onClick={e => { e.stopPropagation(); onSave(value); }}
+        style={{ padding: "5px 10px", borderRadius: "7px", border: "none", background: "var(--color-accent-blue)", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
+      >✓</button>
+      <button
+        onClick={e => { e.stopPropagation(); onCancel(); }}
+        style={{ padding: "5px 8px", borderRadius: "7px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", fontSize: "13px", cursor: "pointer", flexShrink: 0 }}
+      >✕</button>
+    </div>
   );
 }
 
@@ -482,7 +523,6 @@ export default function PortfolioPage() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [editingTagSiteId, setEditingTagSiteId] = useState<string | null>(null);
-  const [editingTagValue, setEditingTagValue]   = useState("");
   const [period, setPeriod]     = useState("7d");
   const [periodView, setPeriodView] = useState<PeriodView>("day");
   const [comparison, setComparison] = useState<Comparison>("previous");
@@ -1101,42 +1141,15 @@ export default function PortfolioPage() {
 
           {/* Inline tag editor (shown when editing this site) */}
           {editingTagSiteId === site.id && (
-            <div style={{display:"flex",gap:"5px",alignItems:"center"}} onClick={e=>e.stopPropagation()}>
-              <input
-                autoFocus
-                value={editingTagValue}
-                onChange={e => setEditingTagValue(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    setSiteTags(prev => ({ ...prev, [site.id]: editingTagValue.split(",").map(x => x.trim()).filter(Boolean) }));
-                    setEditingTagSiteId(null);
-                  }
-                  if (e.key === "Escape") setEditingTagSiteId(null);
-                }}
-                placeholder={t("tagsPrompt") || "тег1, тег2"}
-                style={{
-                  flex: 1, minWidth: 0, padding: "4px 8px",
-                  borderRadius: "6px", border: "1px solid var(--color-accent-blue)",
-                  background: "var(--color-bg)", color: "var(--color-text-primary)",
-                  fontSize: "12px", outline: "none",
-                }}
-              />
-              <button
-                onClick={e => {
-                  e.stopPropagation();
-                  setSiteTags(prev => ({ ...prev, [site.id]: editingTagValue.split(",").map(x => x.trim()).filter(Boolean) }));
-                  setEditingTagSiteId(null);
-                }}
-                style={{ padding: "4px 8px", borderRadius: "6px", border: "none", background: "var(--color-accent-blue)", color: "#fff", fontSize: "12px", fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
-                ✓
-              </button>
-              <button
-                onClick={e => { e.stopPropagation(); setEditingTagSiteId(null); }}
-                style={{ padding: "4px 6px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", fontSize: "12px", cursor: "pointer", flexShrink: 0 }}>
-                ✕
-              </button>
-            </div>
+            <TagInput
+              initialValue={(siteTags[site.id] || []).join(", ")}
+              onSave={v => {
+                setSiteTags(prev => ({ ...prev, [site.id]: v.split(",").map(x => x.trim()).filter(Boolean) }));
+                setEditingTagSiteId(null);
+              }}
+              onCancel={() => setEditingTagSiteId(null)}
+              placeholder={t("tagsPrompt") || "тег1, тег2"}
+            />
           )}
 
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
