@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Search, Eye, EyeOff, Star, ExternalLink,
   ArrowUpDown, SlidersHorizontal, Sparkles, Percent, MoveUp,
@@ -348,6 +349,61 @@ function MultiMetricChart({ data, activeMetrics, prevTrend = true }: { data: Pt[
   );
 }
 
+// ─── CardBtn — icon button with CSS tooltip ───────────────────────────────────
+function CardBtn({ children, tooltip, onClick, active, activeColor }: {
+  children: React.ReactNode;
+  tooltip: string;
+  onClick: (e: React.MouseEvent) => void;
+  active?: boolean;
+  activeColor?: string;
+}) {
+  return (
+    <span style={{ position: "relative", display: "inline-flex" }} className="card-btn-wrap">
+      <button
+        onClick={onClick}
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "center",
+          width: "28px", height: "28px", borderRadius: "7px", border: "none",
+          background: active ? `${activeColor ?? "var(--color-accent-blue)"}22` : "transparent",
+          color: active ? (activeColor ?? "var(--color-accent-blue)") : "var(--color-text-secondary)",
+          cursor: "pointer", transition: "background 0.15s, color 0.15s", flexShrink: 0,
+        }}
+        onMouseEnter={e => {
+          if (!active) {
+            e.currentTarget.style.background = "var(--color-border-soft)";
+            e.currentTarget.style.color = "var(--color-text-primary)";
+          }
+          // show tooltip
+          const tip = e.currentTarget.nextElementSibling as HTMLElement | null;
+          if (tip) tip.style.opacity = "1";
+        }}
+        onMouseLeave={e => {
+          if (!active) {
+            e.currentTarget.style.background = "transparent";
+            e.currentTarget.style.color = "var(--color-text-secondary)";
+          }
+          const tip = e.currentTarget.nextElementSibling as HTMLElement | null;
+          if (tip) tip.style.opacity = "0";
+        }}
+      >
+        {children}
+      </button>
+      {/* Tooltip */}
+      <span style={{
+        position: "absolute", bottom: "calc(100% + 5px)", left: "50%",
+        transform: "translateX(-50%)",
+        background: "var(--color-text-primary)", color: "var(--color-bg)",
+        fontSize: "11px", fontWeight: 500, padding: "4px 8px",
+        borderRadius: "6px", whiteSpace: "nowrap",
+        pointerEvents: "none", opacity: 0,
+        transition: "opacity 0.15s", zIndex: 200,
+      }}>
+        {tooltip}
+      </span>
+    </span>
+  );
+}
+
 // ─── Dropdown ─────────────────────────────────────────────────────────────────
 function Dropdown({ trigger, children, align = "left" }: { trigger: React.ReactNode; children: React.ReactNode; align?: "left" | "right" }) {
   const [open, setOpen] = useState(false);
@@ -408,6 +464,7 @@ const tbBtn = (active = false): React.CSSProperties => ({
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function PortfolioPage() {
   const { t } = useLanguage();
+  const router = useRouter();
   const [sites, setSites]       = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState("");
@@ -985,7 +1042,7 @@ export default function PortfolioPage() {
       : {};
 
     return (
-      <Link href={`/site/${encodeURIComponent(domain)}`} className="card" style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:"8px",cursor:"pointer",textDecoration:"none",color:"inherit",...declineBorder}}>
+      <div onClick={() => router.push(`/site/${encodeURIComponent(domain)}`)} className="card" style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:"8px",cursor:"pointer",textDecoration:"none",color:"inherit",...declineBorder}}>
         {/* Header */}
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:"8px"}}>
           {/* Domain */}
@@ -1103,36 +1160,54 @@ export default function PortfolioPage() {
               })}
             </div>
 
-            {/* Icons */}
-            <div style={{display:"flex",gap:"14px",flexShrink:0}}>
-              <button title={t("advancedExport")} onClick={()=>setExportSite(domain)}
-                style={{color:"var(--color-text-secondary)",opacity:0.5,transition:"all 0.15s",lineHeight:1}}
-                onMouseOver={e=>(e.currentTarget.style.opacity="1")} onMouseOut={e=>(e.currentTarget.style.opacity="0.5")}>
-                <Download size={13}/>
-              </button>
-              <button title={t("tags")} onClick={e => {
-                e.stopPropagation();
-                setEditingTagValue((siteTags[site.id] || []).join(", "));
-                setEditingTagSiteId(site.id);
-              }}
-                style={{color: editingTagSiteId === site.id ? "var(--color-accent-blue)" : "var(--color-text-secondary)", opacity: editingTagSiteId === site.id ? 1 : 0.5, transition:"all 0.15s",lineHeight:1}}
-                onMouseOver={e=>(e.currentTarget.style.opacity="1")} onMouseOut={e=>{ if(editingTagSiteId !== site.id) e.currentTarget.style.opacity="0.5"; }}>
-                <Tag size={13}/>
-              </button>
-              <button title={hidden.has(site.id) ? t("unhideSite") : t("hideSite")} onClick={()=>toggleHide(site.id)}
-                style={{color:hidden.has(site.id)?"var(--color-accent-blue)":"var(--color-text-secondary)",opacity:hidden.has(site.id)?1:0.5,transition:"all 0.15s",lineHeight:1}}
-                onMouseOver={e=>(e.currentTarget.style.opacity="1")} onMouseOut={e=>{if(!hidden.has(site.id))e.currentTarget.style.opacity="0.5";}}>
-                <EyeOff size={13}/>
-              </button>
-              <button title={isFav ? t("removeFromFavorites") : t("addToFavorites")} onClick={()=>toggleFav(site.id)}
-                style={{color:isFav?"var(--color-warning)":"var(--color-text-secondary)",opacity:isFav?1:0.5,transition:"all 0.15s",lineHeight:1}}
-                onMouseOver={e=>(e.currentTarget.style.opacity="1")} onMouseOut={e=>{if(!isFav)e.currentTarget.style.opacity="0.5";}}>
-                <Star size={13} fill={isFav?"var(--color-warning)":"none"}/>
-              </button>
+            {/* Action buttons */}
+            <div style={{display:"flex",gap:"2px",flexShrink:0}}>
+              {/* Export */}
+              <CardBtn
+                tooltip={t("advancedExport")}
+                onClick={e => { e.stopPropagation(); setExportSite(domain); }}
+              >
+                <Download size={14}/>
+              </CardBtn>
+
+              {/* Tag */}
+              <CardBtn
+                tooltip={t("tagsPrompt") || "Добавить тег (через запятую)"}
+                active={editingTagSiteId === site.id}
+                activeColor="var(--color-accent-blue)"
+                onClick={e => {
+                  e.stopPropagation();
+                  if (editingTagSiteId === site.id) { setEditingTagSiteId(null); return; }
+                  setEditingTagValue((siteTags[site.id] || []).join(", "));
+                  setEditingTagSiteId(site.id);
+                }}
+              >
+                <Tag size={14}/>
+              </CardBtn>
+
+              {/* Hide / unhide */}
+              <CardBtn
+                tooltip={hidden.has(site.id) ? t("unhideSite") : t("hideSite")}
+                active={hidden.has(site.id)}
+                activeColor="var(--color-accent-blue)"
+                onClick={e => { e.stopPropagation(); toggleHide(site.id); }}
+              >
+                <EyeOff size={14}/>
+              </CardBtn>
+
+              {/* Favourite */}
+              <CardBtn
+                tooltip={isFav ? t("removeFromFavorites") : t("addToFavorites")}
+                active={isFav}
+                activeColor="var(--color-accent-orange)"
+                onClick={e => { e.stopPropagation(); toggleFav(site.id); }}
+              >
+                <Star size={14} fill={isFav ? "var(--color-accent-orange)" : "none"}/>
+              </CardBtn>
             </div>
           </div>
         </div>
-      </Link>
+      </div>
     );
   }
 
