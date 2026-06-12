@@ -361,7 +361,7 @@ function Dropdown({ trigger, children, align = "left" }: { trigger: React.ReactN
     <div ref={ref} style={{ position: "relative" }}>
       <div onClick={() => setOpen(o => !o)}>{trigger}</div>
       {open && (
-        <div style={{ position: "absolute", top: "calc(100% + 6px)", [align === "right" ? "right" : "left"]: 0, background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "12px", boxShadow: "0 8px 32px rgba(0,0,0,0.25)", zIndex: 100, minWidth: "200px", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: "calc(100% + 6px)", [align === "right" ? "right" : "left"]: 0, background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "12px", boxShadow: "0 8px 32px rgba(0,0,0,0.25)", zIndex: 100, minWidth: "200px", clipPath: "inset(0 round 12px)" }}>
           {children}
         </div>
       )}
@@ -380,11 +380,12 @@ const ms = (label: string) => (
 );
 const md = <div style={{ height: "1px", background: "var(--color-border)", margin: "4px 0" }} />;
 const tbBtn = (active = false): React.CSSProperties => ({
-  display: "flex", alignItems: "center", gap: "6px", padding: "7px 13px", borderRadius: "8px",
-  border: `1px solid ${active ? "#3B82F6" : "var(--color-border)"}`,
-  background: active ? "rgba(59,130,246,0.1)" : "var(--color-card)",
-  color: active ? "#3B82F6" : "var(--color-text-secondary)",
-  fontSize: "13px", fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap" as const,
+  display: "flex", alignItems: "center", gap: "6px", padding: "6px 13px",
+  borderRadius: "9999px",                                       /* pill — matches period pills */
+  border: `1px solid ${active ? "var(--color-accent-blue)" : "var(--color-border)"}`,
+  background: active ? "rgba(var(--color-accent-blue-rgb,0,102,204), 0.12)" : "var(--color-card)",
+  color: active ? "var(--color-accent-blue)" : "var(--color-text-secondary)",
+  fontSize: "12px", fontWeight: active ? 700 : 500, cursor: "pointer", whiteSpace: "nowrap" as const,
 });
 
 // ─── Main page ────────────────────────────────────────────────────────────────
@@ -1085,7 +1086,7 @@ export default function PortfolioPage() {
         {(["7d","28d","3m","6m","12m","16m"] as string[]).map(p => {
           const active = period === p;
           return (
-            <button key={p} onClick={() => setPeriod(p)} style={{padding:"6px 13px",borderRadius:"20px",fontSize:"12px",fontWeight:active?700:500,cursor:"pointer",border:`1px solid ${active?"#3B82F6":"var(--color-border)"}`,background:active?"rgba(59,130,246,0.12)":"var(--color-card)",color:active?"#3B82F6":"var(--color-text-secondary)",transition:"all 0.15s",whiteSpace:"nowrap"}}>
+            <button key={p} onClick={() => setPeriod(p)} style={{padding:"6px 13px",borderRadius:"9999px",fontSize:"12px",fontWeight:active?700:500,cursor:"pointer",border:`1px solid ${active?"var(--color-accent-blue)":"var(--color-border)"}`,background:active?"rgba(0,102,204,0.12)":"var(--color-card)",color:active?"var(--color-accent-blue)":"var(--color-text-secondary)",transition:"all 0.15s",whiteSpace:"nowrap"}}>
               {getPeriodLabel(p)}
             </button>
           );

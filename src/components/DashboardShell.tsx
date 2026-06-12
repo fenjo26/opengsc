@@ -464,8 +464,21 @@ function TopBar() {
         display: "flex", alignItems: "center", gap: "8px", cursor: "pointer",
         background: "none", border: "none",
       }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo.svg" alt="OpenGSC" height={28} style={{ display: "block" }} />
+        {/*
+          Circle container with Apple blue ring — works on both dark and light navbars.
+          White fill inside ensures the bar-chart icon (SVG default black) is always visible,
+          even when <img> can't inherit currentColor.
+        */}
+        <div style={{
+          width: 32, height: 32, borderRadius: "50%",
+          border: "1.5px solid var(--color-accent-blue)",
+          background: "#ffffff",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          flexShrink: 0,
+        }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.svg" alt="OpenGSC" height={18} style={{ display: "block" }} />
+        </div>
       </button>
 
       {/* Avatar */}
