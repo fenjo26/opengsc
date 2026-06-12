@@ -352,16 +352,33 @@ function MultiMetricChart({ data, activeMetrics, prevTrend = true }: { data: Pt[
 function Dropdown({ trigger, children, align = "left" }: { trigger: React.ReactNode; children: React.ReactNode; align?: "left" | "right" }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, []);
+
+  // Clamp panel inside viewport after it renders
+  useEffect(() => {
+    if (!open || !panelRef.current) return;
+    const panel = panelRef.current;
+    const rect  = panel.getBoundingClientRect();
+    const vw    = window.innerWidth;
+    if (rect.right > vw - 8) {
+      const overflow = rect.right - (vw - 8);
+      panel.style.transform = `translateX(-${overflow}px)`;
+    } else {
+      panel.style.transform = "";
+    }
+  }, [open]);
+
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <div onClick={() => setOpen(o => !o)}>{trigger}</div>
       {open && (
-        <div style={{ position: "absolute", top: "calc(100% + 6px)", [align === "right" ? "right" : "left"]: 0, background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "12px", boxShadow: "0 8px 32px rgba(0,0,0,0.25)", zIndex: 100, minWidth: "200px", clipPath: "inset(0 round 12px)" }}>
+        <div ref={panelRef} style={{ position: "absolute", top: "calc(100% + 6px)", [align === "right" ? "right" : "left"]: 0, background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "12px", boxShadow: "0 8px 32px rgba(0,0,0,0.25)", zIndex: 100, minWidth: "200px", maxWidth: "min(360px, calc(100vw - 16px))", clipPath: "inset(0 round 12px)" }}>
           {children}
         </div>
       )}
@@ -407,6 +424,8 @@ export default function PortfolioPage() {
   });
   const [accounts, setAccounts] = useState<any[]>([]);
   const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [editingTagSiteId, setEditingTagSiteId] = useState<string | null>(null);
+  const [editingTagValue, setEditingTagValue]   = useState("");
   const [period, setPeriod]     = useState("7d");
   const [periodView, setPeriodView] = useState<PeriodView>("day");
   const [comparison, setComparison] = useState<Comparison>("previous");
@@ -821,6 +840,33 @@ export default function PortfolioPage() {
         })}
       </div>
 
+      {/* Tag filter section — only shown when user has tags */}
+      {(() => {
+        const allTags = [...new Set(Object.values(siteTags).flat())].sort();
+        if (!allTags.length) return null;
+        return (
+          <>
+            {md}{ms(t("tags"))}
+            <div style={{ padding: "4px 14px 10px", display: "flex", gap: "6px", flexWrap: "wrap" }}>
+              {allTags.map(tag => {
+                const isActive = activeTag === tag;
+                return (
+                  <button key={tag} onClick={() => setActiveTag(isActive ? null : tag)} style={{
+                    padding: "4px 10px", borderRadius: "20px", fontSize: "12px", fontWeight: 500, cursor: "pointer",
+                    border: `1px solid ${isActive ? "var(--color-accent-blue)" : "var(--color-border)"}`,
+                    background: isActive ? "rgba(var(--color-accent-blue-rgb,0,102,204),0.12)" : "transparent",
+                    color: isActive ? "var(--color-accent-blue)" : "var(--color-text-secondary)",
+                  }}>
+                    🏷 {tag}
+                    {isActive && <span style={{ marginLeft: "5px", fontWeight: 700 }}>✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        );
+      })()}
+
       {md}{ms(t("presetFilters"))}
       <button style={mi(filterDimension === "query" && filterText === "?")}
         onClick={() => { setFilterDimension("query"); setFilterText("?"); }}>
@@ -994,54 +1040,96 @@ export default function PortfolioPage() {
         <MultiMetricChart data={site.data} activeMetrics={activeMetrics} prevTrend={prevTrend} />
 
         {/* Footer: tags and 4 action icons */}
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:"2px"}} onClick={e=>e.stopPropagation()}>
-          {/* Tags */}
-          <div style={{display:"flex",gap:"4px",flexWrap:"wrap",maxWidth:"180px"}}>
-            {(siteTags[site.id] || []).map(tag => {
-              const isActive = activeTag === tag;
-              return (
-              <span key={tag}
-                title={isActive ? t("tagFilterRemove") : t("tagFilterApply")}
-                onClick={e => { e.preventDefault(); e.stopPropagation(); setActiveTag(isActive ? null : tag); }}
-                style={{fontSize:"10px",fontWeight:600,padding:"2px 6px",borderRadius:"4px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"80px",cursor:"pointer",transition:"all 0.15s",
-                  background: isActive ? "#3B82F6" : "rgba(59,130,246,0.1)",
-                  color:      isActive ? "#fff"    : "#3B82F6",
-                  outline:    isActive ? "2px solid #3B82F6" : "none",
-                  outlineOffset: "1px",
-                }}>
-                {tag}
-              </span>
-              );
-            })}
-          </div>
-          {/* Icons */}
-          <div style={{display:"flex",gap:"14px"}}>
-            <button title={t("advancedExport")} onClick={()=>setExportSite(domain)}
-            style={{color:"var(--color-text-secondary)",opacity:0.5,transition:"all 0.15s",lineHeight:1}}
-            onMouseOver={e=>(e.currentTarget.style.opacity="1")} onMouseOut={e=>(e.currentTarget.style.opacity="0.5")}>
-            <Download size={13}/>
-          </button>
-            <button title={t("tags")} onClick={() => {
-              const current = (siteTags[site.id] || []).join(", ");
-              const input = window.prompt(t("tagsPrompt") || "Enter tags separated by commas:", current);
-              if (input !== null) {
-                setSiteTags(prev => ({ ...prev, [site.id]: input.split(",").map(x => x.trim()).filter(Boolean) }));
-              }
-            }}
-              style={{color:"var(--color-text-secondary)",opacity:0.5,transition:"all 0.15s",lineHeight:1}}
-              onMouseOver={e=>(e.currentTarget.style.opacity="1")} onMouseOut={e=>(e.currentTarget.style.opacity="0.5")}>
-              <Tag size={13}/>
-            </button>
-          <button title={hidden.has(site.id) ? t("unhideSite") : t("hideSite")} onClick={()=>toggleHide(site.id)}
-            style={{color:hidden.has(site.id)?"#3B82F6":"var(--color-text-secondary)",opacity:hidden.has(site.id)?1:0.5,transition:"all 0.15s",lineHeight:1}}
-            onMouseOver={e=>(e.currentTarget.style.opacity="1")} onMouseOut={e=>{if(!hidden.has(site.id))e.currentTarget.style.opacity="0.5";}}>
-            <EyeOff size={13}/>
-          </button>
-            <button title={isFav ? t("removeFromFavorites") : t("addToFavorites")} onClick={()=>toggleFav(site.id)}
-              style={{color:isFav?"var(--color-warning)":"var(--color-text-secondary)",opacity:isFav?1:0.5,transition:"all 0.15s",lineHeight:1}}
-              onMouseOver={e=>(e.currentTarget.style.opacity="1")} onMouseOut={e=>{if(!isFav)e.currentTarget.style.opacity="0.5";}}>
-              <Star size={13} fill={isFav?"var(--color-warning)":"none"}/>
-            </button>
+        <div style={{display:"flex",flexDirection:"column",gap:"6px",paddingTop:"2px"}} onClick={e=>e.stopPropagation()}>
+
+          {/* Inline tag editor (shown when editing this site) */}
+          {editingTagSiteId === site.id && (
+            <div style={{display:"flex",gap:"5px",alignItems:"center"}} onClick={e=>e.stopPropagation()}>
+              <input
+                autoFocus
+                value={editingTagValue}
+                onChange={e => setEditingTagValue(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    setSiteTags(prev => ({ ...prev, [site.id]: editingTagValue.split(",").map(x => x.trim()).filter(Boolean) }));
+                    setEditingTagSiteId(null);
+                  }
+                  if (e.key === "Escape") setEditingTagSiteId(null);
+                }}
+                placeholder={t("tagsPrompt") || "тег1, тег2"}
+                style={{
+                  flex: 1, minWidth: 0, padding: "4px 8px",
+                  borderRadius: "6px", border: "1px solid var(--color-accent-blue)",
+                  background: "var(--color-bg)", color: "var(--color-text-primary)",
+                  fontSize: "12px", outline: "none",
+                }}
+              />
+              <button
+                onClick={e => {
+                  e.stopPropagation();
+                  setSiteTags(prev => ({ ...prev, [site.id]: editingTagValue.split(",").map(x => x.trim()).filter(Boolean) }));
+                  setEditingTagSiteId(null);
+                }}
+                style={{ padding: "4px 8px", borderRadius: "6px", border: "none", background: "var(--color-accent-blue)", color: "#fff", fontSize: "12px", fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
+                ✓
+              </button>
+              <button
+                onClick={e => { e.stopPropagation(); setEditingTagSiteId(null); }}
+                style={{ padding: "4px 6px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", fontSize: "12px", cursor: "pointer", flexShrink: 0 }}>
+                ✕
+              </button>
+            </div>
+          )}
+
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            {/* Tags display */}
+            <div style={{display:"flex",gap:"4px",flexWrap:"wrap",flex:1,minWidth:0,marginRight:"8px"}}>
+              {(siteTags[site.id] || []).map(tag => {
+                const isActive = activeTag === tag;
+                return (
+                  <span key={tag}
+                    title={isActive ? t("tagFilterRemove") : t("tagFilterApply")}
+                    onClick={e => { e.preventDefault(); e.stopPropagation(); setActiveTag(isActive ? null : tag); }}
+                    style={{fontSize:"10px",fontWeight:600,padding:"2px 6px",borderRadius:"4px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"80px",cursor:"pointer",transition:"all 0.15s",
+                      background: isActive ? "var(--color-accent-blue)" : "rgba(0,102,204,0.10)",
+                      color:      isActive ? "#fff" : "var(--color-accent-blue)",
+                      outline:    isActive ? "2px solid var(--color-accent-blue)" : "none",
+                      outlineOffset: "1px",
+                    }}>
+                    {tag}
+                  </span>
+                );
+              })}
+            </div>
+
+            {/* Icons */}
+            <div style={{display:"flex",gap:"14px",flexShrink:0}}>
+              <button title={t("advancedExport")} onClick={()=>setExportSite(domain)}
+                style={{color:"var(--color-text-secondary)",opacity:0.5,transition:"all 0.15s",lineHeight:1}}
+                onMouseOver={e=>(e.currentTarget.style.opacity="1")} onMouseOut={e=>(e.currentTarget.style.opacity="0.5")}>
+                <Download size={13}/>
+              </button>
+              <button title={t("tags")} onClick={e => {
+                e.stopPropagation();
+                setEditingTagValue((siteTags[site.id] || []).join(", "));
+                setEditingTagSiteId(site.id);
+              }}
+                style={{color: editingTagSiteId === site.id ? "var(--color-accent-blue)" : "var(--color-text-secondary)", opacity: editingTagSiteId === site.id ? 1 : 0.5, transition:"all 0.15s",lineHeight:1}}
+                onMouseOver={e=>(e.currentTarget.style.opacity="1")} onMouseOut={e=>{ if(editingTagSiteId !== site.id) e.currentTarget.style.opacity="0.5"; }}>
+                <Tag size={13}/>
+              </button>
+              <button title={hidden.has(site.id) ? t("unhideSite") : t("hideSite")} onClick={()=>toggleHide(site.id)}
+                style={{color:hidden.has(site.id)?"var(--color-accent-blue)":"var(--color-text-secondary)",opacity:hidden.has(site.id)?1:0.5,transition:"all 0.15s",lineHeight:1}}
+                onMouseOver={e=>(e.currentTarget.style.opacity="1")} onMouseOut={e=>{if(!hidden.has(site.id))e.currentTarget.style.opacity="0.5";}}>
+                <EyeOff size={13}/>
+              </button>
+              <button title={isFav ? t("removeFromFavorites") : t("addToFavorites")} onClick={()=>toggleFav(site.id)}
+                style={{color:isFav?"var(--color-warning)":"var(--color-text-secondary)",opacity:isFav?1:0.5,transition:"all 0.15s",lineHeight:1}}
+                onMouseOver={e=>(e.currentTarget.style.opacity="1")} onMouseOut={e=>{if(!isFav)e.currentTarget.style.opacity="0.5";}}>
+                <Star size={13} fill={isFav?"var(--color-warning)":"none"}/>
+              </button>
+            </div>
           </div>
         </div>
       </Link>
