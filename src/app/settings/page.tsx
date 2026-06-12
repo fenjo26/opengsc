@@ -1029,6 +1029,27 @@ function IndexApiSection() {
           <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 8px", borderRadius: "6px", background: "rgba(139,92,246,0.12)", color: "#8B5CF6", border: "1px solid rgba(139,92,246,0.25)" }}>{t("comingSoon")}</span>
         </div>
       </SectionCard>
+
+      {/* ── Microsoft Clarity (note: token is per-site, configured in site UX tab) ── */}
+      <SectionCard>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <div style={{ width: 28, height: 28, borderRadius: "6px", background: "rgba(0,102,204,0.12)", border: "1px solid rgba(0,102,204,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: 800, color: "var(--color-accent-blue)" }}>MC</div>
+            <div>
+              <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>Microsoft Clarity</span>
+              <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>{t("claritySettingsNote")}</p>
+            </div>
+          </div>
+          <a href="#" onClick={e => { e.preventDefault(); }} style={{
+            fontSize: "11px", fontWeight: 600, padding: "4px 10px", borderRadius: "9999px",
+            background: "rgba(0,102,204,0.10)", color: "var(--color-accent-blue)",
+            border: "1px solid rgba(0,102,204,0.25)", textDecoration: "none",
+            display: "inline-flex", alignItems: "center", gap: "4px",
+          }}>
+            {t("claritySettingsWhere")}
+          </a>
+        </div>
+      </SectionCard>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import StrikingDistanceKeywords from "@/components/StrikingDistanceKeywords";
 import SiteSettingsTab from "@/components/SiteSettingsTab";
 import CtrBenchmark from "@/components/CtrBenchmark";
 import { SiteHealthPanel } from "@/components/SiteHealthPanel";
+import { ClarityPanel } from "@/components/ClarityPanel";
 import { useParams, useRouter } from "next/navigation";
 import { usePrivacy } from "@/lib/PrivacyContext";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
@@ -3095,7 +3096,7 @@ export default function SitePage() {
     : { transition: "filter 0.25s" };
 
   // Use index so tab state doesn't break on language change
-  const TAB_KEYS = ["dashboard", "ga4", "indexing", "backlinks", "annotations", "optimize", "health", "settings"] as const;
+  const TAB_KEYS = ["dashboard", "ga4", "indexing", "backlinks", "annotations", "optimize", "health", "ux", "settings"] as const;
   type TabKey = typeof TAB_KEYS[number];
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [period, setPeriod]       = useState("7d");
@@ -3109,7 +3110,8 @@ export default function SitePage() {
     { key: "backlinks",   label: t("backlinksTab") },
     { key: "annotations", label: t("tabAnnotations") },
     { key: "optimize",    label: t("tabOptimize") },
-    { key: "health",      label: "Health" },
+    { key: "health",      label: t("tabHealth") },
+    { key: "ux",          label: t("tabUX") },
     { key: "settings",    label: t("tabSettings") },
   ];
 
@@ -3402,6 +3404,9 @@ export default function SitePage() {
 
       {/* ── Health tab ── */}
       {activeTab === "health" && <SiteHealthPanel siteDbId={siteDbId} />}
+
+      {/* ── UX / Clarity tab ── */}
+      {activeTab === "ux" && <ClarityPanel siteDbId={siteDbId} />}
 
       {/* ── Settings tab ── */}
       {activeTab === "settings" && (

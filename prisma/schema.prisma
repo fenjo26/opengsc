@@ -84,6 +84,11 @@ model Site {
   sitemapUrls           SitemapUrl[]
   indexingOperations    IndexingOperation[]
   backlinks             Backlink[]
+  claritySnapshots      ClaritySnapshot[]
+
+  // Microsoft Clarity integration
+  clarityToken          String?   // Data Export API token (per-project in Clarity)
+  clarityProjectId      String?   // Clarity project ID (shown in Clarity dashboard URL)
 
   @@unique([userId, siteId])
 }
@@ -213,6 +218,19 @@ model PageInspectionHistory {
 
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
   @@unique([siteId, url, date])
+}
+
+// Microsoft Clarity — cached daily snapshots (API limit: 10 req/day, 3 days max)
+model ClaritySnapshot {
+  id          String   @id @default(cuid())
+  siteId      String
+  fetchedAt   DateTime @default(now())
+  periodDays  Int      // 1, 2, or 3 — numOfDays sent to API
+  data        String   // raw JSON from Clarity API
+
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId, fetchedAt])
 }
 
 model SiteHealth {
