@@ -513,6 +513,7 @@ export default function PortfolioPage() {
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [siteTags, setSiteTags] = useState<Record<string, string[]>>({});
+  const tagsInitialized = useRef(false);
   const [exportSite, setExportSite] = useState<string | null>(null);
 
   const [activeMetrics, setActiveMetrics] = useState<Set<Metric>>(new Set(["clicks", "impressions", "ctr", "position"]));
@@ -578,13 +579,29 @@ export default function PortfolioPage() {
     let ignore = false;
     fetch('/api/gsc/sites')
       .then(r => r.json())
-      .then(d => { 
+      .then(d => {
         if (!ignore && d.sites?.length) {
           setSites(prev => {
             // Only update if we don't already have data, to avoid overwriting portfolio metrics
             if (prev.length > 0 && prev[0].hasData) return prev;
             return d.sites;
           });
+          // Load tags from DB once on mount
+          if (!tagsInitialized.current) {
+            tagsInitialized.current = true;
+            const tagsFromDb: Record<string, string[]> = {};
+            for (const s of d.sites as any[]) {
+              if (s.tags) {
+                try {
+                  const parsed = JSON.parse(s.tags);
+                  if (Array.isArray(parsed)) tagsFromDb[s.id] = parsed;
+                } catch {
+                  tagsFromDb[s.id] = s.tags.split(",").map((t: string) => t.trim()).filter(Boolean);
+                }
+              }
+            }
+            setSiteTags(tagsFromDb);
+          }
         }
       })
       .catch(() => {});
@@ -1144,8 +1161,14 @@ export default function PortfolioPage() {
             <TagInput
               initialValue={(siteTags[site.id] || []).join(", ")}
               onSave={v => {
-                setSiteTags(prev => ({ ...prev, [site.id]: v.split(",").map(x => x.trim()).filter(Boolean) }));
+                const newTags = v.split(",").map(x => x.trim()).filter(Boolean);
+                setSiteTags(prev => ({ ...prev, [site.id]: newTags }));
                 setEditingTagSiteId(null);
+                fetch("/api/gsc/tags", {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ siteId: site.id, tags: newTags }),
+                }).catch(() => {});
               }}
               onCancel={() => setEditingTagSiteId(null)}
               placeholder={t("tagsPrompt") || "тег1, тег2"}
