@@ -1374,9 +1374,15 @@ export default function SettingsPage() {
   };
 
   const NavBtn = ({ id, icon, label, badge }: { id: NavItem; icon: React.ReactNode; label: string; badge?: string }) => (
-    <button onClick={() => setNav(id)} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 12px", borderRadius: "8px", width: "100%", background: nav === id ? "rgba(255,255,255,0.08)" : "transparent", color: nav === id ? "#fff" : "var(--color-text-secondary)", fontSize: "13px", fontWeight: nav === id ? 600 : 400, border: "none", cursor: "pointer", transition: "all 0.15s", textAlign: "left" }}
-      onMouseOver={e => { if (nav !== id) e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
-      onMouseOut={e => { if (nav !== id) e.currentTarget.style.background = "transparent"; }}
+    <button
+      onClick={() => setNav(id)}
+      className={nav === id ? "nav-btn active" : "nav-btn"}
+      style={{
+        display: "flex", alignItems: "center", gap: "10px",
+        padding: "8px 12px", borderRadius: "8px", width: "100%",
+        background: "transparent", color: nav === id ? "#fff" : "var(--color-text-secondary)",
+        fontSize: "13px", fontWeight: 400, border: "none", cursor: "pointer", textAlign: "left",
+      }}
     >
       {icon}
       <span style={{ flex: 1 }}>{label}</span>

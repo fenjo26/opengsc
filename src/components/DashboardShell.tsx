@@ -12,15 +12,11 @@ import { useLanguage } from "@/lib/i18n/LanguageProvider";
 // ─── Popup menu helpers ───────────────────────────────────────────────────────
 function MenuItem({ icon, label, onClick }: { icon: string; label: string; onClick?: () => void }) {
   return (
-    <button onClick={onClick} style={{
+    <button onClick={onClick} className="menu-item" style={{
       display: "flex", alignItems: "center", gap: "10px",
       padding: "9px 16px", fontSize: "13px", color: "var(--color-text-secondary)",
       width: "100%", background: "transparent", border: "none", cursor: "pointer",
-      transition: "background 0.15s",
-    }}
-      onMouseOver={e => { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; e.currentTarget.style.color = "#fff"; }}
-      onMouseOut={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--color-text-secondary)"; }}
-    >
+    }}>
       <span style={{ fontSize: "14px", width: "18px", textAlign: "center" }}>{icon}</span>
       {label}
     </button>
@@ -30,36 +26,28 @@ function MenuItem({ icon, label, onClick }: { icon: string; label: string; onCli
 function ToggleItem({ icon, label, defaultOn = false }: { icon: string; label: string; defaultOn?: boolean }) {
   const [on, setOn] = useState(defaultOn);
   return (
-    <button onClick={() => setOn(o => !o)} style={{
+    <button onClick={() => setOn(o => !o)} className="menu-item" style={{
       display: "flex", alignItems: "center", gap: "10px",
       padding: "9px 16px", fontSize: "13px", color: "var(--color-text-secondary)",
       width: "100%", background: "transparent", border: "none", cursor: "pointer",
-      transition: "background 0.15s",
-    }}
-      onMouseOver={e => e.currentTarget.style.background = "rgba(255,255,255,0.06)"}
-      onMouseOut={e => e.currentTarget.style.background = "transparent"}
-    >
+    }}>
       <span style={{ fontSize: "14px", width: "18px", textAlign: "center" }}>{icon}</span>
       <span style={{ flex: 1, textAlign: "left" }}>{label}</span>
-      <span style={{ fontSize: "11px", fontWeight: 600, color: on ? "#10B981" : "#6b7280" }}>{on ? "ON" : "OFF"}</span>
+      <span style={{ fontSize: "11px", fontWeight: 600, color: on ? "var(--color-accent-green)" : "var(--color-text-tertiary, var(--color-text-secondary))" }}>{on ? "ON" : "OFF"}</span>
     </button>
   );
 }
 
 function SelectItem({ icon, label, value }: { icon: string; label: string; value: string }) {
   return (
-    <button style={{
+    <button className="menu-item" style={{
       display: "flex", alignItems: "center", gap: "10px",
       padding: "9px 16px", fontSize: "13px", color: "var(--color-text-secondary)",
       width: "100%", background: "transparent", border: "none", cursor: "pointer",
-      transition: "background 0.15s",
-    }}
-      onMouseOver={e => e.currentTarget.style.background = "rgba(255,255,255,0.06)"}
-      onMouseOut={e => e.currentTarget.style.background = "transparent"}
-    >
+    }}>
       <span style={{ fontSize: "14px", width: "18px", textAlign: "center" }}>{icon}</span>
       <span style={{ flex: 1, textAlign: "left" }}>{label}</span>
-      <span style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280" }}>{value}</span>
+      <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-text-secondary)" }}>{value}</span>
     </button>
   );
 }
@@ -548,53 +536,59 @@ function TopBar() {
 
                 <div style={{ padding: "6px 0" }}>
                   {/* Privacy Blur — controlled via global context */}
-                  <button onClick={() => setBlur(!blur)} style={{
-                    display: "flex", alignItems: "center", gap: "10px",
-                    padding: "9px 16px", fontSize: "13px",
-                    color: blur ? "#10B981" : "var(--color-text-secondary)",
-                    width: "100%", background: blur ? "rgba(16,185,129,0.06)" : "transparent",
-                    border: "none", cursor: "pointer", transition: "background 0.15s",
-                  }}
-                    onMouseOver={e => { if (!blur) e.currentTarget.style.background = "rgba(255,255,255,0.06)"; }}
-                    onMouseOut={e => { if (!blur) e.currentTarget.style.background = "transparent"; }}
+                  <button
+                    onClick={() => setBlur(!blur)}
+                    className={blur ? "menu-item menu-item-active" : "menu-item"}
+                    style={{
+                      display: "flex", alignItems: "center", gap: "10px",
+                      padding: "9px 16px", fontSize: "13px",
+                      color: blur ? "var(--color-accent-green)" : "var(--color-text-secondary)",
+                      width: "100%",
+                      background: blur ? "rgba(var(--color-accent-green-rgb, 29,131,72), 0.08)" : "transparent",
+                      border: "none", cursor: "pointer",
+                    }}
                   >
                     <span style={{ fontSize: "14px", width: "18px", textAlign: "center" }}>📷</span>
                     <span style={{ flex: 1, textAlign: "left" }}>{t("privacyBlur")}</span>
-                    <span style={{ fontSize: "11px", fontWeight: 700, color: blur ? "#10B981" : "#6b7280" }}>
+                    <span style={{ fontSize: "11px", fontWeight: 700, color: blur ? "var(--color-accent-green)" : "var(--color-text-secondary)" }}>
                       {blur ? "ON" : "OFF"}
                     </span>
                   </button>
                   {/* Dark Mode — controlled via ThemeContext */}
-                  <button onClick={() => setDark(!dark)} style={{
-                    display: "flex", alignItems: "center", gap: "10px",
-                    padding: "9px 16px", fontSize: "13px",
-                    color: dark ? "#10B981" : "var(--color-text-secondary)",
-                    width: "100%", background: dark ? "rgba(16,185,129,0.06)" : "transparent",
-                    border: "none", cursor: "pointer", transition: "background 0.15s",
-                  }}
-                    onMouseOver={e => { if (!dark) e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
-                    onMouseOut={e => { if (!dark) e.currentTarget.style.background = "transparent"; }}
+                  <button
+                    onClick={() => setDark(!dark)}
+                    className={dark ? "menu-item menu-item-active" : "menu-item"}
+                    style={{
+                      display: "flex", alignItems: "center", gap: "10px",
+                      padding: "9px 16px", fontSize: "13px",
+                      color: dark ? "var(--color-accent-green)" : "var(--color-text-secondary)",
+                      width: "100%",
+                      background: dark ? "rgba(var(--color-accent-green-rgb, 29,131,72), 0.08)" : "transparent",
+                      border: "none", cursor: "pointer",
+                    }}
                   >
                     <span style={{ fontSize: "14px", width: "18px", textAlign: "center" }}>🌙</span>
                     <span style={{ flex: 1, textAlign: "left" }}>{t("darkMode")}</span>
-                    <span style={{ fontSize: "11px", fontWeight: 700, color: dark ? "#10B981" : "#6b7280" }}>
+                    <span style={{ fontSize: "11px", fontWeight: 700, color: dark ? "var(--color-accent-green)" : "var(--color-text-secondary)" }}>
                       {dark ? "ON" : "OFF"}
                     </span>
                   </button>
                   {/* Layout — controlled via LayoutContext */}
-                  <button onClick={() => setLayout(layout === "wide" ? "default" : "wide")} style={{
-                    display: "flex", alignItems: "center", gap: "10px",
-                    padding: "9px 16px", fontSize: "13px",
-                    color: layout === "default" ? "#10B981" : "var(--color-text-secondary)",
-                    width: "100%", background: layout === "default" ? "rgba(16,185,129,0.06)" : "transparent",
-                    border: "none", cursor: "pointer", transition: "background 0.15s",
-                  }}
-                    onMouseOver={e => { if (layout !== "default") e.currentTarget.style.background = "rgba(255,255,255,0.06)"; }}
-                    onMouseOut={e => { if (layout !== "default") e.currentTarget.style.background = "transparent"; }}
+                  <button
+                    onClick={() => setLayout(layout === "wide" ? "default" : "wide")}
+                    className={layout === "default" ? "menu-item menu-item-active" : "menu-item"}
+                    style={{
+                      display: "flex", alignItems: "center", gap: "10px",
+                      padding: "9px 16px", fontSize: "13px",
+                      color: layout === "default" ? "var(--color-accent-green)" : "var(--color-text-secondary)",
+                      width: "100%",
+                      background: layout === "default" ? "rgba(var(--color-accent-green-rgb, 29,131,72), 0.08)" : "transparent",
+                      border: "none", cursor: "pointer",
+                    }}
                   >
                     <span style={{ fontSize: "14px", width: "18px", textAlign: "center" }}>⇥</span>
                     <span style={{ flex: 1, textAlign: "left" }}>{t("layout")}</span>
-                    <span style={{ fontSize: "11px", fontWeight: 700, color: layout === "default" ? "#10B981" : "#6b7280" }}>
+                    <span style={{ fontSize: "11px", fontWeight: 700, color: layout === "default" ? "var(--color-accent-green)" : "var(--color-text-secondary)" }}>
                       {layout === "wide" ? t("layoutWide") : t("layoutDefault")}
                     </span>
                   </button>

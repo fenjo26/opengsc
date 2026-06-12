@@ -295,6 +295,42 @@ input::placeholder {
   opacity: 0.7;
 }
 
+/* ── Apple-style dropdown menu items ───────────────────────────────────────── */
+/*
+ * .menu-item: ghost button row used in the user dropdown.
+ * .menu-item-active: the toggled-on state (green) — hover is suppressed.
+ * Uses border-soft variable: rgba(0,0,0,0.08) in light, rgba(255,255,255,0.06) in dark.
+ */
+.menu-item {
+  transition: background 0.15s, color 0.15s;
+}
+.menu-item:hover:not(.menu-item-active) {
+  background: var(--color-border-soft) !important;
+  color: var(--color-text-primary) !important;
+}
+
+/* ── Settings sidebar nav buttons ──────────────────────────────────────────── */
+/*
+ * .nav-btn: sidebar navigation item.
+ * .nav-btn.active: selected section — Apple Action Blue pill.
+ */
+.nav-btn {
+  transition: background 0.15s, color 0.15s, font-weight 0.1s;
+}
+.nav-btn:hover:not(.active) {
+  background: var(--color-border-soft) !important;
+  color: var(--color-text-primary) !important;
+}
+.nav-btn.active {
+  background: var(--color-accent-blue) !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+.nav-btn.active svg,
+.nav-btn.active [data-lucide] {
+  color: #ffffff !important;
+}
+
 /* Autofill override — theme-aware via CSS custom properties
    (Chrome ignores var() in box-shadow for autofill, so we split by theme) */
 input:-webkit-autofill {

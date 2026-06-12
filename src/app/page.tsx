@@ -977,9 +977,9 @@ export default function PortfolioPage() {
                   <span style={{color:MC[m].color,fontSize:"10px",fontWeight:700}}>
                     {m==="clicks"?"✦":m==="impressions"?"◉":m==="ctr"?"%":"↑"}
                   </span>
-                  <span style={{fontWeight:600}}>{fmtVal(m,value)}</span>
+                  <span style={{fontWeight:600,filter:blur?"blur(5px)":"none",transition:"filter 0.25s"}}>{fmtVal(m,value)}</span>
                   {change !== 0 && showPct && (
-                    <span style={{fontSize:"10px",color:good?"#10B981":"#EF4444",fontWeight:500}}>
+                    <span style={{fontSize:"10px",color:good?"#10B981":"#EF4444",fontWeight:500,filter:blur?"blur(5px)":"none",transition:"filter 0.25s"}}>
                       {arrow}{Math.abs(change)}%
                     </span>
                   )}
@@ -1223,7 +1223,7 @@ export default function PortfolioPage() {
                 <span style={{fontSize:"11px",color:"var(--color-text-secondary)",fontWeight:500}}>{label}</span>
               </div>
               <div style={{fontSize:"22px",fontWeight:700,color:"var(--color-text-primary)",lineHeight:1,letterSpacing:"-0.5px",filter:blur?"blur(6px)":"none",transition:"filter 0.25s"}}>{value}</div>
-              <div style={{fontSize:"11px",color:"var(--color-text-secondary)",marginTop:"4px"}}>{sub}</div>
+              <div style={{fontSize:"11px",color:"var(--color-text-secondary)",marginTop:"4px",filter:blur?"blur(5px)":"none",transition:"filter 0.25s"}}>{sub}</div>
             </div>
           ))}
         </div>
@@ -1240,14 +1240,14 @@ export default function PortfolioPage() {
         <>
           {favSites.length>0 && (
             <section>
-              <div style={{fontSize:"11px",color:"var(--color-text-secondary)",fontWeight:600,marginBottom:"12px",textTransform:"uppercase",letterSpacing:"0.07em"}}>⭐ {t("favoritesSection")} ({favSites.length})</div>
+              <div style={{fontSize:"11px",color:"var(--color-text-secondary)",fontWeight:600,marginBottom:"12px",textTransform:"uppercase",letterSpacing:"0.07em"}}>⭐ {t("favoritesSection")} (<span style={{filter:blur?"blur(4px)":"none",transition:"filter 0.25s"}}>{favSites.length}</span>)</div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:"12px"}}>
                 {favSites.map((s,i)=><SiteCard key={s.id||i} site={s}/>)}
               </div>
             </section>
           )}
           <section>
-            <div style={{fontSize:"11px",color:"var(--color-text-secondary)",fontWeight:600,marginBottom:"12px",textTransform:"uppercase",letterSpacing:"0.07em"}}>{t("allSitesSection")} ({restSites.length})</div>
+            <div style={{fontSize:"11px",color:"var(--color-text-secondary)",fontWeight:600,marginBottom:"12px",textTransform:"uppercase",letterSpacing:"0.07em"}}>{t("allSitesSection")} (<span style={{filter:blur?"blur(4px)":"none",transition:"filter 0.25s"}}>{restSites.length}</span>)</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:"12px"}}>
               {restSites.map((s,i)=><SiteCard key={s.id||i} site={s}/>)}
             </div>
