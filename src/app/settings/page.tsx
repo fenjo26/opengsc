@@ -40,8 +40,8 @@ function SectionTitle({ icon, title, sub }: { icon?: React.ReactNode; title: str
   return (
     <div style={{ marginBottom: sub ? "6px" : "20px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-        {icon && <span style={{ color: "#fff" }}>{icon}</span>}
-        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#fff" }}>{title}</h2>
+        {icon && <span style={{ color: "var(--color-text-primary)" }}>{icon}</span>}
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--color-text-primary)" }}>{title}</h2>
       </div>
       {sub && <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", marginTop: "4px", marginBottom: "20px" }}>{sub}</p>}
     </div>
@@ -71,14 +71,14 @@ function AccountsSection({ user, accounts, loadingAccounts, removing, onAdd, onR
       <SectionCard>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "20px" }}>
           <GoogleIcon size={17} />
-          <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#fff" }}>{t("yourAccount")}</h2>
+          <h2 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>{t("yourAccount")}</h2>
         </div>
         {user && (
           <>
             <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "16px" }}>
               <UserAvatar email={user.email ?? ""} picture={user.image} size={44} />
               <div>
-                <div style={{ fontSize: "15px", fontWeight: 700, color: "#fff" }}>{user.name}</div>
+                <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>{user.name}</div>
                 <div style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>{user.email}</div>
               </div>
             </div>
@@ -104,7 +104,7 @@ function AccountsSection({ user, accounts, loadingAccounts, removing, onAdd, onR
           {/* Title row */}
           <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
             <GoogleIcon size={15} />
-            <h2 style={{ fontSize: "14px", fontWeight: 700, color: "#fff", margin: 0 }}>{t("linkedAccounts")}</h2>
+            <h2 style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>{t("linkedAccounts")}</h2>
             {!loadingAccounts && (
               <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-text-secondary)", background: "rgba(255,255,255,0.06)", borderRadius: "20px", padding: "2px 8px" }}>
                 {accounts.length} {accounts.length !== 1 ? t("accounts") : t("account")}
@@ -149,7 +149,7 @@ function AccountsSection({ user, accounts, loadingAccounts, removing, onAdd, onR
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 8px" }}>
                   <UserAvatar email={acc.email} picture={acc.picture} size={32} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{acc.email.split("@")[0]}</div>
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{acc.email.split("@")[0]}</div>
                     <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{acc.email}</div>
                   </div>
                   <span style={{ fontSize: "11px", display: "flex", alignItems: "center", gap: "3px", color: acc.gscAccess ? "#10B981" : "#f87171", flexShrink: 0 }}>
@@ -250,7 +250,7 @@ function TeamsSection({ user }: { user: any }) {
               </div>
             </td>
             <td style={{ padding: "16px 0 0" }}>
-              <button style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "transparent", color: "#fff", fontSize: "13px", fontWeight: 500, cursor: "pointer" }}>
+              <button style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-primary)", fontSize: "13px", fontWeight: 500, cursor: "pointer" }}>
                 <CheckCircle size={14} color="#10B981" /> {t("yes")} <ChevronDown size={13} color="var(--color-text-secondary)" />
               </button>
             </td>
@@ -313,7 +313,7 @@ function ApiSection() {
             value={keyName} onChange={e => setKeyName(e.target.value)}
             onKeyDown={e => e.key === "Enter" && createKey()}
             placeholder={t("mcpKeyName")}
-            style={{ flex: 1, padding: "10px 14px", background: "transparent", border: "none", color: "#fff", fontSize: "13px", outline: "none" }}
+            style={{ flex: 1, padding: "10px 14px", background: "transparent", border: "none", color: "var(--color-text-primary)", fontSize: "13px", outline: "none" }}
           />
           <button onClick={createKey} style={{ padding: "10px 18px", background: "transparent", borderLeft: "1px solid var(--color-border)", color: "var(--color-accent-blue)", fontSize: "13px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
             onMouseOver={e => e.currentTarget.style.background = "rgba(59,130,246,0.08)"} onMouseOut={e => e.currentTarget.style.background = "transparent"}>
@@ -327,7 +327,7 @@ function ApiSection() {
             {keys.map(k => (
               <div key={k.id} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: "8px", border: "1px solid var(--color-border)" }}>
                 <Key size={14} color="var(--color-text-secondary)" />
-                <span style={{ flex: 1, fontSize: "13px", fontWeight: 600, color: "#fff" }}>{k.name}</span>
+                <span style={{ flex: 1, fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{k.name}</span>
                 <code style={{ fontSize: "12px", color: "var(--color-text-secondary)", fontFamily: "monospace" }}>{k.key}</code>
                 <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{k.created}</span>
                 <button onClick={() => setKeys(prev => prev.filter(x => x.id !== k.id))} style={{ color: "var(--color-text-secondary)", background: "none", border: "none", cursor: "pointer" }}
@@ -341,11 +341,11 @@ function ApiSection() {
 
         {/* MCP setup guide */}
         <div style={{ border: "1px solid var(--color-border)", borderRadius: "10px", padding: "20px", display: "flex", flexDirection: "column", gap: "20px" }}>
-          <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#fff" }}>{t("mcpSetupTitle")}</h3>
+          <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>{t("mcpSetupTitle")}</h3>
 
           {/* Step 1 */}
           <div>
-            <div style={{ fontSize: "14px", fontWeight: 700, color: "#fff", marginBottom: "6px" }}>{t("mcpStep1Title")}</div>
+            <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "6px" }}>{t("mcpStep1Title")}</div>
             <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
               {t("mcpStep1Desc")}{" "}
               <a href="https://nodejs.org" target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)" }}>nodejs.org</a>.
@@ -354,7 +354,7 @@ function ApiSection() {
 
           {/* Step 2 */}
           <div>
-            <div style={{ fontSize: "14px", fontWeight: 700, color: "#fff", marginBottom: "12px" }}>{t("mcpStep2Title")}</div>
+            <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "12px" }}>{t("mcpStep2Title")}</div>
             {/* OS tabs */}
             <div style={{ display: "flex", gap: "2px", background: "rgba(255,255,255,0.06)", borderRadius: "8px", padding: "3px", width: "fit-content", marginBottom: "14px" }}>
               {([["mac", "🍎  macOS / Linux"], ["win", "⊞  Windows"]] as [string, string][]).map(([id, label]) => (
@@ -366,7 +366,7 @@ function ApiSection() {
             <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", marginBottom: "8px", lineHeight: 1.6 }}>
               {keys.length === 0
                 ? t("mcpNoKeyYet")
-                : <>{t("mcpOpenTerminal")} <strong style={{ color: "#fff" }}>{t("mcpTerminal")}</strong> {t("mcpTerminalApp")} {os === "mac" && <>(press <kbd style={{ background: "rgba(255,255,255,0.1)", padding: "1px 5px", borderRadius: "4px", fontSize: "11px" }}>⌘ Space</kbd> {t("mcpTerminalPress")} <em>{t("mcpTerminal")}</em>)</>}, {t("mcpTerminalPaste")}</>
+                : <>{t("mcpOpenTerminal")} <strong style={{ color: "var(--color-text-primary)" }}>{t("mcpTerminal")}</strong> {t("mcpTerminalApp")} {os === "mac" && <>(press <kbd style={{ background: "rgba(255,255,255,0.1)", padding: "1px 5px", borderRadius: "4px", fontSize: "11px" }}>⌘ Space</kbd> {t("mcpTerminalPress")} <em>{t("mcpTerminal")}</em>)</>}, {t("mcpTerminalPaste")}</>
               }
             </p>
             {/* Command box */}
@@ -382,9 +382,9 @@ function ApiSection() {
 
           {/* Step 3 */}
           <div>
-            <div style={{ fontSize: "14px", fontWeight: 700, color: "#fff", marginBottom: "6px" }}>{t("mcpStep3Title")}</div>
+            <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "6px" }}>{t("mcpStep3Title")}</div>
             <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: 1.6, marginBottom: "8px" }}>
-              {t("mcpStep3Desc")} <em style={{ color: "#fff" }}>{t("mcpStep3Example")}</em>
+              {t("mcpStep3Desc")} <em style={{ color: "var(--color-text-primary)" }}>{t("mcpStep3Example")}</em>
             </p>
             <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
               {t("mcpTip")}
@@ -403,7 +403,7 @@ function MembersSection({ user }: { user: any }) {
     <SectionCard>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#fff" }}>{t("members")}</h2>
+          <h2 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>{t("members")}</h2>
           <span style={{ fontSize: "11px", color: "var(--color-text-secondary)", background: "rgba(255,255,255,0.06)", borderRadius: "20px", padding: "2px 8px" }}>{t("membersCount")}</span>
         </div>
         <button style={{ display: "flex", alignItems: "center", gap: "6px", padding: "7px 16px", borderRadius: "8px", background: "rgba(59,130,246,0.12)", color: "#3B82F6", border: "1px solid rgba(59,130,246,0.25)", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
@@ -413,7 +413,7 @@ function MembersSection({ user }: { user: any }) {
       <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 0", borderTop: "1px solid var(--color-border)" }}>
         <UserAvatar email={user?.email ?? "a"} picture={user?.image} size={36} />
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: "14px", fontWeight: 600, color: "#fff" }}>{user?.name ?? t("yourAccount")}</div>
+          <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--color-text-primary)" }}>{user?.name ?? t("yourAccount")}</div>
           <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>{user?.email}</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "4px", padding: "4px 10px", borderRadius: "20px", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.2)" }}>
@@ -437,14 +437,14 @@ function PreferencesSection({ user }: { user: any }) {
       {/* Sharing */}
       <SectionCard>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
-          <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#fff" }}>{t("sharingTitle")}</h2>
+          <h2 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>{t("sharingTitle")}</h2>
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", background: "rgba(255,255,255,0.03)", borderRadius: "8px", border: "1px solid var(--color-border)" }}>
           <div>
-            <div style={{ fontSize: "13px", fontWeight: 600, color: "#fff" }}>{teamName}</div>
+            <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{teamName}</div>
             <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>{t("sharingDesc")}</div>
           </div>
-          <button onClick={() => setShareWithTeam(s => !s)} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "transparent", color: "#fff", fontSize: "13px", fontWeight: 500, cursor: "pointer" }}>
+          <button onClick={() => setShareWithTeam(s => !s)} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-primary)", fontSize: "13px", fontWeight: 500, cursor: "pointer" }}>
             {shareWithTeam ? <CheckCircle size={14} color="#10B981" /> : <X size={14} color="#6b7280" />}
             {shareWithTeam ? t("yes") : t("no")}
             <ChevronDown size={13} color="var(--color-text-secondary)" />
@@ -457,7 +457,7 @@ function PreferencesSection({ user }: { user: any }) {
         <SectionTitle title={t("language")} />
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", background: "rgba(255,255,255,0.03)", borderRadius: "8px", border: "1px solid var(--color-border)" }}>
           <div>
-            <div style={{ fontSize: "13px", fontWeight: 600, color: "#fff" }}>{t("language")}</div>
+            <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{t("language")}</div>
             <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>English / Русский / Українська</div>
           </div>
           <div style={{ display: "flex", gap: "6px" }}>
@@ -473,14 +473,14 @@ function PreferencesSection({ user }: { user: any }) {
       {/* Team Preferences */}
       <SectionCard>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
-          <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#fff" }}>{t("teamPreferences")}</h2>
+          <h2 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>{t("teamPreferences")}</h2>
           <button style={{ fontSize: "13px", color: "var(--color-accent-blue)", background: "none", border: "none", cursor: "pointer", fontWeight: 500, display: "flex", alignItems: "center", gap: "4px" }}>
             <Edit2 size={13} /> {t("edit")}
           </button>
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", background: "rgba(255,255,255,0.03)", borderRadius: "8px", border: "1px solid var(--color-border)" }}>
           <div>
-            <div style={{ fontSize: "13px", fontWeight: 600, color: "#fff" }}>{t("useAI")}</div>
+            <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{t("useAI")}</div>
             <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>{t("useAIDesc")}</div>
           </div>
           <div style={{ display: "flex", gap: "6px" }}>
@@ -610,7 +610,7 @@ function AIProviderCard({ provider }: { provider: typeof AI_PROVIDERS[number] })
           {provider.logo}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: "13px", fontWeight: 700, color: "#fff" }}>{provider.name}</div>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)" }}>{provider.name}</div>
           <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{provider.model}</div>
         </div>
         {isConfigured ? (
@@ -759,7 +759,7 @@ function IndexApiSection() {
       body: JSON.stringify({ service: "neural", token: nnToken }),
     }).then(r => r.json()).catch(() => ({ ok: false, error: "Network error" }));
     setNnStatus(res.ok ? "ok" : "error");
-    setNnMsg(res.ok ? `Токен дійсний ✓` : res.error ?? "Помилка");
+    setNnMsg(res.ok ? t("apiKeyTokenValid") : res.error ?? t("apiKeyError"));
     if (res.balance != null) setNnBalance(res.balance);
   };
 
@@ -782,7 +782,7 @@ function IndexApiSection() {
       body: JSON.stringify({ service: "xmlriver", userId: xrUserId, apiKey: xrApiKey }),
     }).then(r => r.json()).catch(() => ({ ok: false, error: "Network error" }));
     setXrStatus(res.ok ? "ok" : "error");
-    setXrMsg(res.ok ? "Ключ дійсний ✓" : res.error ?? "Помилка");
+    setXrMsg(res.ok ? t("apiKeyTokenValid") : res.error ?? t("apiKeyError"));
   };
 
   const saveXr = async () => {
@@ -804,7 +804,7 @@ function IndexApiSection() {
       body: JSON.stringify({ service: "2index", token: niToken }),
     }).then(r => r.json()).catch(() => ({ ok: false, error: "Network error" }));
     setNiStatus(res.ok ? "ok" : "error");
-    setNiMsg(res.ok ? "Токен дійсний ✓" : res.error ?? "Помилка");
+    setNiMsg(res.ok ? t("apiKeyTokenValid") : res.error ?? t("apiKeyError"));
     if (res.balance != null) setNiBalance(res.balance);
   };
 
@@ -821,11 +821,11 @@ function IndexApiSection() {
 
   const statusColor = (s: string) => s === "ok" ? "#10B981" : s === "error" ? "#EF4444" : s === "checking" ? "#F59E0B" : "var(--color-text-secondary)";
   const statusDot   = (s: string) => s === "ok" ? "●" : s === "error" ? "●" : s === "checking" ? "◌" : "○";
-  const statusLabel = (s: string) => s === "ok" ? "Налаштовано" : s === "error" ? "Помилка" : s === "checking" ? "Перевірка…" : "Не налаштовано";
+  const statusLabel = (s: string) => s === "ok" ? t("apiKeyConfigured") : s === "error" ? t("apiKeyError") : s === "checking" ? t("apiKeyChecking") : t("apiKeyNotConfigured");
 
   const inputStyle: React.CSSProperties = {
     flex: 1, padding: "9px 12px", background: "transparent",
-    border: "none", color: "#fff", fontSize: "13px", outline: "none",
+    border: "none", color: "var(--color-text-primary)", fontSize: "13px", outline: "none",
     fontFamily: "monospace",
   };
   const rowStyle: React.CSSProperties = {
@@ -856,8 +856,8 @@ function IndexApiSection() {
               <div style={{ width: 32, height: 32, borderRadius: "8px", background: "linear-gradient(135deg,rgba(139,92,246,0.25),rgba(59,130,246,0.25))", border: "1px solid rgba(139,92,246,0.35)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: 800, color: "#a78bfa" }}>NI</div>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
-                  <span style={{ fontSize: "15px", fontWeight: 700, color: "#fff" }}>NeuralIndexer</span>
-                  <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 7px", borderRadius: "6px", background: "rgba(139,92,246,0.15)", color: "#a78bfa", border: "1px solid rgba(139,92,246,0.3)" }}>Основний</span>
+                  <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>NeuralIndexer</span>
+                  <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 7px", borderRadius: "6px", background: "rgba(139,92,246,0.15)", color: "#a78bfa", border: "1px solid rgba(139,92,246,0.3)" }}>{t("apiKeyPrimary")}</span>
                 </div>
                 <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
                   @InderixingBot · автосплітування, Google + Bing + Yandex
@@ -901,16 +901,16 @@ function IndexApiSection() {
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
           <button onClick={validateNn} disabled={!nnToken || nnStatus === "checking"}
             style={{ ...btnStyle(), opacity: !nnToken ? 0.4 : 1 }}>
-            {nnStatus === "checking" ? "Перевірка…" : "Перевірити ключ"}
+            {nnStatus === "checking" ? t("apiKeyChecking") : t("apiKeyVerify")}
           </button>
           <button onClick={saveNn} disabled={!nnToken || nnSaving}
             style={{ ...btnStyle(true), opacity: !nnToken ? 0.4 : 1 }}>
-            {nnSaved ? "✓ Збережено" : nnSaving ? "Зберігаємо…" : "Зберегти"}
+            {nnSaved ? t("apiKeySaved") : nnSaving ? t("apiKeySaving") : t("apiKeySave")}
           </button>
           {nnToken && (
             <button onClick={() => { setNnToken(""); setNnStatus("idle"); setNnMsg(""); setNnBalance(null); saveNn(); }}
               style={{ padding: "9px 12px", background: "transparent", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "8px", color: "#EF4444", fontSize: "12px", cursor: "pointer" }}>
-              Видалити
+              {t("apiKeyDelete")}
             </button>
           )}
           <a href="https://t.me/InderixingBot" target="_blank" rel="noopener noreferrer"
@@ -928,7 +928,7 @@ function IndexApiSection() {
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <div style={{ width: 28, height: 28, borderRadius: "6px", background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 800, color: "#3B82F6" }}>XR</div>
-              <span style={{ fontSize: "15px", fontWeight: 700, color: "#fff" }}>XML River API</span>
+              <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>XML River API</span>
             </div>
             <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "6px", maxWidth: "480px", lineHeight: 1.5 }}>
               API ключ для перевірки індексації сторінок у Google.{" "}
@@ -954,15 +954,15 @@ function IndexApiSection() {
 
         <div style={{ display: "flex", gap: "8px" }}>
           <button onClick={validateXr} disabled={!xrUserId || !xrApiKey || xrStatus === "checking"} style={{ ...btnStyle(), opacity: (!xrUserId || !xrApiKey) ? 0.4 : 1 }}>
-            {xrStatus === "checking" ? "Перевірка…" : "Перевірити ключ"}
+            {xrStatus === "checking" ? t("apiKeyChecking") : t("apiKeyVerify")}
           </button>
           <button onClick={saveXr} disabled={!xrUserId || !xrApiKey || xrSaving} style={{ ...btnStyle(true), opacity: (!xrUserId || !xrApiKey) ? 0.4 : 1 }}>
-            {xrSaved ? "✓ Збережено" : xrSaving ? "Зберігаємо…" : "Зберегти"}
+            {xrSaved ? t("apiKeySaved") : xrSaving ? t("apiKeySaving") : t("apiKeySave")}
           </button>
           {(xrUserId || xrApiKey) && (
             <button onClick={() => { setXrUserId(""); setXrApiKey(""); setXrStatus("idle"); setXrMsg(""); saveXr(); }}
               style={{ padding: "9px 12px", background: "transparent", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "8px", color: "#EF4444", fontSize: "12px", cursor: "pointer" }}>
-              Видалити
+              {t("apiKeyDelete")}
             </button>
           )}
         </div>
@@ -974,7 +974,7 @@ function IndexApiSection() {
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <div style={{ width: 28, height: 28, borderRadius: "6px", background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 800, color: "#10B981" }}>2I</div>
-              <span style={{ fontSize: "15px", fontWeight: 700, color: "#fff" }}>2index.ninja API</span>
+              <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>2index.ninja API</span>
             </div>
             <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "6px", maxWidth: "480px", lineHeight: 1.5 }}>
               Bearer token для відправки URL на індексацію та перевірки статусу.{" "}
@@ -1000,15 +1000,15 @@ function IndexApiSection() {
 
         <div style={{ display: "flex", gap: "8px" }}>
           <button onClick={validateNi} disabled={!niToken || niStatus === "checking"} style={{ ...btnStyle(), opacity: !niToken ? 0.4 : 1 }}>
-            {niStatus === "checking" ? "Перевірка…" : "Перевірити ключ"}
+            {niStatus === "checking" ? t("apiKeyChecking") : t("apiKeyVerify")}
           </button>
           <button onClick={saveNi} disabled={!niToken || niSaving} style={{ ...btnStyle(true), opacity: !niToken ? 0.4 : 1 }}>
-            {niSaved ? "✓ Збережено" : niSaving ? "Зберігаємо…" : "Зберегти"}
+            {niSaved ? t("apiKeySaved") : niSaving ? t("apiKeySaving") : t("apiKeySave")}
           </button>
           {niToken && (
             <button onClick={() => { setNiToken(""); setNiStatus("idle"); setNiMsg(""); setNiBalance(null); saveNi(); }}
               style={{ padding: "9px 12px", background: "transparent", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "8px", color: "#EF4444", fontSize: "12px", cursor: "pointer" }}>
-              Видалити
+              {t("apiKeyDelete")}
             </button>
           )}
         </div>
@@ -1087,7 +1087,7 @@ function HealthKeyCard({ provider }: { provider: typeof HEALTH_PROVIDERS[number]
           {provider.logo}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: "13px", fontWeight: 700, color: "#fff" }}>{provider.name}</div>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)" }}>{provider.name}</div>
         </div>
         {isConfigured ? (
           <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", color: "#10B981", fontWeight: 600, flexShrink: 0 }}>
@@ -1391,7 +1391,7 @@ export default function SettingsPage() {
         <button onClick={() => router.push("/")} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "var(--color-accent-blue)", background: "none", border: "none", cursor: "pointer", marginBottom: "8px" }}>
           <ArrowLeft size={14} /> {t("back")}
         </button>
-        <h1 style={{ fontSize: "26px", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em" }}>{t("settingsTitle")}</h1>
+        <h1 style={{ fontSize: "26px", fontWeight: 700, color: "var(--color-text-primary)", letterSpacing: "-0.02em" }}>{t("settingsTitle")}</h1>
       </div>
 
       {/* Body */}
@@ -1401,17 +1401,17 @@ export default function SettingsPage() {
         <div style={{ width: "200px", flexShrink: 0, paddingRight: "24px" }}>
           {/* Account */}
           <div style={{ marginBottom: "28px" }}>
-            <div style={{ fontSize: "12px", fontWeight: 700, color: "#fff", marginBottom: "2px" }}>{t("sidebarAccount")}</div>
+            <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "2px" }}>{t("sidebarAccount")}</div>
             <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "10px" }}>{user?.email}</div>
             <NavBtn id="accounts" icon={<GoogleIcon size={14} />} label={t("navMyGoogleAccounts")} />
             <NavBtn id="teams" icon={<Users size={14} />} label={t("myTeams")} />
             <NavBtn id="api" icon={<Key size={14} />} label={t("navApiMcpKeys")} />
-            <NavBtn id="indexing-api" icon={<Globe size={14} />} label="API Індексації" />
+            <NavBtn id="indexing-api" icon={<Globe size={14} />} label={t("navIndexingApi")} />
           </div>
 
           {/* Team */}
           <div>
-            <div style={{ fontSize: "12px", fontWeight: 700, color: "#fff", marginBottom: "2px" }}>{t("sidebarTeam")}</div>
+            <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "2px" }}>{t("sidebarTeam")}</div>
             <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "10px" }}>
               {editingTeam ? (
                 <input
@@ -1419,7 +1419,7 @@ export default function SettingsPage() {
                   onChange={e => setTeamName(e.target.value)}
                   onBlur={() => setEditingTeam(false)}
                   onKeyDown={e => e.key === "Enter" && setEditingTeam(false)}
-                  style={{ fontSize: "12px", color: "#fff", background: "transparent", border: "none", borderBottom: "1px solid var(--color-accent-blue)", outline: "none", width: "120px", padding: "1px 0" }}
+                  style={{ fontSize: "12px", color: "var(--color-text-primary)", background: "transparent", border: "none", borderBottom: "1px solid var(--color-accent-blue)", outline: "none", width: "120px", padding: "1px 0" }}
                 />
               ) : (
                 <span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>{teamName || defaultTeamName}</span>
@@ -1444,23 +1444,6 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Footer */}
-      <div style={{ borderTop: "1px solid var(--color-border)", padding: "16px 32px", display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <div style={{ width: "18px", height: "18px", borderRadius: "4px", background: "#8B5CF6" }} />
-            <span style={{ fontSize: "13px", fontWeight: 700, color: "#fff" }}>OpenGSC</span>
-          </div>
-          <button style={{ fontSize: "13px", color: "var(--color-text-secondary)", background: "none", border: "none", cursor: "pointer" }}
-            onMouseOver={e => e.currentTarget.style.color = "#fff"} onMouseOut={e => e.currentTarget.style.color = "var(--color-text-secondary)"}>
-            {t("changelog")}
-          </button>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px" }}>
-          <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{t("copyright")}</span>
-          <span style={{ fontSize: "10px", color: "var(--color-border)" }}>{t("version")} 1.0.0</span>
-        </div>
-      </div>
     </div>
   );
 }

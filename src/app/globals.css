@@ -1,55 +1,117 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+/*
+ * Font stack: SF Pro on Apple devices via system-ui/-apple-system.
+ * Inter (Google Fonts) is the closest open-source substitute on non-Apple
+ * platforms and is already loaded — it kicks in automatically.
+ */
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
 
-/* ── Dark theme (default) ──────────────────────────────────────────────────── */
+/* ── Dark theme — Apple Design Language ────────────────────────────────────── */
+/*
+ * Apple Dark Mode palette (macOS / iOS system colors).
+ * Pure black canvas (#000000) — Apple's preferred dark surface.
+ * Elevated layers: #1c1c1e → #2c2c2e → #3a3a3c (system grouped backgrounds).
+ * Interactive: #2997ff (Apple on-dark Action Blue — brighter than light mode).
+ * System colors: green #34c759 / red #ff453a / orange #ff9f0a.
+ */
 :root,
 [data-theme="dark"] {
-  --color-bg: #121212;
-  --color-card: #1e1e1e;
-  --color-card-hover: #262626;
-  --color-border: #2A2A2A;
+  /* Surfaces — Apple layering system */
+  --color-bg:           #000000;   /* Dark Void — the canvas */
+  --color-card:         #1c1c1e;   /* System dark grouped surface */
+  --color-card-hover:   #2c2c2e;   /* System dark secondary */
+  --color-bg-secondary: #1c1c1e;
 
-  --color-text-primary: #FFFFFF;
-  --color-text-secondary: #A0A0A0;
+  /* Borders — Apple dark hairline */
+  --color-border:        #3a3a3c;  /* Apple dark separator */
+  --color-border-soft:   rgba(255, 255, 255, 0.06);
 
-  --color-accent-purple: #8B5CF6;
-  --color-accent-green: #10B981;
-  --color-accent-red: #EF4444;
-  --color-accent-orange: #F59E0B;
-  --color-accent-blue: #3B82F6;
+  /* Text */
+  --color-text-primary:  #f5f5f7;  /* Near-white — Apple dark primary */
+  --color-text-secondary:#a1a1a6;  /* Apple dark secondary */
+  --color-text-tertiary: #6e6e73;  /* Apple dark tertiary */
 
-  --color-success: #10B981;
-  --color-danger: #EF4444;
-  --color-warning: #F59E0B;
+  /* Action Blue — on-dark variant is brighter */
+  --color-accent-blue:        #2997ff;  /* Apple on-dark interactive */
+  --color-accent-blue-dark:   #1a7fd4;  /* Press state */
+  --color-accent-blue-bright: #2997ff;
 
+  /* System colors — Apple's exact dark mode values */
+  --color-accent-purple: #bf5af2;  /* Apple System Purple */
+  --color-accent-green:  #34c759;  /* Apple System Green */
+  --color-accent-red:    #ff453a;  /* Apple System Red */
+  --color-accent-orange: #ff9f0a;  /* Apple System Orange */
+
+  --color-success: #34c759;
+  --color-danger:  #ff453a;
+  --color-warning: #ff9f0a;
+
+  /* Radius — same token set as light */
   --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
+  --radius-md: 11px;
+  --radius-lg: 18px;
   --radius-xl: 20px;
+  --radius-pill: 9999px;
 
-  --shadow-card: 0 4px 6px -1px rgba(0,0,0,0.5), 0 2px 4px -1px rgba(0,0,0,0.4);
+  /* Shadow — Apple dark: almost nothing; only inner glow at card border */
+  --shadow-card:    none;
+  --shadow-product: 0 3px 40px 6px rgba(0, 0, 0, 0.60);
+  --shadow-frosted: 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
-/* ── Light theme ───────────────────────────────────────────────────────────── */
+/* ── Light theme — Apple Design Language ───────────────────────────────────── */
+/*
+ * Surface palette matches Apple's exact parchment/white system.
+ * Single accent: Action Blue #0066cc (Apple's universal "click me" signal).
+ * Text: Near-Black Ink #1d1d1f (Apple's preferred alternative to pure black).
+ * Elevation: hairline borders only — no shadows on cards or buttons.
+ */
 [data-theme="light"] {
-  --color-bg: #f4f5f7;
-  --color-card: #ffffff;
-  --color-card-hover: #f9fafb;
-  --color-border: #e5e7eb;
+  /* Surfaces */
+  --color-bg:            #f5f5f7;   /* Apple Parchment — the page canvas */
+  --color-card:          #ffffff;   /* Pure White — utility cards */
+  --color-card-hover:    #fafafc;   /* Pearl — very subtle lift on hover */
+  --color-bg-secondary:  #f5f5f7;   /* Parchment again — secondary areas */
 
-  --color-text-primary: #111827;
-  --color-text-secondary: #6b7280;
+  /* Borders — hairline only, Apple-style */
+  --color-border:        #d2d2d7;   /* Apple Hairline */
+  --color-border-soft:   rgba(0, 0, 0, 0.08); /* Soft ring for ghost buttons */
 
-  --color-accent-purple: #7c3aed;
-  --color-accent-green: #059669;
-  --color-accent-red: #dc2626;
-  --color-accent-orange: #d97706;
-  --color-accent-blue: #2563eb;
+  /* Text — Apple Near-Black system */
+  --color-text-primary:  #1d1d1f;   /* Near-Black Ink */
+  --color-text-secondary:#6e6e73;   /* Apple secondary copy */
+  --color-text-tertiary: #a1a1a6;   /* Fine print / disabled */
 
-  --color-success: #059669;
-  --color-danger: #dc2626;
-  --color-warning: #d97706;
+  /* Action Blue — Apple's single interactive accent */
+  --color-accent-blue:   #0066cc;   /* Action Blue — links, pills, focus */
+  --color-accent-blue-dark: #0051a3;/* Press/active state */
+  --color-accent-blue-bright: #2997ff; /* On-dark surfaces only */
 
-  --shadow-card: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05);
+  /* Semantic — kept functional, shifted slightly toward Apple palette */
+  --color-accent-purple: #6e3acf;
+  --color-accent-green:  #1d8348;
+  --color-accent-red:    #c0392b;
+  --color-accent-orange: #b7600a;
+
+  --color-success: #1d8348;
+  --color-danger:  #c0392b;
+  --color-warning: #b7600a;
+
+  /* Radius — Apple's rounded.lg for cards, keeps sm/md for compact UI */
+  --radius-sm: 8px;    /* compact utility buttons */
+  --radius-md: 11px;   /* pearl capsule buttons */
+  --radius-lg: 18px;   /* utility cards (Apple rounded.lg) */
+  --radius-xl: 20px;
+  --radius-pill: 9999px; /* primary pill CTAs — the Apple action signal */
+
+  /*
+   * Shadow philosophy (Apple):
+   *   - Cards use a 1px hairline border — no shadow.
+   *   - The only "real" drop-shadow is for product imagery.
+   *   - Frosted-glass blur for sticky/floating bars.
+   */
+  --shadow-card:    none;
+  --shadow-product: 0 3px 30px 5px rgba(0, 0, 0, 0.10); /* imagery only */
+  --shadow-frosted: 0 1px 0 rgba(0, 0, 0, 0.08);         /* sticky nav hairline */
 }
 
 * {
@@ -59,7 +121,12 @@
 }
 
 body {
-  font-family: 'Inter', sans-serif;
+  /*
+   * SF Pro on Apple devices (via system-ui / -apple-system),
+   * Inter on everything else — same visual weight, no FOUT.
+   */
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+  font-size: 17px;         /* Apple's body copy size */
   background-color: var(--color-bg);
   color: var(--color-text-primary);
   line-height: 1.5;
@@ -97,14 +164,18 @@ button {
 }
 
 /* Typography Utilities */
+/*
+ * Apple negative letter-spacing on large type — avoids open gaps between
+ * letters at display sizes. Values mirror Apple.com headline tracking.
+ */
 .title {
   font-size: 28px;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.374px;  /* Apple headline tracking */
 }
 
 .title-sm {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 500;
   color: var(--color-text-secondary);
 }
@@ -112,7 +183,7 @@ button {
 .metric-value {
   font-size: 32px;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.5px;  /* Apple display tracking */
 }
 
 /* Card Component */
@@ -126,7 +197,9 @@ button {
 }
 
 .card:hover {
-  border-color: #3f3f3f;
+  /* Theme-aware hover: dark mode uses slightly lighter border,
+     light mode uses Apple's interactive Action Blue as a hairline ring. */
+  border-color: var(--color-accent-blue);
 }
 
 .card-header {
@@ -137,23 +210,33 @@ button {
 }
 
 /* Badges / Pills */
+/*
+ * Apple pill pattern: inactive = ghost on surface, active = solid accent blue.
+ * Avoids white/dark inversion hack — both themes use Action Blue for active.
+ */
 .pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 6px 14px;
-  border-radius: 100px;
+  border-radius: var(--radius-pill);
   font-size: 13px;
   font-weight: 500;
-  background-color: rgba(255, 255, 255, 0.05);
-  transition: background-color 0.2s;
+  background-color: var(--color-border-soft);
+  border: 1px solid transparent;
+  transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
   color: var(--color-text-secondary);
 }
 
-.pill:hover,
+.pill:hover {
+  background-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
 .pill.active {
-  background-color: #ffffff;
-  color: var(--color-bg);
+  background-color: var(--color-accent-blue);
+  color: #ffffff;
+  border-color: transparent;
 }
 
 /* Metric Change Indicators */
@@ -212,8 +295,20 @@ input::placeholder {
   opacity: 0.7;
 }
 
+/* Autofill override — theme-aware via CSS custom properties
+   (Chrome ignores var() in box-shadow for autofill, so we split by theme) */
 input:-webkit-autofill {
-  background-color: rgba(255,255,255,0.04) !important;
-  -webkit-text-fill-color: #fff !important;
-  box-shadow: 0 0 0 30px #1a1a1a inset !important;
+  -webkit-text-fill-color: var(--color-text-primary) !important;
+  caret-color: var(--color-text-primary);
+  transition: background-color 9999s ease-in-out 0s;
+}
+
+[data-theme="dark"] input:-webkit-autofill {
+  box-shadow: 0 0 0 30px #1c1c1e inset !important;
+  -webkit-text-fill-color: #f5f5f7 !important;
+}
+
+[data-theme="light"] input:-webkit-autofill {
+  box-shadow: 0 0 0 30px #ffffff inset !important;
+  -webkit-text-fill-color: #1d1d1f !important;
 }
