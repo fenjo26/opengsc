@@ -835,13 +835,15 @@ function IndexApiSection() {
   const labelStyle: React.CSSProperties = {
     fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "5px", display: "block",
   };
+  /* Apple-style pill buttons — primary = solid Action Blue, secondary = ghost */
   const btnStyle = (primary?: boolean): React.CSSProperties => ({
-    padding: "9px 16px", background: "transparent",
-    borderLeft: "1px solid var(--color-border)",
-    color: primary ? "#3B82F6" : "var(--color-text-secondary)",
-    fontSize: "13px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
-    border: primary ? "1px solid rgba(59,130,246,0.4)" : "1px solid var(--color-border)",
-    borderRadius: "8px",
+    padding: "8px 18px",
+    borderRadius: "9999px",
+    border: primary ? "none" : "1px solid var(--color-border)",
+    background: primary ? "var(--color-accent-blue)" : "transparent",
+    color: primary ? "#ffffff" : "var(--color-text-primary)",
+    fontSize: "13px", fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap",
+    transition: "opacity 0.15s, background 0.15s",
   });
 
   return (
@@ -860,7 +862,7 @@ function IndexApiSection() {
                   <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 7px", borderRadius: "6px", background: "rgba(139,92,246,0.15)", color: "#a78bfa", border: "1px solid rgba(139,92,246,0.3)" }}>{t("apiKeyPrimary")}</span>
                 </div>
                 <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
-                  @InderixingBot · автосплітування, Google + Bing + Yandex
+                  {t("nnBotDesc")}
                 </p>
               </div>
             </div>
@@ -917,7 +919,7 @@ function IndexApiSection() {
             style={{ marginLeft: "auto", fontSize: "12px", color: "#a78bfa", textDecoration: "none", display: "flex", alignItems: "center", gap: "4px" }}
             onMouseOver={e => e.currentTarget.style.textDecoration = "underline"}
             onMouseOut={e => e.currentTarget.style.textDecoration = "none"}>
-            ✈️ Отримати токен у Telegram →
+            {t("nnGetToken")}
           </a>
         </div>
       </SectionCard>
@@ -931,7 +933,7 @@ function IndexApiSection() {
               <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>XML River API</span>
             </div>
             <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "6px", maxWidth: "480px", lineHeight: 1.5 }}>
-              API ключ для перевірки індексації сторінок у Google.{" "}
+              {t("xrDesc")}{" "}
               <a href="https://xmlriver.com" target="_blank" rel="noopener noreferrer" style={{ color: "#3B82F6" }}>xmlriver.com</a>
             </p>
           </div>
@@ -977,7 +979,7 @@ function IndexApiSection() {
               <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>2index.ninja API</span>
             </div>
             <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "6px", maxWidth: "480px", lineHeight: 1.5 }}>
-              Bearer token для відправки URL на індексацію та перевірки статусу.{" "}
+              {t("niDesc")}{" "}
               <a href="https://2index.ninja" target="_blank" rel="noopener noreferrer" style={{ color: "#10B981" }}>2index.ninja</a>
             </p>
           </div>
@@ -1021,10 +1023,10 @@ function IndexApiSection() {
             <div style={{ width: 28, height: 28, borderRadius: "6px", background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 800, color: "#8B5CF6" }}>AH</div>
             <div>
               <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-secondary)" }}>Ahrefs API</span>
-              <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>Розширена інтеграція для аналізу беклінків</p>
+              <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>{t("ahrefsDesc")}</p>
             </div>
           </div>
-          <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 8px", borderRadius: "6px", background: "rgba(139,92,246,0.12)", color: "#8B5CF6", border: "1px solid rgba(139,92,246,0.25)" }}>Незабаром</span>
+          <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 8px", borderRadius: "6px", background: "rgba(139,92,246,0.12)", color: "#8B5CF6", border: "1px solid rgba(139,92,246,0.25)" }}>{t("comingSoon")}</span>
         </div>
       </SectionCard>
     </div>
