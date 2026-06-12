@@ -278,24 +278,39 @@ function Pagination({ page, total, pageSize, onChange }: { page: number; total: 
   );
 }
 
-function DataTable({ title, rows, tabs, blur = false, csvFilename }: {
+type DtSortCol = "clicks" | "impr" | "ctr" | "pos";
+
+function DataTable({ title, rows, blur = false, csvFilename }: {
   title: string;
   rows: { label: string; clicks: number; impr: number; ctr: number; pos: number; cPct: number; iPct: number }[];
-  tabs?: string[];
   blur?: boolean;
   csvFilename?: string;
+  /** @deprecated kept for call-site compatibility */
+  tabs?: string[];
 }) {
   const { t } = useLanguage();
-  const [tab, setTab] = useState("All");
-  const [page, setPage] = useState(1);
-  const sorted = tab === "Growing"
-    ? [...rows].sort((a, b) => b.cPct - a.cPct)
-    : tab === "Decaying"
-    ? [...rows].sort((a, b) => a.cPct - b.cPct)
-    : rows;
-  const paged = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const [page,     setPage]     = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [sortCol,  setSortCol]  = useState<DtSortCol>("clicks");
+  const [sortDir,  setSortDir]  = useState<"asc" | "desc">("desc");
 
-  const handleTabChange = (t: string) => { setTab(t); setPage(1); };
+  const handleSort = (col: DtSortCol) => {
+    if (sortCol === col) {
+      setSortDir(d => d === "desc" ? "asc" : "desc");
+    } else {
+      setSortCol(col);
+      setSortDir(col === "pos" ? "asc" : "desc");
+    }
+    setPage(1);
+  };
+
+  const sorted = [...rows].sort((a, b) => {
+    const v = sortDir === "desc" ? -1 : 1;
+    return (a[sortCol] - b[sortCol]) * v;
+  });
+  const paged = sorted.slice((page - 1) * pageSize, page * pageSize);
+
+  const handlePageSize = (n: number) => { setPageSize(n); setPage(1); };
 
   const handleCSV = () => {
     exportCSV(
@@ -305,24 +320,40 @@ function DataTable({ title, rows, tabs, blur = false, csvFilename }: {
     );
   };
 
+  // Sortable column header helper
+  const SortTh = ({ col, label, color }: { col: DtSortCol; label: string; color: string }) => {
+    const active = sortCol === col;
+    const arrow = active ? (sortDir === "desc" ? " ↓" : " ↑") : " ↕";
+    return (
+      <th onClick={() => handleSort(col)}
+        style={{ textAlign: "left", padding: "8px 8px", color: active ? color : "var(--color-text-secondary)", fontWeight: active ? 700 : 500, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap", fontSize: "11px", letterSpacing: "0.04em" }}>
+        {label}<span style={{ opacity: active ? 1 : 0.35, marginLeft: "2px" }}>{arrow}</span>
+      </th>
+    );
+  };
+
+  // Totals row
+  const totalClicks = rows.reduce((s, r) => s + r.clicks, 0);
+  const totalImpr   = rows.reduce((s, r) => s + r.impr, 0);
+  const avgPos      = rows.length ? (rows.reduce((s, r) => s + r.pos, 0) / rows.length) : 0;
+
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
         <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>{title}</h3>
-        {tabs && <TabBar tabs={tabs} active={tab} onChange={handleTabChange} />}
         <button onClick={handleCSV} title="Export CSV"
           style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "4px", padding: "4px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-secondary)", fontSize: "12px", cursor: "pointer" }}>
-          <Download size={12} /> CSV
+          <Download size={12} /> {t("exportCsv")}
         </button>
       </div>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
         <thead>
           <tr style={{ borderBottom: "1px solid var(--color-border)" }}>
-            <th style={{ textAlign: "left", padding: "8px 0", color: "var(--color-text-secondary)", fontWeight: 500 }}></th>
-            <th style={{ textAlign: "left", padding: "8px 8px", color: C.clicks, fontWeight: 600 }}>{t("clicks")}</th>
-            <th style={{ textAlign: "left", padding: "8px 8px", color: C.impressions, fontWeight: 600 }}>{t("impressions")}</th>
-            <th style={{ textAlign: "left", padding: "8px 8px", color: C.ctr, fontWeight: 600 }}>CTR</th>
-            <th style={{ textAlign: "left", padding: "8px 0", color: C.position, fontWeight: 600 }}>{t("position")}</th>
+            <th style={{ textAlign: "left", padding: "8px 8px 8px 0", color: "var(--color-text-secondary)", fontWeight: 500, fontSize: "11px", letterSpacing: "0.04em" }}>{title === t("queriesTable") ? t("colQuery") : t("colPage")}</th>
+            <SortTh col="clicks" label={t("clicks").toUpperCase()}      color={C.clicks} />
+            <SortTh col="impr"   label={t("impressions").toUpperCase()} color={C.impressions} />
+            <SortTh col="ctr"    label="CTR"                            color={C.ctr} />
+            <SortTh col="pos"    label={t("position").toUpperCase()}    color={C.position} />
           </tr>
         </thead>
         <tbody>
@@ -333,17 +364,35 @@ function DataTable({ title, rows, tabs, blur = false, csvFilename }: {
                   {r.label}
                 </span>
               </td>
-              <td style={{ padding: "8px 8px", color: "var(--color-text-primary)", fontWeight: 500 }}>
-                {r.clicks}<Change pct={r.cPct} />
-              </td>
+              <td style={{ padding: "8px 8px", color: "var(--color-text-primary)", fontWeight: 500 }}>{r.clicks}<Change pct={r.cPct} /></td>
               <td style={{ padding: "8px 8px", color: "var(--color-text-secondary)" }}>{fmtK(r.impr)}<Change pct={r.iPct} /></td>
               <td style={{ padding: "8px 8px", color: "var(--color-text-secondary)" }}>{r.ctr}%</td>
-              <td style={{ padding: "8px 0", color: "var(--color-text-secondary)" }}>{r.pos}</td>
+              <td style={{ padding: "8px 0",  color: "var(--color-text-secondary)" }}>{r.pos}</td>
             </tr>
           ))}
+          {/* Totals row */}
+          {rows.length > 0 && (
+            <tr style={{ borderTop: "2px solid var(--color-border)", background: "rgba(255,255,255,0.03)" }}>
+              <td style={{ padding: "8px 8px 8px 0", fontSize: "12px", fontWeight: 700, color: "var(--color-text-secondary)" }}></td>
+              <td style={{ padding: "8px 8px", fontWeight: 700, color: "var(--color-text-primary)" }}>{fmtK(totalClicks)}</td>
+              <td style={{ padding: "8px 8px", fontWeight: 700, color: "var(--color-text-primary)" }}>{fmtK(totalImpr)}</td>
+              <td style={{ padding: "8px 8px", color: "var(--color-text-secondary)" }}></td>
+              <td style={{ padding: "8px 0",  fontWeight: 700, color: "var(--color-text-primary)" }}>{avgPos.toFixed(1)}</td>
+            </tr>
+          )}
         </tbody>
       </table>
-      <Pagination page={page} total={sorted.length} pageSize={PAGE_SIZE} onChange={setPage} />
+      {/* Rows-per-page + pagination */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginTop: "10px", gap: "16px" }}>
+        <Pagination page={page} total={sorted.length} pageSize={pageSize} onChange={setPage} />
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "var(--color-text-secondary)" }}>
+          <span>{t("rowsPerPage")}</span>
+          <select value={pageSize} onChange={e => handlePageSize(Number(e.target.value))}
+            style={{ fontSize: "12px", padding: "3px 6px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-primary)", cursor: "pointer" }}>
+            {[10, 50, 100, 500].map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+      </div>
     </div>
   );
 }
@@ -351,21 +400,35 @@ function DataTable({ title, rows, tabs, blur = false, csvFilename }: {
 type CountryRow = { name: string; flag?: string; clicks: number; impr: number; ctr: number; pos: number; cPct: number; iPct: number };
 function CountryTable({ rows }: { rows: CountryRow[] }) {
   const { t } = useLanguage();
-  const [tab, setTab] = useState("All");
-  const [page, setPage] = useState(1);
-  const sorted = tab === "Growing" ? [...rows].sort((a, b) => b.cPct - a.cPct)
-    : tab === "Decaying" ? [...rows].sort((a, b) => a.cPct - b.cPct) : rows;
-  const paged = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const [page,     setPage]     = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [sortCol,  setSortCol]  = useState<DtSortCol>("clicks");
+  const [sortDir,  setSortDir]  = useState<"asc"|"desc">("desc");
 
-  const handleTabChange = (t: string) => { setTab(t); setPage(1); };
+  const handleSort = (col: DtSortCol) => {
+    if (sortCol === col) setSortDir(d => d === "desc" ? "asc" : "desc");
+    else { setSortCol(col); setSortDir(col === "pos" ? "asc" : "desc"); }
+    setPage(1);
+  };
+
+  const sorted = [...rows].sort((a, b) => (a[sortCol] - b[sortCol]) * (sortDir === "desc" ? -1 : 1));
+  const paged = sorted.slice((page - 1) * pageSize, page * pageSize);
 
   const handleCSV = () => {
     exportCSV("countries.csv",
-      ["Country", "Clicks", "Impressions", "CTR%", "Position", "Clicks%Change", "Impr%Change"],
-      sorted.map(r => {
-        const label = r.flag ? r.name : iso3ToName(r.name);
-        return [label, r.clicks, r.impr, r.ctr, r.pos, r.cPct, r.iPct];
-      })
+      ["Country", "Clicks", "Impressions", "CTR%", "Position"],
+      sorted.map(r => [r.flag ? r.name : iso3ToName(r.name), r.clicks, r.impr, r.ctr, r.pos])
+    );
+  };
+
+  const SortTh = ({ col, label, color }: { col: DtSortCol; label: string; color: string }) => {
+    const active = sortCol === col;
+    const arrow = active ? (sortDir === "desc" ? " ↓" : " ↑") : " ↕";
+    return (
+      <th onClick={() => handleSort(col)}
+        style={{ textAlign: "left", padding: "8px 8px", color: active ? color : "var(--color-text-secondary)", fontWeight: active ? 700 : 500, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap", fontSize: "11px", letterSpacing: "0.04em" }}>
+        {label}<span style={{ opacity: active ? 1 : 0.35, marginLeft: "2px" }}>{arrow}</span>
+      </th>
     );
   };
 
@@ -373,20 +436,19 @@ function CountryTable({ rows }: { rows: CountryRow[] }) {
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
         <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>{t("countries")}</h3>
-        <TabBar tabs={["All", "Growing", "Decaying"]} active={tab} onChange={handleTabChange} />
-        <button onClick={handleCSV} title="Export CSV"
+        <button onClick={handleCSV}
           style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "4px", padding: "4px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-secondary)", fontSize: "12px", cursor: "pointer" }}>
-          <Download size={12} /> CSV
+          <Download size={12} /> {t("exportCsv")}
         </button>
       </div>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
         <thead>
           <tr style={{ borderBottom: "1px solid var(--color-border)" }}>
-            <th style={{ textAlign: "left", padding: "8px 0", color: "var(--color-text-secondary)", fontWeight: 500 }}></th>
-            <th style={{ textAlign: "left", padding: "8px 8px", color: C.clicks, fontWeight: 600 }}>{t("clicks")}</th>
-            <th style={{ textAlign: "left", padding: "8px 8px", color: C.impressions, fontWeight: 600 }}>{t("impressions")}</th>
-            <th style={{ textAlign: "left", padding: "8px 8px", color: C.ctr, fontWeight: 600 }}>CTR</th>
-            <th style={{ textAlign: "left", padding: "8px 0", color: C.position, fontWeight: 600 }}>{t("position")}</th>
+            <th style={{ textAlign: "left", padding: "8px 0", color: "var(--color-text-secondary)", fontWeight: 500, fontSize: "11px" }}></th>
+            <SortTh col="clicks" label={t("clicks").toUpperCase()}      color={C.clicks} />
+            <SortTh col="impr"   label={t("impressions").toUpperCase()} color={C.impressions} />
+            <SortTh col="ctr"    label="CTR"                            color={C.ctr} />
+            <SortTh col="pos"    label={t("position").toUpperCase()}    color={C.position} />
           </tr>
         </thead>
         <tbody>
@@ -399,13 +461,22 @@ function CountryTable({ rows }: { rows: CountryRow[] }) {
                 <td style={{ padding: "8px 8px", fontWeight: 500, color: "var(--color-text-primary)" }}>{r.clicks}<Change pct={r.cPct} /></td>
                 <td style={{ padding: "8px 8px", color: "var(--color-text-secondary)" }}>{fmtK(r.impr)}<Change pct={r.iPct} /></td>
                 <td style={{ padding: "8px 8px", color: "var(--color-text-secondary)" }}>{r.ctr}%</td>
-                <td style={{ padding: "8px 0", color: "var(--color-text-secondary)" }}>{r.pos}</td>
+                <td style={{ padding: "8px 0",  color: "var(--color-text-secondary)" }}>{r.pos}</td>
               </tr>
             );
           })}
         </tbody>
       </table>
-      <Pagination page={page} total={sorted.length} pageSize={PAGE_SIZE} onChange={setPage} />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginTop: "10px", gap: "16px" }}>
+        <Pagination page={page} total={sorted.length} pageSize={pageSize} onChange={setPage} />
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "var(--color-text-secondary)" }}>
+          <span>{t("rowsPerPage")}</span>
+          <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
+            style={{ fontSize: "12px", padding: "3px 6px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-primary)", cursor: "pointer" }}>
+            {[10, 50, 100, 500].map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1542,229 +1613,862 @@ function timeAgo(date: string | Date): string {
   return `${days}d ago`;
 }
 
-function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string }) {
-  const [rows, setRows]           = useState<any[]>([]);
-  const [loading, setLoading]     = useState(false);
-  const [inspecting, setInspecting] = useState(false);
-  const [error, setError]         = useState("");
-  const [inspectedCount, setInspectedCount] = useState<number | null>(null);
+// ─── BacklinksTab ─────────────────────────────────────────────────────────────
+function BacklinksTab({ siteDbId }: { siteDbId: string }) {
+  const { t } = useLanguage();
 
-  // Load cached inspections on mount / siteDbId change
+  const [links,    setLinks]    = useState<any[]>([]);
+  const [stats,    setStats]    = useState<any>({});
+  const [loading,  setLoading]  = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Add URLs
+  const [showAdd,   setShowAdd]   = useState(false);
+  const [addText,   setAddText]   = useState("");
+  const [adding,    setAdding]    = useState(false);
+
+  // Check states
+  const [checking404, setChecking404] = useState(false);
+  const [checkingXr,  setCheckingXr]  = useState(false);
+  const [submitting2i, setSubmitting2i] = useState(false);
+  const [actionMsg,   setActionMsg]   = useState("");
+
+  // Operations history
+  const [ops,       setOps]       = useState<any[]>([]);
+  const [showOps,   setShowOps]   = useState(false);
+  const [opsLoading, setOpsLoading] = useState(false);
+
+  // ── Display limit ──
+  const [displayLimit, setDisplayLimit] = useState(50);
+
   const load = async () => {
-    if (!siteDbId) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/gsc/inspect?siteId=${encodeURIComponent(siteDbId)}`);
-      const data = await res.json();
-      setRows(data.inspections ?? []);
+      const res = await fetch(`/api/backlinks?siteDbId=${siteDbId}`);
+      const d = await res.json();
+      setLinks(d.links ?? []);
+      setStats(d.stats ?? {});
     } catch {}
     setLoading(false);
   };
 
   useEffect(() => { load(); }, [siteDbId]);
 
-  // Run fresh inspection via API
-  const runInspection = async (forceRefresh = false) => {
-    if (!siteDbId || inspecting) return;
-    setInspecting(true); setError(""); setInspectedCount(null);
+  const handleAdd = async () => {
+    const urls = addText.split(/[\n,]+/).map(s => s.trim()).filter(s => s.startsWith('http'));
+    if (!urls.length) return;
+    setAdding(true);
     try {
-      const res = await fetch("/api/gsc/inspect", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ siteId: siteDbId, forceRefresh }),
+      await fetch('/api/backlinks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteDbId, urls }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed");
-      setRows(data.inspections ?? []);
-      setInspectedCount(data.inspected ?? 0);
-    } catch (e: any) { setError(e.message); }
-    setInspecting(false);
+      setAddText(''); setShowAdd(false);
+      await load();
+    } catch {}
+    setAdding(false);
   };
 
-  // Summary counts
-  const counts = rows.reduce((acc: Record<string, number>, r) => {
-    const k = statusCategory(r.status);
-    acc[k] = (acc[k] ?? 0) + 1;
-    return acc;
-  }, {});
+  const handleDelete = async (ids: string[]) => {
+    await fetch('/api/backlinks', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ siteDbId, ids }),
+    });
+    setSelected(new Set());
+    await load();
+  };
 
-  const SUMMARY = [
-    { key: "indexed",    color: "#4ADE80", label: "Indexed" },
-    { key: "notIndexed", color: "#FBBF24", label: "Crawled – not indexed" },
-    { key: "discovered", color: "#F97316", label: "Discovered – not indexed" },
-    { key: "other",      color: "#94a3b8", label: "Other / Unknown" },
-  ];
+  const handleCheck404 = async (all = false) => {
+    setChecking404(true); setActionMsg('');
+    const ids = !all && selected.size > 0 ? [...selected] : [];
+    try {
+      const res = await fetch('/api/backlinks/check-alive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteDbId, ids, forceAll: all }),
+      });
+      const d = await res.json();
+      setActionMsg(`✓ Перевірено ${d.checked}: живих ${d.alive}, мертвих ${d.dead}`);
+      await load();
+    } catch (e: any) { setActionMsg(`✗ ${e.message}`); }
+    setChecking404(false);
+  };
 
-  const lastInspectDate = rows.length > 0
-    ? new Date(Math.max(...rows.map(r => new Date(r.lastInspect).getTime())))
-    : null;
+  const handleCheckXr = async () => {
+    setCheckingXr(true); setActionMsg('');
+    const ids = selected.size > 0 ? [...selected] : [];
+    try {
+      const res = await fetch('/api/backlinks/check-xr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteDbId, ids }),
+      });
+      const d = await res.json();
+      setActionMsg(`✓ XML River: перевірено ${d.checked}`);
+      await load();
+    } catch (e: any) { setActionMsg(`✗ ${e.message}`); }
+    setCheckingXr(false);
+  };
 
-  // Empty state
-  const isEmpty = !loading && rows.length === 0;
+  const handleExport = () => {
+    const csv = ['url,title,alive,xr_status,2index,added']
+      .concat(links.map(l => `"${l.url}","${l.title ?? ''}",${l.isAlive ?? ''},${l.xrStatus ?? ''},${l.twoIndexStatus ?? ''},"${l.addedAt}"`))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `backlinks-${siteDbId}.csv`; a.click();
+  };
+
+  const loadOps = async () => {
+    setOpsLoading(true);
+    try {
+      const res = await fetch(`/api/indexing/sitemap/operations?siteDbId=${siteDbId}&limit=30`);
+      const d = await res.json();
+      setOps((d.ops ?? []).filter((o: any) => o.type.startsWith('backlink')));
+    } catch {}
+    setOpsLoading(false);
+  };
+
+  const toggleSel = (id: string) => setSelected(prev => {
+    const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n;
+  });
+  const toggleAll = () => setSelected(prev =>
+    prev.size === links.length && links.length > 0 ? new Set() : new Set(links.map(l => l.id))
+  );
+
+  const displayed = links.slice(0, displayLimit);
 
   return (
     <div style={{ padding: "24px 32px", display: "flex", flexDirection: "column", gap: "20px" }}>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
       {/* ── Header ── */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
-        <div>
-          <h2 style={{ fontSize: "17px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "2px" }}>
-            Indexing Status
-          </h2>
-          {lastInspectDate && (
-            <span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
-              Last inspected {timeAgo(lastInspectDate)} · {rows.length} pages
-            </span>
-          )}
-        </div>
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-          {rows.length > 0 && (
-            <button
-              onClick={() => runInspection(true)}
-              disabled={inspecting}
-              style={{ padding: "7px 14px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "rgba(255,255,255,0.05)", color: "var(--color-text-secondary)", fontSize: "12px", fontWeight: 500, cursor: inspecting ? "not-allowed" : "pointer", opacity: inspecting ? 0.5 : 1 }}
-            >
-              {inspecting ? "Inspecting…" : "↻ Refresh"}
-            </button>
-          )}
-          <button
-            onClick={() => runInspection(false)}
-            disabled={inspecting || loading}
-            style={{ display: "flex", alignItems: "center", gap: "6px", padding: "7px 16px", borderRadius: "8px", border: "none", background: "#3B82F6", color: "#fff", fontSize: "12px", fontWeight: 600, cursor: inspecting || loading ? "not-allowed" : "pointer", opacity: inspecting || loading ? 0.6 : 1 }}
-          >
-            <Search size={13} />
-            {isEmpty ? "Inspect Top Pages" : "Update Cache"}
+        <h2 style={{ fontSize: "17px", fontWeight: 700, color: "var(--color-text-primary)" }}>{t("backlinksTitle")}</h2>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <button onClick={() => handleCheck404(true)} disabled={checking404}
+            style={{ display: "flex", alignItems: "center", gap: "5px", padding: "7px 13px", borderRadius: "8px", border: "none", background: "#3B82F6", color: "#fff", fontSize: "12px", fontWeight: 600, cursor: checking404 ? "not-allowed" : "pointer", opacity: checking404 ? 0.6 : 1 }}>
+            {checking404 ? t("backlinksChecking") : t("backlinksCheck404")}
+          </button>
+          <button onClick={handleCheckXr} disabled={checkingXr}
+            style={{ display: "flex", alignItems: "center", gap: "5px", padding: "7px 13px", borderRadius: "8px", border: "none", background: "#10B981", color: "#fff", fontSize: "12px", fontWeight: 600, cursor: checkingXr ? "not-allowed" : "pointer", opacity: checkingXr ? 0.6 : 1 }}>
+            {checkingXr ? t("backlinksChecking") : t("backlinksIndexXr")}
+          </button>
+          <button onClick={handleExport}
+            style={{ padding: "7px 13px", borderRadius: "8px", border: "none", background: "#F59E0B", color: "#fff", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
+            {t("backlinksExport")}
           </button>
         </div>
       </div>
 
-      {/* ── API rate limit note ── */}
-      <div style={{ padding: "10px 14px", borderRadius: "8px", background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.18)", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
-        Inspects your top 20 pages by GSC impressions. Results are cached for 24 hours to stay within Google's 2,000 requests/day limit.
-        {inspectedCount !== null && (
-          <span style={{ color: "#4ADE80", fontWeight: 600 }}> · {inspectedCount} pages freshly inspected.</span>
+      {/* ── Stats bar ── */}
+      <div style={{ display: "flex", gap: "20px", flexWrap: "wrap", fontSize: "13px" }}>
+        {[
+          { label: t("backlinksTotal"), value: stats.total ?? 0, color: "var(--color-text-primary)" },
+          { label: t("backlinksDead"),  value: stats.dead   ?? 0, color: "#F87171" },
+          { label: t("backlinksAlive"), value: stats.alive  ?? 0, color: "#4ADE80" },
+          { label: t("backlinksXrIndexed"), value: stats.xrIndexed ?? 0, color: "#60a5fa" },
+        ].map(({ label, value, color }) => (
+          <span key={label} style={{ fontWeight: 600 }}>
+            {label} <span style={{ color }}>{value}</span>
+          </span>
+        ))}
+        {actionMsg && <span style={{ color: actionMsg.startsWith('✓') ? "#4ADE80" : "#F87171", fontWeight: 600 }}>{actionMsg}</span>}
+      </div>
+
+      {/* ── Add URLs block ── */}
+      <div style={{ background: "var(--color-card)", borderRadius: "12px", border: "1px solid var(--color-border)", overflow: "hidden" }}>
+        <div style={{ padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{t("backlinksAdd")}</span>
+          <button onClick={() => setShowAdd(o => !o)}
+            style={{ fontSize: "12px", padding: "4px 12px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", cursor: "pointer" }}>
+            {showAdd ? "▲" : "▼"}
+          </button>
+        </div>
+        {showAdd && (
+          <div style={{ padding: "0 16px 14px", borderTop: "1px solid var(--color-border)", display: "flex", flexDirection: "column", gap: "8px" }}>
+            <textarea
+              value={addText} onChange={e => setAddText(e.target.value)}
+              placeholder={t("backlinksAddPlaceholder")}
+              rows={6}
+              style={{ width: "100%", fontSize: "12px", padding: "8px 10px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", resize: "vertical", fontFamily: "monospace", boxSizing: "border-box", marginTop: "10px" }}
+            />
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button onClick={handleAdd} disabled={adding || !addText.trim()}
+                style={{ padding: "7px 18px", borderRadius: "8px", border: "none", background: "#3B82F6", color: "#fff", fontSize: "12px", fontWeight: 700, cursor: adding ? "not-allowed" : "pointer", opacity: adding ? 0.7 : 1 }}>
+                {adding ? t("backlinksChecking") : t("backlinksAddBtn")}
+              </button>
+            </div>
+          </div>
         )}
       </div>
 
-      {/* ── Error ── */}
-      {error && (
-        <div style={{ padding: "10px 14px", borderRadius: "8px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", fontSize: "12px", color: "#f87171" }}>
-          {error}
-        </div>
-      )}
-
-      {/* ── Loading spinner ── */}
-      {(loading || inspecting) && rows.length === 0 && (
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "40px 0", justifyContent: "center" }}>
-          <div style={{ width: "22px", height: "22px", border: "2px solid var(--color-border)", borderTopColor: "#3B82F6", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-          <span style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>
-            {inspecting ? "Calling Google URL Inspection API…" : "Loading…"}
-          </span>
-          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      {/* ── Loading ── */}
+      {loading && (
+        <div style={{ display: "flex", justifyContent: "center", padding: "30px 0" }}>
+          <div style={{ width: 22, height: 22, border: "2px solid var(--color-border)", borderTopColor: "#3B82F6", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
         </div>
       )}
 
       {/* ── Empty state ── */}
-      {isEmpty && !loading && !inspecting && (
-        <div style={{ textAlign: "center", padding: "60px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
-          <Search size={36} color="var(--color-text-secondary)" style={{ opacity: 0.3 }} />
-          <div style={{ fontSize: "15px", fontWeight: 600, color: "var(--color-text-primary)" }}>No inspection data yet</div>
-          <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", maxWidth: "380px", lineHeight: 1.6 }}>
-            Click <strong>Inspect Top Pages</strong> to fetch the indexing status of your top 20 pages directly from Google.
-            <br />Make sure you've synced GSC data first.
-          </p>
+      {!loading && links.length === 0 && (
+        <div style={{ textAlign: "center", padding: "50px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
+          <Link2 size={36} color="var(--color-text-secondary)" style={{ opacity: 0.25 }} />
+          <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", maxWidth: "360px", lineHeight: 1.6 }}>{t("backlinksEmpty")}</p>
         </div>
       )}
 
-      {/* ── Summary counts ── */}
-      {rows.length > 0 && (
-        <div style={{ display: "flex", gap: "28px", flexWrap: "wrap" }}>
-          {SUMMARY.map(({ key, color, label }) => (
-            <div key={key} style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: color, flexShrink: 0, display: "inline-block" }} />
-                <span style={{ fontSize: "26px", fontWeight: 700, color: "var(--color-text-primary)" }}>{counts[key] ?? 0}</span>
-              </div>
-              <span style={{ fontSize: "11px", color: "var(--color-text-secondary)", paddingLeft: "14px" }}>{label}</span>
+      {/* ── Selection toolbar ── */}
+      {selected.size > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 12px", background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.25)", borderRadius: "8px", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "12px", color: "#60a5fa", fontWeight: 600 }}>{selected.size} {t("backlinksSelected")}</span>
+          <button onClick={() => handleCheck404(false)} disabled={checking404}
+            style={{ padding: "4px 10px", borderRadius: "6px", border: "1px solid rgba(59,130,246,0.35)", background: "transparent", color: "#60a5fa", fontSize: "11px", fontWeight: 600, cursor: "pointer" }}>
+            Check 404
+          </button>
+          <button onClick={handleCheckXr} disabled={checkingXr}
+            style={{ padding: "4px 10px", borderRadius: "6px", border: "1px solid rgba(16,185,129,0.35)", background: "transparent", color: "#34d399", fontSize: "11px", fontWeight: 600, cursor: "pointer" }}>
+            {t("backlinksIndexXr")}
+          </button>
+          <button onClick={() => handleDelete([...selected])}
+            style={{ padding: "4px 10px", borderRadius: "6px", border: "1px solid rgba(239,68,68,0.35)", background: "transparent", color: "#f87171", fontSize: "11px", fontWeight: 600, cursor: "pointer" }}>
+            {t("backlinksDelete")}
+          </button>
+          <button onClick={() => setSelected(new Set())}
+            style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", fontSize: "11px", cursor: "pointer" }}>
+            {t("backlinksClearSel")}
+          </button>
+        </div>
+      )}
+
+      {/* ── Table ── */}
+      {links.length > 0 && (
+        <div style={{ background: "var(--color-card)", borderRadius: "12px", border: "1px solid var(--color-border)", overflow: "hidden" }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "700px" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--color-border)", background: "rgba(255,255,255,0.02)" }}>
+                  <th style={{ padding: "9px 12px", width: 32 }}>
+                    <input type="checkbox" checked={selected.size === links.length && links.length > 0} onChange={toggleAll}
+                      style={{ cursor: "pointer", width: 13, height: 13, accentColor: "#3B82F6" }} />
+                  </th>
+                  {[t("backlinksColUrl"), t("backlinksColDate"), t("backlinksColTitle"), t("backlinksColAlive"), t("backlinksColXr"), t("backlinks2index"), t("backlinksColActions")].map(h => (
+                    <th key={h} style={{ textAlign: "left", padding: "9px 12px", color: "var(--color-text-secondary)", fontWeight: 500, fontSize: "10px", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {displayed.map((link, i) => {
+                  const isSelected = selected.has(link.id);
+                  const path = link.url.replace(/^https?:\/\/[^/]+/, "") || "/";
+                  const host = (() => { try { return new URL(link.url).hostname; } catch { return link.url; } })();
+                  return (
+                    <tr key={link.id} style={{ borderBottom: "1px solid var(--color-border)", background: isSelected ? "rgba(59,130,246,0.05)" : i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.012)" }}>
+                      <td style={{ padding: "8px 12px" }}>
+                        <input type="checkbox" checked={isSelected} onChange={() => toggleSel(link.id)}
+                          style={{ cursor: "pointer", width: 13, height: 13, accentColor: "#3B82F6" }} />
+                      </td>
+                      {/* URL */}
+                      <td style={{ padding: "8px 12px", maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <div style={{ fontWeight: 600, fontSize: "11px", color: "var(--color-text-secondary)", marginBottom: "1px" }}>{host}</div>
+                        <a href={link.url} target="_blank" rel="noreferrer" title={link.url}
+                          style={{ color: "#60a5fa", textDecoration: "none", fontSize: "11px" }}
+                          onMouseOver={e => (e.currentTarget.style.textDecoration = "underline")}
+                          onMouseOut={e => (e.currentTarget.style.textDecoration = "none")}>{path || "/"}</a>
+                      </td>
+                      {/* Date */}
+                      <td style={{ padding: "8px 12px", fontSize: "11px", color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>
+                        {timeAgo(new Date(link.addedAt))}
+                      </td>
+                      {/* Title */}
+                      <td style={{ padding: "8px 12px", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "11px", color: "var(--color-text-primary)" }}>
+                        {link.title ?? <span style={{ color: "rgba(255,255,255,0.2)" }}>—</span>}
+                      </td>
+                      {/* Alive */}
+                      <td style={{ padding: "8px 12px", whiteSpace: "nowrap" }}>
+                        {link.isAlive === null || link.isAlive === undefined
+                          ? <span style={{ color: "rgba(255,255,255,0.2)", fontSize: "11px" }}>—</span>
+                          : link.isAlive
+                            ? <span style={{ color: "#4ADE80", fontWeight: 600, fontSize: "11px" }}>✓ Alive</span>
+                            : <span style={{ color: "#F87171", fontWeight: 600, fontSize: "11px" }}>✗ Dead</span>
+                        }
+                      </td>
+                      {/* XR */}
+                      <td style={{ padding: "8px 12px", whiteSpace: "nowrap" }}>
+                        {link.xrStatus
+                          ? <span style={{ fontSize: "11px", color: link.xrStatus === "indexed" ? "#4ADE80" : link.xrStatus === "error" ? "#F87171" : "#FBBF24", fontWeight: 600 }}>
+                              {link.xrStatus === "indexed" ? "✓ В індексі" : link.xrStatus === "error" ? "⚠ Error" : "✗ Не в індексі"}
+                            </span>
+                          : <span style={{ color: "rgba(255,255,255,0.2)", fontSize: "11px" }}>—</span>
+                        }
+                      </td>
+                      {/* 2index */}
+                      <td style={{ padding: "8px 12px" }}>
+                        {link.twoIndexStatus === "submitted"
+                          ? <span style={{ fontSize: "11px", color: "#34d399", fontWeight: 600 }}>✓ Надіслано</span>
+                          : <span style={{ color: "rgba(255,255,255,0.2)", fontSize: "11px" }}>—</span>
+                        }
+                      </td>
+                      {/* Actions */}
+                      <td style={{ padding: "8px 12px" }}>
+                        <button onClick={() => handleDelete([link.id])}
+                          style={{ padding: "3px 9px", borderRadius: "5px", border: "1px solid rgba(239,68,68,0.3)", background: "transparent", color: "#f87171", fontSize: "10px", fontWeight: 600, cursor: "pointer" }}>
+                          {t("backlinksDelete")}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {links.length > displayLimit && (
+            <div style={{ padding: "12px", textAlign: "center", borderTop: "1px solid var(--color-border)" }}>
+              <button onClick={() => setDisplayLimit(n => n + 100)}
+                style={{ padding: "7px 20px", borderRadius: "20px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", fontSize: "12px", cursor: "pointer" }}>
+                {t("backlinksShowMore")} ({links.length - displayLimit})
+              </button>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Operations history ── */}
+      <div style={{ background: "var(--color-card)", borderRadius: "12px", border: "1px solid var(--color-border)", overflow: "hidden" }}>
+        <div style={{ padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>🕐 {t("backlinksOpsTitle")}</span>
+          <button onClick={() => { setShowOps(o => !o); if (!showOps) loadOps(); }}
+            style={{ fontSize: "12px", padding: "4px 12px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", cursor: "pointer" }}>
+            {showOps ? "▲" : t("backlinksOpsRefresh")}
+          </button>
+        </div>
+        {showOps && (
+          <div style={{ borderTop: "1px solid var(--color-border)" }}>
+            {opsLoading ? (
+              <div style={{ padding: "20px", textAlign: "center" }}>
+                <div style={{ width: 18, height: 18, border: "2px solid var(--color-border)", borderTopColor: "#3B82F6", borderRadius: "50%", animation: "spin 0.8s linear infinite", display: "inline-block" }} />
+              </div>
+            ) : ops.length === 0 ? (
+              <div style={{ padding: "16px", textAlign: "center", fontSize: "12px", color: "var(--color-text-secondary)" }}>{t("backlinksOpsEmpty")}</div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                <thead>
+                  <tr style={{ background: "rgba(255,255,255,0.02)" }}>
+                    {["ОПЕРАЦІЯ", "ПІДСУМОК", "ДАТА"].map(h => (
+                      <th key={h} style={{ textAlign: "left", padding: "8px 14px", color: "var(--color-text-secondary)", fontWeight: 500, fontSize: "10px", letterSpacing: "0.06em" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {ops.map((op: any, i: number) => (
+                    <tr key={op.id} style={{ borderTop: "1px solid var(--color-border)", background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.01)" }}>
+                      <td style={{ padding: "8px 14px", fontWeight: 600, color: "var(--color-text-primary)" }}>
+                        {op.type === 'backlink_check_alive' ? 'Check 404' : op.type === 'backlink_check_xr' ? 'XML River' : op.type}
+                      </td>
+                      <td style={{ padding: "8px 14px" }}>
+                        <span style={{ color: op.result === 'success' ? "#4ADE80" : "#F87171", fontWeight: 600 }}>{op.result}</span>
+                        {op.urlCount != null && <span style={{ color: "var(--color-text-secondary)", marginLeft: 4 }}>· {op.urlCount} URL</span>}
+                        {op.detail && <span style={{ color: "var(--color-text-secondary)", marginLeft: 4 }}>· {op.detail}</span>}
+                      </td>
+                      <td style={{ padding: "8px 14px", color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>{timeAgo(new Date(op.createdAt))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string }) {
+  // ── URL list state ──
+  const [urlRows,    setUrlRows]    = useState<any[]>([]);
+  const [counters,   setCounters]   = useState<any>({});
+  const [meta,       setMeta]       = useState<any>({});
+  const [total,      setTotal]      = useState(0);
+  const [pages,      setPages]      = useState(1);
+  const [page,       setPage]       = useState(1);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [search,     setSearch]     = useState("");
+  const [loading,    setLoading]    = useState(false);
+
+  // ── Sitemap sync state ──
+  const [syncing,    setSyncing]    = useState(false);
+  const [syncError,  setSyncError]  = useState("");
+  const [customSitemapUrl, setCustomSitemapUrl] = useState("");
+  const [crawlInterval, setCrawlInterval] = useState("disabled");
+
+  // ── Selection ──
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // ── API keys ──
+  const [hasNeural,   setHasNeural]   = useState(false);
+  const [hasXmlRiver, setHasXmlRiver] = useState(false);
+  const [hasTwoIndex, setHasTwoIndex] = useState(false);
+
+  // ── Submit state ──
+  const [submitting,   setSubmitting]   = useState(false);
+  const [submitResult, setSubmitResult] = useState<any>(null);
+  const [nnQueue,      setNnQueue]      = useState<"slow"|"fast"|"yandex">("slow");
+
+  // ── Google check ──
+  const [checking,  setChecking]  = useState(false);
+  const [checkMsg,  setCheckMsg]  = useState("");
+
+  // ── Operations history ──
+  const [ops,      setOps]      = useState<any[]>([]);
+  const [showOps,  setShowOps]  = useState(false);
+  const [opsLoading, setOpsLoading] = useState(false);
+
+  // ── Load URL list ──
+  const loadUrls = async (pg = page, sf = statusFilter, sq = search) => {
+    if (!siteDbId) return;
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ siteDbId, page: String(pg), limit: "50", status: sf, search: sq });
+      const res = await fetch(`/api/indexing/sitemap/urls?${params}`);
+      const d = await res.json();
+      setUrlRows(d.rows ?? []);
+      setCounters(d.counters ?? {});
+      setMeta(d.meta ?? {});
+      setTotal(d.total ?? 0);
+      setPages(d.pages ?? 1);
+      if (d.meta?.crawlInterval) setCrawlInterval(d.meta.crawlInterval);
+      if (d.meta?.sitemapUrl) setCustomSitemapUrl(d.meta.sitemapUrl);
+    } catch {}
+    setLoading(false);
+  };
+
+  // ── Load API keys ──
+  useEffect(() => {
+    fetch("/api/settings/api-keys")
+      .then(r => r.json())
+      .then(d => {
+        setHasNeural(d.neuralIndexer?.configured ?? false);
+        setHasXmlRiver(d.xmlRiver?.configured ?? false);
+        setHasTwoIndex(d.twoIndex?.configured ?? false);
+      }).catch(() => {});
+  }, []);
+
+  useEffect(() => { loadUrls(1, statusFilter, search); }, [siteDbId]);
+
+  // ── Sitemap sync ──
+  const runSync = async () => {
+    setSyncing(true); setSyncError(""); setSubmitResult(null);
+    try {
+      const res = await fetch("/api/indexing/sitemap/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteDbId, sitemapUrl: customSitemapUrl || undefined }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error ?? "Sync failed");
+      await loadUrls(1, statusFilter, search);
+    } catch (e: any) { setSyncError(e.message); }
+    setSyncing(false);
+  };
+
+  // ── Google URL Inspection check ──
+  const runGoogleCheck = async () => {
+    const urls = selected.size > 0 ? [...selected] : urlRows.filter(r => !r.googleStatus).map(r => r.url);
+    if (!urls.length) return;
+    setChecking(true); setCheckMsg("");
+    try {
+      const res = await fetch("/api/indexing/sitemap/check-google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteDbId, urls: urls.slice(0, 50) }),
+      });
+      const d = await res.json();
+      setCheckMsg(`✓ Перевірено ${d.checked ?? 0} URLs${d.errors ? ` · ${d.errors} помилок` : ""}`);
+      await loadUrls(page, statusFilter, search);
+    } catch (e: any) { setCheckMsg(`✗ ${e.message}`); }
+    setChecking(false);
+  };
+
+  // ── NeuralIndexer submit ──
+  const runNeuralSubmit = async () => {
+    const urls = selected.size > 0
+      ? [...selected]
+      : urlRows.filter(r => r.neuralStatus !== "submitted").map(r => r.url);
+    if (!urls.length) return;
+    setSubmitting(true); setSubmitResult(null);
+    try {
+      const res = await fetch("/api/indexing/neural", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ urls, queue: nnQueue, label: domain, siteDbId }),
+      });
+      const d = await res.json();
+      setSubmitResult(d);
+      if (d.ok) await loadUrls(page, statusFilter, search);
+    } catch {}
+    setSubmitting(false);
+  };
+
+  // ── 2index.ninja submit ──
+  const runTwoIndexSubmit = async () => {
+    const urls = selected.size > 0 ? [...selected] : urlRows.map(r => r.url);
+    if (!urls.length) return;
+    setSubmitting(true); setSubmitResult(null);
+    try {
+      const res = await fetch("/api/indexing/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ urls }),
+      });
+      const d = await res.json();
+      setSubmitResult({ submitted: d.submitted ?? 0, total: d.total ?? urls.length });
+    } catch {}
+    setSubmitting(false);
+  };
+
+  // ── Operations history ──
+  const loadOps = async () => {
+    if (opsLoading) return;
+    setOpsLoading(true);
+    try {
+      const res = await fetch(`/api/indexing/sitemap/operations?siteDbId=${siteDbId}&limit=50`);
+      const d = await res.json();
+      setOps(d.ops ?? []);
+    } catch {}
+    setOpsLoading(false);
+  };
+
+  // ── Selection helpers ──
+  const toggleSelect = (url: string) => setSelected(prev => {
+    const n = new Set(prev); n.has(url) ? n.delete(url) : n.add(url); return n;
+  });
+  const toggleAll = () => setSelected(prev =>
+    prev.size === urlRows.length && urlRows.length > 0 ? new Set() : new Set(urlRows.map(r => r.url))
+  );
+
+  // ── Helpers ──
+  const googleStatusColor = (s: string | null) => {
+    if (!s) return "rgba(255,255,255,0.2)";
+    if (/submitted and indexed/i.test(s)) return "#4ADE80";
+    if (/not on google/i.test(s) || /not indexed/i.test(s)) return "#F87171";
+    return "#FBBF24";
+  };
+  const googleStatusLabel = (s: string | null) => {
+    if (!s) return "—";
+    if (/submitted and indexed/i.test(s)) return "В індексі";
+    if (/not on google/i.test(s)) return "Не знайдено Google";
+    if (/crawled/i.test(s)) return "Проіндексовано, не в індексі";
+    if (/discovered/i.test(s)) return "Виявлено, не проіндексовано";
+    if (/blocked/i.test(s)) return "Заблоковано";
+    return s;
+  };
+  const opTypeLabel = (t: string) => {
+    const m: Record<string,string> = {
+      sitemap_sync: "Sync sitemap", google_check: "Google check",
+      xr_check: "XML River", "2index_submit": "2index submit", neural_submit: "NeuralIndexer",
+    };
+    return m[t] ?? t;
+  };
+
+  const hasData = urlRows.length > 0 || counters.total > 0;
+
+  const COUNTER_CHIPS = [
+    { label: "Всього", value: counters.total ?? 0, color: "var(--color-text-primary)", filter: "all" },
+    { label: "В індексі", value: counters.indexed ?? 0, color: "#4ADE80", filter: "indexed" },
+    { label: "Не в індексі", value: counters.notIndexed ?? 0, color: "#F87171", filter: "not_indexed" },
+    { label: "Не перевірено", value: counters.notChecked ?? 0, color: "#FBBF24", filter: "not_checked" },
+    { label: "Neural надіслано", value: counters.neuralSubmitted ?? 0, color: "#a78bfa", filter: "all" },
+  ];
+
+  return (
+    <div style={{ padding: "24px 32px", display: "flex", flexDirection: "column", gap: "20px" }}>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+
+      {/* ── Sitemap sync card ── */}
+      <div style={{ background: "var(--color-card)", borderRadius: "12px", border: "1px solid var(--color-border)", overflow: "hidden" }}>
+        <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>🗺 Автообхід sitemap</span>
+            {meta.lastSitemapSync && (
+              <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
+                · Оновлено {timeAgo(new Date(meta.lastSitemapSync))}
+              </span>
+            )}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Інтервал:</span>
+            <select value={crawlInterval} onChange={e => setCrawlInterval(e.target.value)}
+              style={{ fontSize: "12px", padding: "4px 8px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", cursor: "pointer" }}>
+              {[["disabled","Виключити"],["daily","Щодня"],["weekly","Щотижня"],["monthly","Щомісяця"]].map(([v,l]) => (
+                <option key={v} value={v}>{l}</option>
+              ))}
+            </select>
+            <button onClick={runSync} disabled={syncing}
+              style={{ padding: "6px 16px", borderRadius: "8px", border: "none", background: syncing ? "rgba(59,130,246,0.3)" : "#3B82F6", color: "#fff", fontSize: "12px", fontWeight: 600, cursor: syncing ? "not-allowed" : "pointer" }}>
+              {syncing ? "Синхронізація…" : "Синхронізувати сторінки"}
+            </button>
+          </div>
+        </div>
+        {/* Custom sitemap URL row */}
+        <div style={{ padding: "10px 16px", display: "flex", alignItems: "center", gap: "8px", background: "rgba(255,255,255,0.01)" }}>
+          <span style={{ fontSize: "11px", color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>Sitemap URL:</span>
+          <input
+            value={customSitemapUrl}
+            onChange={e => setCustomSitemapUrl(e.target.value)}
+            placeholder={`${meta.siteUrl ?? "https://example.com"}/sitemap.xml`}
+            style={{ flex: 1, fontSize: "12px", padding: "5px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", maxWidth: "480px" }}
+          />
+        </div>
+        {syncError && (
+          <div style={{ padding: "8px 16px", background: "rgba(239,68,68,0.06)", borderTop: "1px solid rgba(239,68,68,0.2)", fontSize: "12px", color: "#f87171" }}>
+            ✗ {syncError}
+          </div>
+        )}
+      </div>
+
+      {/* ── Status counters ── */}
+      {counters.total > 0 && (
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          {COUNTER_CHIPS.map(({ label, value, color, filter }) => (
+            <button key={label} onClick={() => { setStatusFilter(filter); loadUrls(1, filter, search); }}
+              style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "10px 18px", borderRadius: "10px", border: `1px solid ${statusFilter === filter && filter !== "all" ? color + "55" : "var(--color-border)"}`, background: statusFilter === filter && filter !== "all" ? `${color}10` : "var(--color-card)", cursor: "pointer", minWidth: "80px", gap: "2px" }}>
+              <span style={{ fontSize: "22px", fontWeight: 700, color }}>{value}</span>
+              <span style={{ fontSize: "10px", color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>
+            </button>
           ))}
         </div>
       )}
 
-      {/* ── Pages table ── */}
-      {rows.length > 0 && (
-        <div style={{ background: "var(--color-card)", borderRadius: "12px", border: "1px solid var(--color-border)", overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-            <thead>
-              <tr style={{ borderBottom: "1px solid var(--color-border)", background: "rgba(255,255,255,0.02)" }}>
-                {["URL", "STATUS", "LAST CRAWL", "RICH RESULTS", "INSPECTED"].map(h => (
-                  <th key={h} style={{ textAlign: "left", padding: "10px 14px", color: "var(--color-text-secondary)", fontWeight: 500, fontSize: "11px", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, i) => {
-                const path = row.url.replace(/^https?:\/\/[^/]+/, "") || "/";
-                const rich: string[] = (() => { try { return JSON.parse(row.richResults ?? "[]"); } catch { return []; } })();
-                const crawlDate = row.lastCrawl ? new Date(row.lastCrawl) : null;
-                const crawlStr  = crawlDate
-                  ? crawlDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-                  : "—";
-                return (
-                  <tr key={row.id ?? i} style={{ borderBottom: "1px solid var(--color-border)", background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.015)" }}>
-                    {/* URL */}
-                    <td style={{ padding: "10px 14px", maxWidth: "260px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      <a
-                        href={row.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        title={row.url}
-                        style={{ color: "#3B82F6", textDecoration: "none", fontSize: "12px" }}
-                        onMouseOver={e => (e.currentTarget.style.textDecoration = "underline")}
-                        onMouseOut={e => (e.currentTarget.style.textDecoration = "none")}
-                      >
-                        {path}
-                      </a>
-                    </td>
-                    {/* Status */}
-                    <td style={{ padding: "10px 14px", whiteSpace: "nowrap" }}>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "12px", color: statusColor(row.status), fontWeight: 500 }}>
-                        <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: statusColor(row.status), flexShrink: 0 }} />
-                        {row.status}
-                      </span>
-                    </td>
-                    {/* Last crawl */}
-                    <td style={{ padding: "10px 14px", fontSize: "12px", color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>
-                      {crawlDate ? (
-                        <>
-                          <div style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{timeAgo(crawlDate)}</div>
-                          <div style={{ fontSize: "11px" }}>{crawlStr}</div>
-                        </>
-                      ) : "—"}
-                    </td>
-                    {/* Rich results */}
-                    <td style={{ padding: "10px 14px" }}>
-                      {rich.length > 0 ? (
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
-                          {rich.map((r: string) => (
-                            <span key={r} style={{ fontSize: "10px", fontWeight: 600, padding: "2px 7px", borderRadius: "20px", background: "rgba(139,92,246,0.12)", color: "#8B5CF6", border: "1px solid rgba(139,92,246,0.25)", whiteSpace: "nowrap" }}>
-                              {r}
-                            </span>
-                          ))}
-                        </div>
-                      ) : <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.2)" }}>—</span>}
-                    </td>
-                    {/* Inspected */}
-                    <td style={{ padding: "10px 14px", fontSize: "11px", color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>
-                      {timeAgo(row.lastInspect)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+      {/* ── Search + filter bar ── */}
+      {counters.total > 0 && (
+        <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+          <input
+            value={search} onChange={e => setSearch(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && loadUrls(1, statusFilter, search)}
+            placeholder="Пошук по URL…"
+            style={{ fontSize: "12px", padding: "6px 12px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-primary)", minWidth: "200px" }}
+          />
+          <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); loadUrls(1, e.target.value, search); }}
+            style={{ fontSize: "12px", padding: "6px 10px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-primary)", cursor: "pointer" }}>
+            {[["all","Всі статуси"],["indexed","В індексі"],["not_indexed","Не в індексі"],["not_checked","Не перевірено"]].map(([v,l]) => (
+              <option key={v} value={v}>{l}</option>
+            ))}
+          </select>
+
+          {/* Google API check button */}
+          <button onClick={runGoogleCheck} disabled={checking}
+            style={{ display: "flex", alignItems: "center", gap: "5px", padding: "6px 12px", borderRadius: "8px", border: "1px solid rgba(66,133,244,0.35)", background: "rgba(66,133,244,0.08)", color: "#60a5fa", fontSize: "12px", fontWeight: 600, cursor: checking ? "not-allowed" : "pointer", opacity: checking ? 0.6 : 1 }}>
+            <GoogleIcon size={13} />
+            {checking ? "Перевірка…" : selected.size > 0 ? `Google API (${selected.size})` : "Google API check"}
+          </button>
+
+          {checkMsg && (
+            <span style={{ fontSize: "12px", color: checkMsg.startsWith("✓") ? "#4ADE80" : "#F87171", fontWeight: 600 }}>{checkMsg}</span>
+          )}
+
+          {selected.size > 0 && (
+            <span style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginLeft: "4px" }}>
+              Обрано {selected.size}
+              <button onClick={() => setSelected(new Set())} style={{ marginLeft: "6px", background: "none", border: "none", color: "var(--color-text-secondary)", cursor: "pointer", fontSize: "11px" }}>✕</button>
+            </span>
+          )}
         </div>
       )}
+
+      {/* ── NeuralIndexer primary submit toolbar ── */}
+      {counters.total > 0 && (hasNeural || hasXmlRiver || hasTwoIndex) && (
+        <div style={{ borderRadius: "12px", background: "var(--color-card)", border: "1px solid var(--color-border)", overflow: "hidden" }}>
+          {hasNeural && (
+            <div style={{ padding: "10px 14px", borderBottom: hasXmlRiver || hasTwoIndex ? "1px solid var(--color-border)" : "none", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+              <div style={{ width: 22, height: 22, borderRadius: "5px", background: "linear-gradient(135deg,rgba(139,92,246,0.3),rgba(59,130,246,0.3))", border: "1px solid rgba(139,92,246,0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 800, color: "#a78bfa" }}>NI</div>
+              <span style={{ fontSize: "12px", fontWeight: 700, color: "#a78bfa" }}>NeuralIndexer</span>
+              <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
+                {selected.size > 0 ? `· ${selected.size} обрано` : `· ${(counters.total ?? 0) - (counters.neuralSubmitted ?? 0)} ще не надіслано`}
+              </span>
+              {(["slow","fast","yandex"] as const).map(q => (
+                <button key={q} onClick={() => setNnQueue(q)}
+                  style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", background: nnQueue === q ? "rgba(139,92,246,0.2)" : "transparent", color: nnQueue === q ? "#a78bfa" : "var(--color-text-secondary)", border: `1px solid ${nnQueue === q ? "rgba(139,92,246,0.4)" : "var(--color-border)"}` }}>
+                  {q === "slow" ? "Slow" : q === "fast" ? "⚡ Fast" : "Yandex"}
+                </button>
+              ))}
+              <button onClick={runNeuralSubmit} disabled={submitting}
+                style={{ padding: "6px 14px", borderRadius: "7px", border: "none", background: submitting ? "rgba(139,92,246,0.2)" : "rgba(139,92,246,0.85)", color: "#fff", fontSize: "12px", fontWeight: 700, cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.7 : 1 }}>
+                {submitting ? "Надсилання…" : "▶ Відправити на індексацію"}
+              </button>
+              {submitResult?.ok && (
+                <span style={{ fontSize: "12px", color: "#4ADE80", fontWeight: 600 }}>
+                  ✓ Прийнято {submitResult.accepted} URL
+                  {submitResult.charged != null && ` · $${Number(submitResult.charged).toFixed(4)} списано`}
+                  {submitResult.balance != null && ` · баланс $${Number(submitResult.balance).toFixed(4)}`}
+                </span>
+              )}
+              {submitResult?.error && <span style={{ fontSize: "12px", color: "#F87171" }}>✗ {submitResult.error}</span>}
+            </div>
+          )}
+          {(hasXmlRiver || hasTwoIndex) && (
+            <div style={{ padding: "8px 14px", display: "flex", alignItems: "center", gap: "8px", background: "rgba(255,255,255,0.01)" }}>
+              <span style={{ fontSize: "10px", fontWeight: 700, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Додатково:</span>
+              {hasTwoIndex && (
+                <button onClick={runTwoIndexSubmit} disabled={submitting}
+                  style={{ display: "flex", alignItems: "center", gap: "4px", padding: "4px 10px", borderRadius: "6px", border: "1px solid rgba(16,185,129,0.3)", background: "transparent", color: "#34d399", fontSize: "11px", fontWeight: 600, cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.6 : 1 }}>
+                  <span style={{ fontSize: "9px", fontWeight: 800 }}>2I</span>
+                  {submitting ? "Надсилання…" : "Відправити в 2index"}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Loading ── */}
+      {loading && (
+        <div style={{ display: "flex", justifyContent: "center", padding: "30px 0" }}>
+          <div style={{ width: 22, height: 22, border: "2px solid var(--color-border)", borderTopColor: "#3B82F6", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+        </div>
+      )}
+
+      {/* ── Empty state ── */}
+      {!loading && counters.total === 0 && (
+        <div style={{ textAlign: "center", padding: "60px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
+          <Globe size={36} color="var(--color-text-secondary)" style={{ opacity: 0.25 }} />
+          <div style={{ fontSize: "15px", fontWeight: 600, color: "var(--color-text-primary)" }}>Список сторінок пустий</div>
+          <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", maxWidth: "380px", lineHeight: 1.6 }}>
+            Натисніть <strong>Синхронізувати сторінки</strong>, щоб зібрати URL з sitemap.
+          </p>
+        </div>
+      )}
+
+      {/* ── URL table ── */}
+      {urlRows.length > 0 && (
+        <div style={{ background: "var(--color-card)", borderRadius: "12px", border: "1px solid var(--color-border)", overflow: "hidden" }}>
+          <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--color-border)", display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-primary)" }}>📋 Список сторінок</span>
+            <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>· {total} URL</span>
+            <div style={{ marginLeft: "auto", display: "flex", gap: "8px", alignItems: "center" }}>
+              <button onClick={() => { const p = Math.max(1, page - 1); setPage(p); loadUrls(p, statusFilter, search); }}
+                disabled={page <= 1 || loading}
+                style={{ padding: "3px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", fontSize: "12px", cursor: page <= 1 ? "not-allowed" : "pointer", opacity: page <= 1 ? 0.4 : 1 }}>← Назад</button>
+              <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Стор. {page} з {pages}</span>
+              <button onClick={() => { const p = Math.min(pages, page + 1); setPage(p); loadUrls(p, statusFilter, search); }}
+                disabled={page >= pages || loading}
+                style={{ padding: "3px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", fontSize: "12px", cursor: page >= pages ? "not-allowed" : "pointer", opacity: page >= pages ? 0.4 : 1 }}>Вперед →</button>
+            </div>
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "700px" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--color-border)", background: "rgba(255,255,255,0.02)" }}>
+                  <th style={{ padding: "9px 12px", width: 32 }}>
+                    <input type="checkbox" checked={selected.size === urlRows.length && urlRows.length > 0} onChange={toggleAll}
+                      style={{ cursor: "pointer", width: 13, height: 13, accentColor: "#3B82F6" }} />
+                  </th>
+                  {["URL","СТАТУС GOOGLE","XML RIVER","2INDEX","NEURAL","ПЕРЕВІРЕНО"].map(h => (
+                    <th key={h} style={{ textAlign: "left", padding: "9px 12px", color: "var(--color-text-secondary)", fontWeight: 500, fontSize: "10px", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {urlRows.map((row, i) => {
+                  const path = row.url.replace(/^https?:\/\/[^/]+/, "") || "/";
+                  const gColor = googleStatusColor(row.googleStatus);
+                  const isSelected = selected.has(row.url);
+                  return (
+                    <tr key={row.id} style={{ borderBottom: "1px solid var(--color-border)", background: isSelected ? "rgba(59,130,246,0.05)" : i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.012)" }}>
+                      <td style={{ padding: "8px 12px" }}>
+                        <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(row.url)}
+                          style={{ cursor: "pointer", width: 13, height: 13, accentColor: "#3B82F6" }} />
+                      </td>
+                      <td style={{ padding: "8px 12px", maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <a href={row.url} target="_blank" rel="noreferrer" title={row.url}
+                          style={{ color: "#60a5fa", textDecoration: "none" }}
+                          onMouseOver={e => (e.currentTarget.style.textDecoration = "underline")}
+                          onMouseOut={e => (e.currentTarget.style.textDecoration = "none")}>{path}</a>
+                      </td>
+                      <td style={{ padding: "8px 12px", whiteSpace: "nowrap" }}>
+                        {row.googleStatus ? (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: gColor, fontWeight: 500 }}>
+                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: gColor, flexShrink: 0 }} />
+                            {googleStatusLabel(row.googleStatus)}
+                          </span>
+                        ) : <span style={{ color: "rgba(255,255,255,0.2)" }}>—</span>}
+                      </td>
+                      <td style={{ padding: "8px 12px" }}>
+                        {row.xrStatus ? (
+                          <span style={{ fontSize: "11px", color: row.xrStatus === "indexed" ? "#4ADE80" : "#FBBF24", fontWeight: 600 }}>
+                            {row.xrStatus === "indexed" ? "✓ В індексі" : "✗ Не в індексі"}
+                          </span>
+                        ) : <span style={{ color: "rgba(255,255,255,0.2)", fontSize: "11px" }}>—</span>}
+                      </td>
+                      <td style={{ padding: "8px 12px" }}>
+                        {row.twoIndexStatus === "submitted"
+                          ? <span style={{ fontSize: "11px", color: "#34d399", fontWeight: 600 }}>✓ Надіслано</span>
+                          : <span style={{ color: "rgba(255,255,255,0.2)", fontSize: "11px" }}>—</span>}
+                      </td>
+                      <td style={{ padding: "8px 12px" }}>
+                        {row.neuralStatus === "submitted"
+                          ? <span style={{ fontSize: "11px", color: "#a78bfa", fontWeight: 600 }}>✓ {row.neuralQueue ?? "slow"}</span>
+                          : <span style={{ color: "rgba(255,255,255,0.2)", fontSize: "11px" }}>—</span>}
+                      </td>
+                      <td style={{ padding: "8px 12px", color: "var(--color-text-secondary)", fontSize: "11px", whiteSpace: "nowrap" }}>
+                        {row.googleChecked ? timeAgo(new Date(row.googleChecked)) : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Operations history ── */}
+      <div style={{ background: "var(--color-card)", borderRadius: "12px", border: "1px solid var(--color-border)", overflow: "hidden" }}>
+        <div style={{ padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>🕐 Історія операцій</span>
+          <button onClick={() => { setShowOps(o => !o); if (!showOps) loadOps(); }}
+            style={{ fontSize: "12px", padding: "4px 12px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", cursor: "pointer" }}>
+            {showOps ? "Згорнути" : "Оновити історію"}
+          </button>
+        </div>
+        {showOps && (
+          <div style={{ borderTop: "1px solid var(--color-border)" }}>
+            {opsLoading ? (
+              <div style={{ padding: "20px", textAlign: "center" }}>
+                <div style={{ width: 18, height: 18, border: "2px solid var(--color-border)", borderTopColor: "#3B82F6", borderRadius: "50%", animation: "spin 0.8s linear infinite", display: "inline-block" }} />
+              </div>
+            ) : ops.length === 0 ? (
+              <div style={{ padding: "20px", textAlign: "center", fontSize: "12px", color: "var(--color-text-secondary)" }}>Історія поки пуста</div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                <thead>
+                  <tr style={{ background: "rgba(255,255,255,0.02)" }}>
+                    {["ТИП","ПІДСУМОК","ДЕТАЛЬ","ДАТА"].map(h => (
+                      <th key={h} style={{ textAlign: "left", padding: "8px 14px", color: "var(--color-text-secondary)", fontWeight: 500, fontSize: "10px", letterSpacing: "0.06em" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {ops.map((op, i) => (
+                    <tr key={op.id} style={{ borderTop: "1px solid var(--color-border)", background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.01)" }}>
+                      <td style={{ padding: "8px 14px", fontWeight: 600, color: "var(--color-text-primary)" }}>{opTypeLabel(op.type)}</td>
+                      <td style={{ padding: "8px 14px" }}>
+                        <span style={{ color: op.result === "success" ? "#4ADE80" : op.result === "error" ? "#F87171" : "#FBBF24", fontWeight: 600 }}>
+                          {op.result ?? "—"}
+                        </span>
+                        {op.urlCount != null && <span style={{ color: "var(--color-text-secondary)", marginLeft: 4 }}>· {op.urlCount} URL</span>}
+                      </td>
+                      <td style={{ padding: "8px 14px", color: "var(--color-text-secondary)", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{op.detail ?? "—"}</td>
+                      <td style={{ padding: "8px 14px", color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>{timeAgo(new Date(op.createdAt))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -2391,7 +3095,7 @@ export default function SitePage() {
     : { transition: "filter 0.25s" };
 
   // Use index so tab state doesn't break on language change
-  const TAB_KEYS = ["dashboard", "ga4", "indexing", "annotations", "optimize", "health", "settings"] as const;
+  const TAB_KEYS = ["dashboard", "ga4", "indexing", "backlinks", "annotations", "optimize", "health", "settings"] as const;
   type TabKey = typeof TAB_KEYS[number];
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [period, setPeriod]       = useState("7d");
@@ -2402,6 +3106,7 @@ export default function SitePage() {
     { key: "dashboard",   label: t("tabDashboard") },
     { key: "ga4",         label: t("tabGA4") },
     { key: "indexing",    label: t("tabIndexing") },
+    { key: "backlinks",   label: t("backlinksTab") },
     { key: "annotations", label: t("tabAnnotations") },
     { key: "optimize",    label: t("tabOptimize") },
     { key: "health",      label: "Health" },
@@ -2684,6 +3389,9 @@ export default function SitePage() {
       {/* ── Indexing tab ── */}
       {activeTab === "indexing" && <IndexingTab siteDbId={siteDbId} domain={domain} />}
 
+      {/* ── Backlinks tab ── */}
+      {activeTab === "backlinks" && <BacklinksTab siteDbId={siteDbId} />}
+
       {/* ── Annotations tab ── */}
       {activeTab === "annotations" && (
         <AnnotationsTab period={period} setPeriod={setPeriod} periodOptions={periodOptions} onSetupBranded={() => setShowSetupModal(true)} />
@@ -2869,17 +3577,6 @@ export default function SitePage() {
         {/* Devices */}
         <DeviceTable rows={deviceRowsReal} />
 
-        {/* Footer */}
-        <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: "20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <div style={{ width: "20px", height: "20px", borderRadius: "4px", background: "#8B5CF6" }} />
-              <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)" }}>OpenGSC</span>
-            </div>
-            <span style={{ fontSize: "13px", color: "var(--color-text-secondary)", cursor: "pointer" }}>{t("changelog")}</span>
-          </div>
-          <span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>{t("copyright")}</span>
-        </div>
       </div>
       )}
     </div>

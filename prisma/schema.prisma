@@ -44,6 +44,12 @@ model User {
   accounts      Account[]
   sessions      Session[]
   sites         Site[]
+
+  // Third-party API integrations
+  neuralIndexerToken String?
+  xmlRiverUserId     String?
+  xmlRiverApiKey     String?
+  twoIndexToken      String?
 }
 
 model VerificationToken {
@@ -63,6 +69,11 @@ model Site {
   brandedKeywords  String?  // JSON array e.g. ["ikea","ikea chair"]
   createdAt        DateTime @default(now())
 
+  // Sitemap indexing
+  sitemapUrl       String?   // custom sitemap URL (defaults to url + /sitemap.xml)
+  crawlInterval    String?   // "disabled" | "daily" | "weekly" | "monthly"
+  lastSitemapSync  DateTime?
+
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   metrics               DailyMetric[]
   contentGroups         ContentGroup[]
@@ -70,8 +81,76 @@ model Site {
   pageInspections       PageInspection[]
   pageInspectionHistories PageInspectionHistory[]
   siteHealth            SiteHealth?
+  sitemapUrls           SitemapUrl[]
+  indexingOperations    IndexingOperation[]
+  backlinks             Backlink[]
 
   @@unique([userId, siteId])
+}
+
+model SitemapUrl {
+  id            String    @id @default(cuid())
+  siteId        String
+  url           String
+
+  // Google URL Inspection status
+  googleStatus   String?   // "Submitted and indexed", "URL is not on Google", etc.
+  googleCoverage String?   // raw coverage state
+  googleReason   String?
+  googleChecked  DateTime?
+
+  // XML River check
+  xrStatus      String?   // "indexed" | "not_indexed" | "error"
+  xrChecked     DateTime?
+
+  // 2index.ninja submission
+  twoIndexStatus String?  // "submitted" | "not_submitted"
+  twoIndexAt     DateTime?
+
+  // NeuralIndexer submission
+  neuralStatus   String?  // "submitted"
+  neuralAt       DateTime?
+  neuralQueue    String?
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  site          Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, url])
+  @@index([siteId])
+}
+
+model Backlink {
+  id            String    @id @default(cuid())
+  siteId        String
+  url           String    // the backlink URL (page that links to us)
+  title         String?   // page title from 404-check crawl
+  isAlive       Boolean?  // null = not checked; true = alive; false = dead/404
+  aliveChecked  DateTime?
+  xrStatus      String?   // "indexed" | "not_indexed" | "error"
+  xrChecked     DateTime?
+  twoIndexStatus String?  // "submitted"
+  twoIndexAt    DateTime?
+  addedAt       DateTime  @default(now())
+
+  site          Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, url])
+  @@index([siteId])
+}
+
+model IndexingOperation {
+  id        String   @id @default(cuid())
+  siteId    String
+  urlCount  Int?     // how many URLs were affected
+  type      String   // "sitemap_sync" | "google_check" | "xr_check" | "2index_submit" | "neural_submit"
+  result    String?  // "success" | "error" | "partial"
+  detail    String?  // JSON or text with extra info
+  createdAt DateTime @default(now())
+
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  @@index([siteId, createdAt])
 }
 
 model DailyMetric {

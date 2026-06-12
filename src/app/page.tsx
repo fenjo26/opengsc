@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Search, Eye, EyeOff, Star, ExternalLink,
   ArrowUpDown, SlidersHorizontal, Sparkles, Percent, MoveUp,
@@ -395,13 +395,17 @@ export default function PortfolioPage() {
   const [search, setSearch]     = useState("");
   const { blur } = usePrivacy();
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
-  const router = useRouter();
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [siteTags, setSiteTags] = useState<Record<string, string[]>>({});
   const [exportSite, setExportSite] = useState<string | null>(null);
 
   const [activeMetrics, setActiveMetrics] = useState<Set<Metric>>(new Set(["clicks", "impressions", "ctr", "position"]));
-  const [sortBy, setSortBy]     = useState<SortBy>("az");
+  const [sortBy, setSortBy] = useState<SortBy>(() => {
+    if (typeof window !== "undefined") return (localStorage.getItem("gsc_sort") as SortBy) ?? "az";
+    return "az";
+  });
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [activeTag, setActiveTag] = useState<string | null>(null);
   const [period, setPeriod]     = useState("7d");
   const [periodView, setPeriodView] = useState<PeriodView>("day");
   const [comparison, setComparison] = useState<Comparison>("previous");
@@ -422,6 +426,19 @@ export default function PortfolioPage() {
     const s = localStorage.getItem('gsc_synced_at');
     if (s) setSyncedAt(new Date(s));
   }, []);
+
+  useEffect(() => {
+    fetch('/api/gsc/accounts')
+      .then(r => r.json())
+      .then(d => { if (d.accounts) setAccounts(d.accounts); })
+      .catch(() => {});
+  }, []);
+
+  const handleSetSortBy = (s: SortBy) => {
+    setSortBy(s);
+    localStorage.setItem("gsc_sort", s);
+  };
+
   const [newSitesFound, setNewSitesFound] = useState(0);
 
   const portfolioUrl = (p = period) =>
@@ -580,6 +597,13 @@ export default function PortfolioPage() {
       return true;
     })
     .sort((a, b) => {
+      // Active tag: sites with this tag always float to top
+      if (activeTag) {
+        const aHas = (siteTags[a.id] || []).includes(activeTag);
+        const bHas = (siteTags[b.id] || []).includes(activeTag);
+        if (aHas && !bHas) return -1;
+        if (!aHas && bHas) return 1;
+      }
       switch (sortBy) {
         case "az":
           return getDomain(a.url).localeCompare(getDomain(b.url));
@@ -621,6 +645,15 @@ export default function PortfolioPage() {
   const favSites    = filtered.filter(s => favorites.has(s.id) && !hidden.has(s.id));
   const restSites   = filtered.filter(s => !favorites.has(s.id) && !hidden.has(s.id));
   const hiddenSites = filtered.filter(s => hidden.has(s.id));
+
+  // ─── Totals from visible (filtered) sites — respects search/tag/branded filters ──
+  const visibleForTotals = [...favSites, ...restSites];
+  const totalClicks      = visibleForTotals.reduce((s, site) => s + (site.summary?.clicks?.value ?? 0), 0);
+  const totalImpressions = visibleForTotals.reduce((s, site) => s + (site.summary?.impressions?.value ?? 0), 0);
+  const withCtr = visibleForTotals.filter(s => (s.summary?.ctr?.value ?? 0) > 0);
+  const avgCtr  = withCtr.length > 0 ? +(withCtr.reduce((s, site) => s + site.summary.ctr.value, 0) / withCtr.length).toFixed(2) : 0;
+  const withPos = visibleForTotals.filter(s => (s.summary?.position?.value ?? 0) > 0);
+  const avgPos  = withPos.length > 0 ? +(withPos.reduce((s, site) => s + site.summary.position.value, 0) / withPos.length).toFixed(1) : 0;
 
   const toggleMetric = (m: Metric) => setActiveMetrics(p => { const n = new Set(p); n.has(m) ? n.delete(m) : n.add(m); return n; });
   const toggleFav    = (id: string) => setFavorites(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -694,7 +727,7 @@ export default function PortfolioPage() {
   const SortDd = (
     <Dropdown trigger={<button style={tbBtn()}><ArrowUpDown size={13} /> {t("sort")}</button>}>
       {(["az","total","growth","growth_pct","decline","decline_imp","decline_pos","tags"] as SortBy[]).map(v => (
-        <button key={v} style={mi(sortBy===v)} onClick={() => setSortBy(v)}>
+        <button key={v} style={mi(sortBy===v)} onClick={() => handleSetSortBy(v)}>
           {sortLabels[v]}{sortBy===v && <Check size={12} style={{marginLeft:"auto"}} />}
         </button>
       ))}
@@ -905,8 +938,7 @@ export default function PortfolioPage() {
       : {};
 
     return (
-      <div className="card" style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:"8px",cursor:"pointer",...declineBorder}}
-        onClick={() => router.push(`/site/${encodeURIComponent(domain)}`)}>
+      <Link href={`/site/${encodeURIComponent(domain)}`} className="card" style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:"8px",cursor:"pointer",textDecoration:"none",color:"inherit",...declineBorder}}>
         {/* Header */}
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:"8px"}}>
           {/* Domain */}
@@ -964,11 +996,22 @@ export default function PortfolioPage() {
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:"2px"}} onClick={e=>e.stopPropagation()}>
           {/* Tags */}
           <div style={{display:"flex",gap:"4px",flexWrap:"wrap",maxWidth:"180px"}}>
-            {(siteTags[site.id] || []).map(tag => (
-              <span key={tag} style={{fontSize:"10px",fontWeight:600,padding:"2px 6px",borderRadius:"4px",background:"rgba(59,130,246,0.1)",color:"#3B82F6",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"80px"}} title={tag}>
+            {(siteTags[site.id] || []).map(tag => {
+              const isActive = activeTag === tag;
+              return (
+              <span key={tag}
+                title={isActive ? t("tagFilterRemove") : t("tagFilterApply")}
+                onClick={e => { e.preventDefault(); e.stopPropagation(); setActiveTag(isActive ? null : tag); }}
+                style={{fontSize:"10px",fontWeight:600,padding:"2px 6px",borderRadius:"4px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"80px",cursor:"pointer",transition:"all 0.15s",
+                  background: isActive ? "#3B82F6" : "rgba(59,130,246,0.1)",
+                  color:      isActive ? "#fff"    : "#3B82F6",
+                  outline:    isActive ? "2px solid #3B82F6" : "none",
+                  outlineOffset: "1px",
+                }}>
                 {tag}
               </span>
-            ))}
+              );
+            })}
           </div>
           {/* Icons */}
           <div style={{display:"flex",gap:"14px"}}>
@@ -1000,13 +1043,76 @@ export default function PortfolioPage() {
             </button>
           </div>
         </div>
-      </div>
+      </Link>
     );
   }
 
   return (
     <div className="main-content">
-      {/* Toolbar */}
+      <style>{`
+        @keyframes gsc-spin { to { transform: rotate(360deg); } }
+        .period-scroll::-webkit-scrollbar { width: 6px; }
+        .period-scroll::-webkit-scrollbar-track { background: var(--color-bg-secondary, #1e2130); border-radius: 3px; }
+        .period-scroll::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+        .period-scroll::-webkit-scrollbar-thumb:hover { background: var(--color-text-secondary); }
+      `}</style>
+
+      {/* ─── Accounts bar ─── */}
+      {accounts.length > 0 && (
+        <div style={{marginBottom:"10px",padding:"10px 14px",borderRadius:"12px",background:"var(--color-card)",border:"1px solid var(--color-border)",display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
+          <span style={{fontSize:"11px",fontWeight:700,color:"var(--color-text-secondary)",textTransform:"uppercase",letterSpacing:"0.06em",whiteSpace:"nowrap",marginRight:"2px"}}>{t("googleAccountsLabel")}</span>
+          <div style={{display:"flex",alignItems:"center",gap:"6px",padding:"4px 12px",borderRadius:"20px",fontSize:"12px",fontWeight:600,cursor:"default",border:"1px solid rgba(59,130,246,0.4)",background:"rgba(59,130,246,0.12)",color:"#3B82F6",whiteSpace:"nowrap"}}>
+            Все сайты (<span style={{filter:blur?"blur(5px)":"none",transition:"filter 0.25s"}}>{sites.length}</span>)
+          </div>
+          {accounts.map(acc => (
+            <div key={acc.id} style={{display:"flex",alignItems:"center",gap:"5px",padding:"4px 10px",borderRadius:"20px",fontSize:"12px",background:"var(--color-bg-secondary,rgba(255,255,255,0.04))",border:"1px solid var(--color-border)"}}>
+              {acc.picture
+                ? <img src={acc.picture} width={14} height={14} alt="" style={{borderRadius:"50%",flexShrink:0,filter:blur?"blur(5px)":"none",transition:"filter 0.25s"}} onError={e=>((e.target as HTMLImageElement).style.display="none")} />
+                : <span style={{width:14,height:14,borderRadius:"50%",background:"#4b5563",display:"inline-block",flexShrink:0}}/>
+              }
+              <span style={{color:"var(--color-text-secondary)",maxWidth:"200px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",filter:blur?"blur(5px)":"none",transition:"filter 0.25s"}}>{acc.email}</span>
+            </div>
+          ))}
+          <a href="/settings" style={{display:"flex",alignItems:"center",gap:"4px",padding:"4px 10px",borderRadius:"20px",fontSize:"12px",fontWeight:500,color:"#3B82F6",border:"1px solid rgba(59,130,246,0.25)",background:"transparent",textDecoration:"none",whiteSpace:"nowrap",cursor:"pointer"}}>
+            {t("addGoogleAccount")}
+          </a>
+        </div>
+      )}
+
+      {/* ─── Period quick buttons + Metric text toggles ─── */}
+      <div style={{display:"flex",alignItems:"center",gap:"6px",flexWrap:"wrap",marginBottom:"8px"}}>
+        {/* Quick period buttons */}
+        {(["7d","28d","3m","6m","12m","16m"] as string[]).map(p => {
+          const active = period === p;
+          return (
+            <button key={p} onClick={() => setPeriod(p)} style={{padding:"6px 13px",borderRadius:"20px",fontSize:"12px",fontWeight:active?700:500,cursor:"pointer",border:`1px solid ${active?"#3B82F6":"var(--color-border)"}`,background:active?"rgba(59,130,246,0.12)":"var(--color-card)",color:active?"#3B82F6":"var(--color-text-secondary)",transition:"all 0.15s",whiteSpace:"nowrap"}}>
+              {getPeriodLabel(p)}
+            </button>
+          );
+        })}
+        {/* More periods */}
+        {PeriodDd}
+
+        <div style={{flex:1,minWidth:"8px"}}/>
+
+        {/* Metric toggles with text labels — same icons as on cards */}
+        {([
+          {m:"clicks"      as Metric, icon:"✦", label:t("clicks"),      color:"#3B82F6", bg:"rgba(59,130,246,0.12)"},
+          {m:"impressions" as Metric, icon:"◉", label:t("impressions"), color:"#8B5CF6", bg:"rgba(139,92,246,0.12)"},
+          {m:"ctr"         as Metric, icon:"%", label:"CTR",             color:"#10B981", bg:"rgba(16,185,129,0.12)"},
+          {m:"position"    as Metric, icon:"↑", label:t("avgPosition"),  color:"#F59E0B", bg:"rgba(245,158,11,0.12)"},
+        ]).map(({m, icon, label, color, bg}) => {
+          const active = activeMetrics.has(m);
+          return (
+            <button key={m} onClick={() => toggleMetric(m)} style={{display:"flex",alignItems:"center",gap:"5px",padding:"6px 13px",borderRadius:"20px",fontSize:"12px",fontWeight:active?700:500,cursor:"pointer",border:`1px solid ${active?color:"var(--color-border)"}`,background:active?bg:"var(--color-card)",color:active?color:"var(--color-text-secondary)",transition:"all 0.15s",whiteSpace:"nowrap"}}>
+              <span style={{fontWeight:800,fontSize:"11px",lineHeight:1}}>{icon}</span>
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ─── Search + Sort + Filter + Sync ─── */}
       <div style={{display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
         <div style={{position:"relative",flex:"1 1 180px"}}>
           <Search size={14} style={{position:"absolute",left:"10px",top:"50%",transform:"translateY(-50%)",color:"var(--color-text-secondary)"}}/>
@@ -1015,25 +1121,6 @@ export default function PortfolioPage() {
         </div>
         {SortDd}
         {FilterDd}
-
-        {/* Metric icons */}
-        <div style={{display:"flex",gap:"4px"}}>
-          {([
-            {m:"clicks",      icon:<Sparkles size={14}/>, color:"#3B82F6", bg:"rgba(59,130,246,0.12)"},
-            {m:"impressions", icon:<Eye size={14}/>,      color:"#8B5CF6", bg:"rgba(139,92,246,0.12)"},
-            {m:"ctr",         icon:<Percent size={14}/>,  color:"#10B981", bg:"rgba(16,185,129,0.12)"},
-            {m:"position",    icon:<MoveUp size={14}/>,   color:"#F59E0B", bg:"rgba(245,158,11,0.12)"},
-          ] as {m:Metric;icon:React.ReactNode;color:string;bg:string}[]).map(({m,icon,color,bg}) => {
-            const active = activeMetrics.has(m);
-            return (
-              <button key={m} title={metricLabels[m]} onClick={()=>toggleMetric(m)} style={{display:"flex",alignItems:"center",justifyContent:"center",width:"34px",height:"34px",borderRadius:"8px",cursor:"pointer",border:`1px solid ${active?color:"var(--color-border)"}`,background:active?bg:"var(--color-card)",color:active?color:"var(--color-text-secondary)",transition:"all 0.15s"}}>
-                {icon}
-              </button>
-            );
-          })}
-        </div>
-
-        {PeriodDd}
 
         {/* ── Manual sync button ── */}
         <button
@@ -1064,13 +1151,6 @@ export default function PortfolioPage() {
               <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
             </svg>
           )}
-          <style>{`
-            @keyframes gsc-spin { to { transform: rotate(360deg); } }
-            .period-scroll::-webkit-scrollbar { width: 6px; }
-            .period-scroll::-webkit-scrollbar-track { background: var(--color-bg-secondary, #1e2130); border-radius: 3px; }
-            .period-scroll::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
-            .period-scroll::-webkit-scrollbar-thumb:hover { background: var(--color-text-secondary); }
-          `}</style>
           {syncStatus === "syncing" ? "Синхронизация…"
             : syncStatus === "done" ? `Готово · ${syncedAt?.toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" })}`
             : syncStatus === "reauth" ? "Требуется вход"
@@ -1082,7 +1162,7 @@ export default function PortfolioPage() {
 
       {/* ── Sync warning banner ── */}
       {syncWarning && (
-        <div style={{ margin: "0 0 12px 0", padding: "10px 16px", borderRadius: "10px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", display: "flex", alignItems: "center", gap: "10px" }}>
+        <div style={{ margin: "8px 0 0", padding: "10px 16px", borderRadius: "10px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", display: "flex", alignItems: "center", gap: "10px" }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
@@ -1105,8 +1185,14 @@ export default function PortfolioPage() {
       )}
 
       {/* Active filter chips */}
-      {activeFilterCount > 0 && (
-        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "4px" }}>
+      {(activeFilterCount > 0 || activeTag) && (
+        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "8px" }}>
+          {activeTag && (
+            <FilterChip
+              label={`🏷 ${activeTag}`}
+              onRemove={() => setActiveTag(null)}
+            />
+          )}
           {branded !== "all" && (
             <FilterChip
               label={branded === "branded" ? `✦ ${t("branded")}` : `◎ ${t("nonBranded")}`}
@@ -1119,6 +1205,27 @@ export default function PortfolioPage() {
               onRemove={() => { setFilterDimension(null); setFilterText(""); }}
             />
           )}
+        </div>
+      )}
+
+      {/* ─── Totals row (respects tag/search filter) ─── */}
+      {!loading && visibleForTotals.length > 0 && (
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"8px",marginTop:"12px"}}>
+          {([
+            {label:t("totalClicks"),      icon:"✦", color:"#3B82F6", bg:"rgba(59,130,246,0.06)", value: fmtK(totalClicks),          sub: t("fromNSites").replace("{n}", String(visibleForTotals.length))},
+            {label:t("totalImpressions"), icon:"◉", color:"#8B5CF6", bg:"rgba(139,92,246,0.06)", value: fmtK(totalImpressions),      sub: t("fromNSites").replace("{n}", String(visibleForTotals.length))},
+            {label:t("averageCTR"),       icon:"%", color:"#10B981", bg:"rgba(16,185,129,0.06)", value: `${avgCtr}%`,                sub: withCtr.length > 0 ? t("acrossNSites").replace("{n}", String(withCtr.length)) : t("noData")},
+            {label:t("averagePosition"),  icon:"↑", color:"#F59E0B", bg:"rgba(245,158,11,0.06)", value: avgPos > 0 ? String(avgPos) : "—", sub: withPos.length > 0 ? t("acrossNSites").replace("{n}", String(withPos.length)) : t("noData")},
+          ]).map(({label, icon, color, bg, value, sub}) => (
+            <div key={label} style={{padding:"12px 16px",borderRadius:"12px",background:"var(--color-card)",border:"1px solid var(--color-border)"}}>
+              <div style={{display:"flex",alignItems:"center",gap:"6px",marginBottom:"6px"}}>
+                <span style={{fontWeight:800,fontSize:"12px",color,lineHeight:1}}>{icon}</span>
+                <span style={{fontSize:"11px",color:"var(--color-text-secondary)",fontWeight:500}}>{label}</span>
+              </div>
+              <div style={{fontSize:"22px",fontWeight:700,color:"var(--color-text-primary)",lineHeight:1,letterSpacing:"-0.5px",filter:blur?"blur(6px)":"none",transition:"filter 0.25s"}}>{value}</div>
+              <div style={{fontSize:"11px",color:"var(--color-text-secondary)",marginTop:"4px"}}>{sub}</div>
+            </div>
+          ))}
         </div>
       )}
 

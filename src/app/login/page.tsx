@@ -47,6 +47,21 @@ const content = {
     signIn: "Войти через Google",
     bullets: ["Только Google OAuth — никаких паролей", "Можно подключить несколько аккаунтов", "Self-hosted на вашем VPS"],
   },
+  uk: {
+    tagline: "Твій особистий",
+    highlight: "Search Console",
+    tagline2: "командний центр",
+    sub: "Всі Google акаунти, всі сайти — одна чиста панель. Без лімітів, без шуму, без підписки.",
+    features: [
+      { title: "Всі акаунти в одному місці", desc: "Підключи кілька Google акаунтів і дивись всі GSC-сайти на одному екрані." },
+      { title: "Трафік з першого погляду", desc: "Міні-графіки для кожного сайту. Одразу видно зростання, падіння і тренди." },
+      { title: "Твої дані, твій сервер", desc: "Self-hosted. Дані Search Console нікуди не залишають твій VPS." },
+    ],
+    getStarted: "Увійти",
+    signInSub: "Увійди через Google акаунт. Перший акаунт стає власником цього дашборду.",
+    signIn: "Увійти через Google",
+    bullets: ["Лише Google OAuth — без паролів", "Можна підключити кілька акаунтів", "Self-hosted на вашому VPS"],
+  },
 };
 
 const featureIcons = [
@@ -81,7 +96,7 @@ export default function LoginPage() {
           border: "1px solid var(--color-border)",
           borderRadius: "8px", overflow: "hidden",
         }}>
-          {(["en", "ru"] as const).map(lang => (
+          {(["en", "ru", "uk"] as const).map(lang => (
             <button
               key={lang}
               onClick={() => setLanguage(lang)}

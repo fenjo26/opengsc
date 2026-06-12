@@ -10,7 +10,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
-type NavItem = "accounts" | "teams" | "api" | "members" | "preferences" | "supersites";
+type NavItem = "accounts" | "teams" | "api" | "indexing-api" | "members" | "preferences" | "supersites";
 
 interface ConnectedAccount {
   id: string; email: string; picture: string | null; connected: boolean; gscAccess: boolean;
@@ -458,12 +458,12 @@ function PreferencesSection({ user }: { user: any }) {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", background: "rgba(255,255,255,0.03)", borderRadius: "8px", border: "1px solid var(--color-border)" }}>
           <div>
             <div style={{ fontSize: "13px", fontWeight: 600, color: "#fff" }}>{t("language")}</div>
-            <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>English / Русский</div>
+            <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>English / Русский / Українська</div>
           </div>
           <div style={{ display: "flex", gap: "6px" }}>
-            {(["en", "ru"] as const).map(lang => (
+            {(["en", "ru", "uk"] as const).map(lang => (
               <button key={lang} onClick={() => setLanguage(lang)} style={{ padding: "6px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, cursor: "pointer", background: language === lang ? "rgba(139,92,246,0.15)" : "transparent", color: language === lang ? "#8B5CF6" : "var(--color-text-secondary)", border: `1px solid ${language === lang ? "rgba(139,92,246,0.3)" : "var(--color-border)"}`, transition: "all 0.15s" }}>
-                {lang === "en" ? "🇬🇧 EN" : "🇷🇺 RU"}
+                {lang === "en" ? "🇬🇧 EN" : lang === "ru" ? "🇷🇺 RU" : "🇺🇦 UK"}
               </button>
             ))}
           </div>
@@ -705,6 +705,331 @@ function AIConfigSection() {
 }
 
 
+
+// ─── Section: Indexing API Keys ───────────────────────────────────────────────
+function IndexApiSection() {
+  const { t } = useLanguage();
+
+  // NeuralIndexer state
+  const [nnToken,   setNnToken]   = useState("");
+  const [nnStatus,  setNnStatus]  = useState<"idle"|"checking"|"ok"|"error">("idle");
+  const [nnMsg,     setNnMsg]     = useState("");
+  const [nnSaving,  setNnSaving]  = useState(false);
+  const [nnSaved,   setNnSaved]   = useState(false);
+  const [nnBalance, setNnBalance] = useState<number|null>(null);
+
+  // XML River state
+  const [xrUserId,  setXrUserId]  = useState("");
+  const [xrApiKey,  setXrApiKey]  = useState("");
+  const [xrStatus,  setXrStatus]  = useState<"idle"|"checking"|"ok"|"error">("idle");
+  const [xrMsg,     setXrMsg]     = useState("");
+  const [xrSaving,  setXrSaving]  = useState(false);
+  const [xrSaved,   setXrSaved]   = useState(false);
+
+  // 2index state
+  const [niToken,   setNiToken]   = useState("");
+  const [niStatus,  setNiStatus]  = useState<"idle"|"checking"|"ok"|"error">("idle");
+  const [niMsg,     setNiMsg]     = useState("");
+  const [niSaving,  setNiSaving]  = useState(false);
+  const [niSaved,   setNiSaved]   = useState(false);
+  const [niBalance, setNiBalance] = useState<number|null>(null);
+
+  // Load existing (masked) state on mount
+  useEffect(() => {
+    fetch("/api/settings/api-keys")
+      .then(r => r.json())
+      .then(d => {
+        if (d.neuralIndexer?.token)       setNnToken(d.neuralIndexer.token);
+        if (d.neuralIndexer?.configured)  { setNnStatus("ok"); setNnBalance(d.neuralIndexer.balance); }
+        if (d.xmlRiver?.userId)           setXrUserId(d.xmlRiver.userId);
+        if (d.xmlRiver?.apiKey)           setXrApiKey(d.xmlRiver.apiKey);
+        if (d.xmlRiver?.configured)       setXrStatus("ok");
+        if (d.twoIndex?.token)            setNiToken(d.twoIndex.token);
+        if (d.twoIndex?.configured)       setNiStatus("ok");
+      })
+      .catch(() => {});
+  }, []);
+
+  // NeuralIndexer actions
+  const validateNn = async () => {
+    setNnStatus("checking"); setNnMsg(""); setNnBalance(null);
+    const res = await fetch("/api/settings/api-keys/validate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ service: "neural", token: nnToken }),
+    }).then(r => r.json()).catch(() => ({ ok: false, error: "Network error" }));
+    setNnStatus(res.ok ? "ok" : "error");
+    setNnMsg(res.ok ? `Токен дійсний ✓` : res.error ?? "Помилка");
+    if (res.balance != null) setNnBalance(res.balance);
+  };
+
+  const saveNn = async () => {
+    setNnSaving(true);
+    await fetch("/api/settings/api-keys", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ neuralIndexerToken: nnToken }),
+    });
+    setNnSaving(false); setNnSaved(true);
+    setTimeout(() => setNnSaved(false), 2000);
+  };
+
+  const validateXr = async () => {
+    setXrStatus("checking"); setXrMsg("");
+    const res = await fetch("/api/settings/api-keys/validate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ service: "xmlriver", userId: xrUserId, apiKey: xrApiKey }),
+    }).then(r => r.json()).catch(() => ({ ok: false, error: "Network error" }));
+    setXrStatus(res.ok ? "ok" : "error");
+    setXrMsg(res.ok ? "Ключ дійсний ✓" : res.error ?? "Помилка");
+  };
+
+  const saveXr = async () => {
+    setXrSaving(true);
+    await fetch("/api/settings/api-keys", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ xmlRiverUserId: xrUserId, xmlRiverApiKey: xrApiKey }),
+    });
+    setXrSaving(false); setXrSaved(true);
+    setTimeout(() => setXrSaved(false), 2000);
+  };
+
+  const validateNi = async () => {
+    setNiStatus("checking"); setNiMsg(""); setNiBalance(null);
+    const res = await fetch("/api/settings/api-keys/validate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ service: "2index", token: niToken }),
+    }).then(r => r.json()).catch(() => ({ ok: false, error: "Network error" }));
+    setNiStatus(res.ok ? "ok" : "error");
+    setNiMsg(res.ok ? "Токен дійсний ✓" : res.error ?? "Помилка");
+    if (res.balance != null) setNiBalance(res.balance);
+  };
+
+  const saveNi = async () => {
+    setNiSaving(true);
+    await fetch("/api/settings/api-keys", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ twoIndexToken: niToken }),
+    });
+    setNiSaving(false); setNiSaved(true);
+    setTimeout(() => setNiSaved(false), 2000);
+  };
+
+  const statusColor = (s: string) => s === "ok" ? "#10B981" : s === "error" ? "#EF4444" : s === "checking" ? "#F59E0B" : "var(--color-text-secondary)";
+  const statusDot   = (s: string) => s === "ok" ? "●" : s === "error" ? "●" : s === "checking" ? "◌" : "○";
+  const statusLabel = (s: string) => s === "ok" ? "Налаштовано" : s === "error" ? "Помилка" : s === "checking" ? "Перевірка…" : "Не налаштовано";
+
+  const inputStyle: React.CSSProperties = {
+    flex: 1, padding: "9px 12px", background: "transparent",
+    border: "none", color: "#fff", fontSize: "13px", outline: "none",
+    fontFamily: "monospace",
+  };
+  const rowStyle: React.CSSProperties = {
+    display: "flex", gap: "0", border: "1px solid var(--color-border)",
+    borderRadius: "8px", overflow: "hidden", marginBottom: "10px",
+  };
+  const labelStyle: React.CSSProperties = {
+    fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "5px", display: "block",
+  };
+  const btnStyle = (primary?: boolean): React.CSSProperties => ({
+    padding: "9px 16px", background: "transparent",
+    borderLeft: "1px solid var(--color-border)",
+    color: primary ? "#3B82F6" : "var(--color-text-secondary)",
+    fontSize: "13px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+    border: primary ? "1px solid rgba(59,130,246,0.4)" : "1px solid var(--color-border)",
+    borderRadius: "8px",
+  });
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+
+      {/* ── NeuralIndexer (featured / primary) ── */}
+      <SectionCard>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "16px" }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div style={{ width: 32, height: 32, borderRadius: "8px", background: "linear-gradient(135deg,rgba(139,92,246,0.25),rgba(59,130,246,0.25))", border: "1px solid rgba(139,92,246,0.35)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: 800, color: "#a78bfa" }}>NI</div>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+                  <span style={{ fontSize: "15px", fontWeight: 700, color: "#fff" }}>NeuralIndexer</span>
+                  <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 7px", borderRadius: "6px", background: "rgba(139,92,246,0.15)", color: "#a78bfa", border: "1px solid rgba(139,92,246,0.3)" }}>Основний</span>
+                </div>
+                <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
+                  @InderixingBot · автосплітування, Google + Bing + Yandex
+                </p>
+              </div>
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" }}>
+            <span style={{ fontSize: "12px", fontWeight: 600, color: statusColor(nnStatus) }}>
+              {statusDot(nnStatus)} {statusLabel(nnStatus)}
+            </span>
+            {nnBalance != null && (
+              <span style={{ fontSize: "12px", fontWeight: 700, color: "#4ADE80" }}>${nnBalance.toFixed(4)}</span>
+            )}
+          </div>
+        </div>
+
+        {/* Info strip */}
+        <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap" }}>
+          {[
+            { label: "Slow (Google+Bing)", price: "$0.0122/URL" },
+            { label: "Fast (Google API)", price: "$0.50/URL" },
+            { label: "Yandex", price: "$0.0122/URL" },
+            { label: "Index check", price: "$0.0024/URL" },
+          ].map(({ label, price }) => (
+            <div key={label} style={{ padding: "4px 10px", borderRadius: "7px", background: "rgba(139,92,246,0.07)", border: "1px solid rgba(139,92,246,0.18)", fontSize: "11px", color: "var(--color-text-secondary)" }}>
+              {label} <span style={{ color: "#a78bfa", fontWeight: 600 }}>{price}</span>
+            </div>
+          ))}
+        </div>
+
+        <label style={labelStyle}>API Token</label>
+        <div style={rowStyle}>
+          <input value={nnToken} onChange={e => setNnToken(e.target.value)}
+            placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+            type="password" style={inputStyle} />
+        </div>
+
+        {nnMsg && <p style={{ fontSize: "12px", color: statusColor(nnStatus), marginBottom: "10px" }}>{nnMsg}</p>}
+
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+          <button onClick={validateNn} disabled={!nnToken || nnStatus === "checking"}
+            style={{ ...btnStyle(), opacity: !nnToken ? 0.4 : 1 }}>
+            {nnStatus === "checking" ? "Перевірка…" : "Перевірити ключ"}
+          </button>
+          <button onClick={saveNn} disabled={!nnToken || nnSaving}
+            style={{ ...btnStyle(true), opacity: !nnToken ? 0.4 : 1 }}>
+            {nnSaved ? "✓ Збережено" : nnSaving ? "Зберігаємо…" : "Зберегти"}
+          </button>
+          {nnToken && (
+            <button onClick={() => { setNnToken(""); setNnStatus("idle"); setNnMsg(""); setNnBalance(null); saveNn(); }}
+              style={{ padding: "9px 12px", background: "transparent", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "8px", color: "#EF4444", fontSize: "12px", cursor: "pointer" }}>
+              Видалити
+            </button>
+          )}
+          <a href="https://t.me/InderixingBot" target="_blank" rel="noopener noreferrer"
+            style={{ marginLeft: "auto", fontSize: "12px", color: "#a78bfa", textDecoration: "none", display: "flex", alignItems: "center", gap: "4px" }}
+            onMouseOver={e => e.currentTarget.style.textDecoration = "underline"}
+            onMouseOut={e => e.currentTarget.style.textDecoration = "none"}>
+            ✈️ Отримати токен у Telegram →
+          </a>
+        </div>
+      </SectionCard>
+
+      {/* ── XML River ── */}
+      <SectionCard>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "16px" }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div style={{ width: 28, height: 28, borderRadius: "6px", background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 800, color: "#3B82F6" }}>XR</div>
+              <span style={{ fontSize: "15px", fontWeight: 700, color: "#fff" }}>XML River API</span>
+            </div>
+            <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "6px", maxWidth: "480px", lineHeight: 1.5 }}>
+              API ключ для перевірки індексації сторінок у Google.{" "}
+              <a href="https://xmlriver.com" target="_blank" rel="noopener noreferrer" style={{ color: "#3B82F6" }}>xmlriver.com</a>
+            </p>
+          </div>
+          <span style={{ fontSize: "12px", fontWeight: 600, color: statusColor(xrStatus) }}>
+            {statusDot(xrStatus)} {statusLabel(xrStatus)}
+          </span>
+        </div>
+
+        <label style={labelStyle}>User ID</label>
+        <div style={rowStyle}>
+          <input value={xrUserId} onChange={e => setXrUserId(e.target.value)} placeholder="12345" style={inputStyle} />
+        </div>
+
+        <label style={labelStyle}>API Key</label>
+        <div style={rowStyle}>
+          <input value={xrApiKey} onChange={e => setXrApiKey(e.target.value)} placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" type="password" style={inputStyle} />
+        </div>
+
+        {xrMsg && <p style={{ fontSize: "12px", color: statusColor(xrStatus), marginBottom: "10px" }}>{xrMsg}</p>}
+
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button onClick={validateXr} disabled={!xrUserId || !xrApiKey || xrStatus === "checking"} style={{ ...btnStyle(), opacity: (!xrUserId || !xrApiKey) ? 0.4 : 1 }}>
+            {xrStatus === "checking" ? "Перевірка…" : "Перевірити ключ"}
+          </button>
+          <button onClick={saveXr} disabled={!xrUserId || !xrApiKey || xrSaving} style={{ ...btnStyle(true), opacity: (!xrUserId || !xrApiKey) ? 0.4 : 1 }}>
+            {xrSaved ? "✓ Збережено" : xrSaving ? "Зберігаємо…" : "Зберегти"}
+          </button>
+          {(xrUserId || xrApiKey) && (
+            <button onClick={() => { setXrUserId(""); setXrApiKey(""); setXrStatus("idle"); setXrMsg(""); saveXr(); }}
+              style={{ padding: "9px 12px", background: "transparent", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "8px", color: "#EF4444", fontSize: "12px", cursor: "pointer" }}>
+              Видалити
+            </button>
+          )}
+        </div>
+      </SectionCard>
+
+      {/* ── 2index.ninja ── */}
+      <SectionCard>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "16px" }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div style={{ width: 28, height: 28, borderRadius: "6px", background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 800, color: "#10B981" }}>2I</div>
+              <span style={{ fontSize: "15px", fontWeight: 700, color: "#fff" }}>2index.ninja API</span>
+            </div>
+            <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "6px", maxWidth: "480px", lineHeight: 1.5 }}>
+              Bearer token для відправки URL на індексацію та перевірки статусу.{" "}
+              <a href="https://2index.ninja" target="_blank" rel="noopener noreferrer" style={{ color: "#10B981" }}>2index.ninja</a>
+            </p>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" }}>
+            <span style={{ fontSize: "12px", fontWeight: 600, color: statusColor(niStatus) }}>
+              {statusDot(niStatus)} {statusLabel(niStatus)}
+            </span>
+            {niBalance != null && (
+              <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Баланс: {niBalance}</span>
+            )}
+          </div>
+        </div>
+
+        <label style={labelStyle}>Bearer token</label>
+        <div style={rowStyle}>
+          <input value={niToken} onChange={e => setNiToken(e.target.value)} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" type="password" style={inputStyle} />
+        </div>
+
+        {niMsg && <p style={{ fontSize: "12px", color: statusColor(niStatus), marginBottom: "10px" }}>{niMsg}</p>}
+
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button onClick={validateNi} disabled={!niToken || niStatus === "checking"} style={{ ...btnStyle(), opacity: !niToken ? 0.4 : 1 }}>
+            {niStatus === "checking" ? "Перевірка…" : "Перевірити ключ"}
+          </button>
+          <button onClick={saveNi} disabled={!niToken || niSaving} style={{ ...btnStyle(true), opacity: !niToken ? 0.4 : 1 }}>
+            {niSaved ? "✓ Збережено" : niSaving ? "Зберігаємо…" : "Зберегти"}
+          </button>
+          {niToken && (
+            <button onClick={() => { setNiToken(""); setNiStatus("idle"); setNiMsg(""); setNiBalance(null); saveNi(); }}
+              style={{ padding: "9px 12px", background: "transparent", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "8px", color: "#EF4444", fontSize: "12px", cursor: "pointer" }}>
+              Видалити
+            </button>
+          )}
+        </div>
+      </SectionCard>
+
+      {/* ── Ahrefs (coming soon) ── */}
+      <SectionCard>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <div style={{ width: 28, height: 28, borderRadius: "6px", background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 800, color: "#8B5CF6" }}>AH</div>
+            <div>
+              <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-secondary)" }}>Ahrefs API</span>
+              <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>Розширена інтеграція для аналізу беклінків</p>
+            </div>
+          </div>
+          <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 8px", borderRadius: "6px", background: "rgba(139,92,246,0.12)", color: "#8B5CF6", border: "1px solid rgba(139,92,246,0.25)" }}>Незабаром</span>
+        </div>
+      </SectionCard>
+    </div>
+  );
+}
 
 // ─── Section: Health API Keys ─────────────────────────────────────────────────
 const HEALTH_PROVIDERS = [
@@ -1081,6 +1406,7 @@ export default function SettingsPage() {
             <NavBtn id="accounts" icon={<GoogleIcon size={14} />} label={t("navMyGoogleAccounts")} />
             <NavBtn id="teams" icon={<Users size={14} />} label={t("myTeams")} />
             <NavBtn id="api" icon={<Key size={14} />} label={t("navApiMcpKeys")} />
+            <NavBtn id="indexing-api" icon={<Globe size={14} />} label="API Індексації" />
           </div>
 
           {/* Team */}
@@ -1111,6 +1437,7 @@ export default function SettingsPage() {
           {nav === "accounts"     && <AccountsSection user={user} accounts={accounts} loadingAccounts={loadingAccounts} removing={removing} onAdd={handleAdd} onRemove={handleRemove} onReauth={handleReauth} />}
           {nav === "teams"        && <TeamsSection user={user} />}
           {nav === "api"          && <ApiSection />}
+          {nav === "indexing-api" && <IndexApiSection />}
           {nav === "members"      && <MembersSection user={user} />}
           {nav === "preferences"  && <PreferencesSection user={user} />}
           {nav === "supersites"   && <SuperSitesSection />}
