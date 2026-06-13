@@ -1488,6 +1488,13 @@ function GA4Tab({ domain, period, setPeriod, periodOptions }: {
   const [loading, setLoading] = useState(true);
   const [linking, setLinking] = useState(false);
   const [propsMeta, setPropsMeta] = useState<{ connected: number; errors?: string[] } | null>(null);
+  const { t } = useLanguage();
+
+  const metricLabel = (key: GA4Metric) =>
+    key === "sessions" ? t("ga4MetricSessions")
+      : key === "engagement" ? t("ga4MetricEngagement")
+        : key === "events" ? t("ga4MetricEvents")
+          : t("ga4MetricRevenue");
 
   const ga4Linked = report?.linked === true;
 
@@ -1556,10 +1563,10 @@ function GA4Tab({ domain, period, setPeriod, periodOptions }: {
       <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
         {/* Metric toggles */}
         <div style={{ display: "flex", gap: "4px" }}>
-          {GA4_METRICS.map(({ key, icon, label, color, bg }) => {
+          {GA4_METRICS.map(({ key, icon, color, bg }) => {
             const active = activeMetrics.has(key);
             return (
-              <button key={key} title={label} onClick={() => toggleMetric(key)} style={{
+              <button key={key} title={metricLabel(key)} onClick={() => toggleMetric(key)} style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: "34px", height: "34px", borderRadius: "8px", cursor: "pointer",
                 border: `1px solid ${active ? color : "var(--color-border)"}`,
@@ -1598,7 +1605,7 @@ function GA4Tab({ domain, period, setPeriod, periodOptions }: {
       {/* Initial load */}
       {loading && !report ? (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "80px 32px", color: "var(--color-text-secondary)", fontSize: "13px" }}>
-          Loading GA4…
+          {t("ga4Loading")}
         </div>
       ) : !ga4Linked ? (
         /* Onboarding card — pick a real GA4 property */
@@ -1609,10 +1616,10 @@ function GA4Tab({ domain, period, setPeriod, periodOptions }: {
           </div>
           <div style={{ maxWidth: "420px" }}>
             <h2 style={{ fontSize: "20px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "10px" }}>
-              Link your GA4 property
+              {t("ga4LinkTitle")}
             </h2>
             <p style={{ fontSize: "14px", color: "var(--color-text-secondary)", lineHeight: "1.6" }}>
-              Unlock the Google Analytics data you know and love, right here in OpenGSC.
+              {t("ga4LinkSubtitle")}
             </p>
           </div>
 
@@ -1625,7 +1632,7 @@ function GA4Tab({ domain, period, setPeriod, periodOptions }: {
               style={{ width: "100%", padding: "10px 14px", borderRadius: "10px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: selectedProp ? "var(--color-text-primary)" : "var(--color-text-secondary)", fontSize: "14px", outline: "none", cursor: "pointer" }}
             >
               <option value="">
-                {propsLoading ? "Loading properties…" : properties.length === 0 ? "No GA4 properties found" : "Select GA4 Property…"}
+                {propsLoading ? t("ga4LoadingProps") : properties.length === 0 ? t("ga4NoPropsShort") : t("ga4SelectPlaceholder")}
               </option>
               {properties.map(p => (
                 <option key={p.id} value={p.id}>
@@ -1638,25 +1645,25 @@ function GA4Tab({ domain, period, setPeriod, periodOptions }: {
               disabled={!selectedProp || linking}
               style={{ width: "100%", padding: "10px 20px", borderRadius: "10px", border: "none", background: selectedProp && !linking ? "#3B82F6" : "var(--color-border)", color: selectedProp && !linking ? "#fff" : "var(--color-text-secondary)", fontSize: "14px", fontWeight: 600, cursor: selectedProp && !linking ? "pointer" : "not-allowed", transition: "all 0.15s", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
             >
-              <Link2 size={15} /> {linking ? "Linking…" : "Link Property"}
+              <Link2 size={15} /> {linking ? t("ga4Linking") : t("ga4LinkBtn")}
             </button>
           </div>
 
           {properties.length === 0 && !propsLoading ? (
             <div style={{ maxWidth: "460px", display: "flex", flexDirection: "column", gap: "8px" }}>
               <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
-                No GA4 properties found across {propsMeta?.connected ?? 0} connected account(s). Likely causes: the Analytics scope wasn’t granted (re-connect the account in Settings), the Analytics Data/Admin APIs aren’t enabled in Google Cloud, or this Google account has no access to any GA4 property.
+                {t("ga4NoPropsLead")} {propsMeta?.connected ?? 0} {t("ga4AccountsConnected")}. {t("ga4NoPropsCauses")}
               </p>
               {propsMeta?.errors && propsMeta.errors.length > 0 && (
                 <div style={{ fontSize: "11px", color: "#F87171", background: "var(--color-bg)", padding: "8px 10px", borderRadius: "8px", textAlign: "left", lineHeight: 1.5, overflow: "auto" }}>
-                  <div style={{ fontWeight: 700, marginBottom: 4, color: "var(--color-text-secondary)" }}>Google API said:</div>
+                  <div style={{ fontWeight: 700, marginBottom: 4, color: "var(--color-text-secondary)" }}>{t("ga4ApiSaid")}</div>
                   {propsMeta.errors.map((e, i) => <div key={i}>{e}</div>)}
                 </div>
               )}
             </div>
           ) : (
             <p style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
-              You can always unlink your GA4 property later.
+              {t("ga4CanUnlinkLater")}
             </p>
           )}
         </div>
@@ -1664,22 +1671,22 @@ function GA4Tab({ domain, period, setPeriod, periodOptions }: {
         /* Linked but the API call failed */
         <div style={{ background: "var(--color-card)", borderRadius: "16px", border: "1px solid var(--color-border)", padding: "32px", display: "flex", flexDirection: "column", gap: "16px", alignItems: "center", textAlign: "center" }}>
           <p style={{ fontSize: "14px", color: "var(--color-text-secondary)", maxWidth: "460px", lineHeight: 1.6 }}>
-            Couldn’t load GA4 data for this property. The linked Google account may have lost access, or the Analytics scope hasn’t been granted yet. Try re-connecting the account, or unlink and pick another property.
+            {t("ga4LoadError")}
           </p>
           <code style={{ fontSize: "12px", color: "#F87171", background: "var(--color-bg)", padding: "6px 10px", borderRadius: "6px", maxWidth: "100%", overflow: "auto" }}>{report.error}</code>
           <button onClick={unlinkProperty} style={{ fontSize: "12px", color: "var(--color-text-secondary)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
-            Unlink GA4
+            {t("ga4Unlink")}
           </button>
         </div>
       ) : (
         /* Linked state — real metrics + chart */
         <div style={{ background: "var(--color-card)", borderRadius: "16px", border: "1px solid var(--color-border)", padding: "32px", display: "flex", flexDirection: "column", gap: "24px", position: "relative" }}>
           {loading && (
-            <div style={{ position: "absolute", top: 14, right: 18, fontSize: "11px", color: "var(--color-text-secondary)" }}>Updating…</div>
+            <div style={{ position: "absolute", top: 14, right: 18, fontSize: "11px", color: "var(--color-text-secondary)" }}>{t("ga4Updating")}</div>
           )}
           {report?.property?.name && (
             <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
-              {report.property.name} · property {report.property.id}
+              {report.property.name} · {t("ga4PropertyWord")} {report.property.id}
             </div>
           )}
           <div style={{ display: "flex", alignItems: "center", gap: "28px", flexWrap: "wrap" }}>
@@ -1710,9 +1717,10 @@ function GA4Tab({ domain, period, setPeriod, periodOptions }: {
                   <YAxis yAxisId="right" orientation="right" domain={[0, 100]} tick={{ fontSize: 10, fill: "var(--color-text-secondary)" }} axisLine={false} tickLine={false} width={36} />
                   <Tooltip
                     contentStyle={{ background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 12 }}
-                    formatter={(value: any, name: any) => {
-                      if (name === "Engagement Rate") return [`${value}%`, name];
-                      if (name === "Revenue") return [`$${value}`, name];
+                    formatter={(value: any, name: any, item: any) => {
+                      const key = item?.dataKey as GA4Metric | undefined;
+                      if (key === "engagement") return [`${value}%`, name];
+                      if (key === "revenue") return [`$${value}`, name];
                       return [Number(value).toLocaleString(), name];
                     }}
                   />
@@ -1722,7 +1730,7 @@ function GA4Tab({ domain, period, setPeriod, periodOptions }: {
                       yAxisId={m.key === "engagement" ? "right" : "left"}
                       type="monotone"
                       dataKey={m.key}
-                      name={m.label}
+                      name={metricLabel(m.key)}
                       stroke={m.color}
                       strokeWidth={2}
                       dot={false}
@@ -1734,12 +1742,12 @@ function GA4Tab({ domain, period, setPeriod, periodOptions }: {
             </div>
           ) : (
             <div style={{ height: "200px", borderRadius: "12px", background: "var(--color-bg)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-secondary)", fontSize: "13px" }}>
-              No data for this period
+              {t("ga4NoData")}
             </div>
           )}
 
           <button onClick={unlinkProperty} style={{ alignSelf: "flex-end", fontSize: "12px", color: "var(--color-text-secondary)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
-            Unlink GA4
+            {t("ga4Unlink")}
           </button>
         </div>
       )}
