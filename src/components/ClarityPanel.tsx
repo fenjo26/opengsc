@@ -389,7 +389,7 @@ export function ClarityPanel({ siteDbId }: { siteDbId: string }) {
       }}>
         <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--color-text-primary)", marginBottom: "14px", display: "flex", alignItems: "center", gap: "6px" }}>
           <Info size={14} color="var(--color-accent-blue)" />
-          {configured ? "✅ Clarity подключён" : t("clarityNotConfigured")}
+          {configured ? `✅ ${t("clarityConnected")}` : t("clarityNotConfigured")}
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
@@ -471,7 +471,7 @@ export function ClarityPanel({ siteDbId }: { siteDbId: string }) {
                 display: "flex", alignItems: "center", gap: "5px",
                 fontSize: "12px", color: "var(--color-accent-blue)", textDecoration: "none",
               }}>
-              <ExternalLink size={12} /> Открыть в Clarity
+              <ExternalLink size={12} /> {t("clarityOpen")}
             </a>
           )}
 

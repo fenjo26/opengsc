@@ -171,7 +171,7 @@ function AccountsSection({ user, accounts, loadingAccounts, removing, onAdd, onR
                       onMouseOver={e => { e.currentTarget.style.background = "rgba(239,68,68,0.1)"; e.currentTarget.style.color = "#f87171"; e.currentTarget.style.borderColor = "rgba(239,68,68,0.25)"; }}
                       onMouseOut={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.color = "var(--color-text-secondary)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; }}
                     >
-                      <X size={11} /> Удалить
+                      <X size={11} /> {t("remove")}
                     </button>
                   )}
                 </div>
@@ -180,7 +180,7 @@ function AccountsSection({ user, accounts, loadingAccounts, removing, onAdd, onR
                 {confirmDeleteId === acc.id && (
                   <div style={{ padding: "0 8px 10px 50px", display: "flex", alignItems: "center", gap: "8px" }}>
                     <span style={{ fontSize: "12px", color: "#f87171", flex: 1 }}>
-                      Удалить аккаунт <strong>{acc.email}</strong>? Данные сайтов останутся в БД.
+                      {t("setRemoveAccountQ1")} <strong>{acc.email}</strong>{t("setRemoveAccountQ2")}
                     </span>
                     <button
                       onClick={() => setConfirmDeleteId(null)}
@@ -188,7 +188,7 @@ function AccountsSection({ user, accounts, loadingAccounts, removing, onAdd, onR
                       onMouseOver={e => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
                       onMouseOut={e => e.currentTarget.style.background = "rgba(255,255,255,0.06)"}
                     >
-                      Отмена
+                      {t("cancel")}
                     </button>
                     <button
                       onClick={() => { setConfirmDeleteId(null); onRemove(acc.id); }}
@@ -197,7 +197,7 @@ function AccountsSection({ user, accounts, loadingAccounts, removing, onAdd, onR
                       onMouseOver={e => e.currentTarget.style.background = "rgba(239,68,68,0.28)"}
                       onMouseOut={e => e.currentTarget.style.background = "rgba(239,68,68,0.15)"}
                     >
-                      <X size={11} /> Да, удалить
+                      <X size={11} /> {t("setConfirmRemove")}
                     </button>
                   </div>
                 )}
@@ -206,7 +206,7 @@ function AccountsSection({ user, accounts, loadingAccounts, removing, onAdd, onR
                 {!acc.gscAccess && confirmDeleteId !== acc.id && (
                   <div style={{ padding: "0 8px 10px 50px", display: "flex", alignItems: "center", gap: "10px" }}>
                     <span style={{ fontSize: "11px", color: "#f87171", flex: 1 }}>
-                      ⚠ Нет доступа к GSC — требуется повторная авторизация
+                      {t("setNoGscAccess")}
                     </span>
                     <button
                       onClick={() => onReauth(acc.email)}
@@ -214,7 +214,7 @@ function AccountsSection({ user, accounts, loadingAccounts, removing, onAdd, onR
                       onMouseOver={e => e.currentTarget.style.background = "rgba(239,68,68,0.22)"}
                       onMouseOut={e => e.currentTarget.style.background = "rgba(239,68,68,0.12)"}
                     >
-                      <GoogleIcon size={11} /> Переавторизовать
+                      <GoogleIcon size={11} /> {t("setReauthorize")}
                     </button>
                   </div>
                 )}
@@ -995,7 +995,7 @@ function IndexApiSection() {
               {statusDot(niStatus)} {statusLabel(niStatus)}
             </span>
             {niBalance != null && (
-              <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Баланс: {niBalance}</span>
+              <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{t("balanceLabel")}: {niBalance}</span>
             )}
           </div>
         </div>

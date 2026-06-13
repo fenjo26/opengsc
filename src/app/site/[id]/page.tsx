@@ -708,6 +708,7 @@ function updateRules(item: SetupItem, patternStr: string): SetupItem {
 
 // ─── Branded Chart ────────────────────────────────────────────────────────────
 function BrandedChart({ siteDbId, period, keywords }: { siteDbId: string; period: string; keywords: string[] }) {
+  const { t } = useLanguage();
   const [tab, setTab] = useState<'Trend' | 'Comparison'>('Trend');
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -729,11 +730,11 @@ function BrandedChart({ siteDbId, period, keywords }: { siteDbId: string; period
   const total = totalBranded + totalNon;
   const brandedPct = total > 0 ? Math.round((totalBranded / total) * 100) : 0;
 
-  if (loading) return <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-secondary)', fontSize: 13 }}>Загрузка данных GSC…</div>;
+  if (loading) return <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-secondary)', fontSize: 13 }}>{t('brandLoadingGsc')}</div>;
 
   if (rows.length === 0) return (
     <div style={{ border: '1px dashed var(--color-border)', borderRadius: 12, padding: '32px 24px', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 13 }}>
-      Нет данных за этот период.<br/>Ключи: {keywords.join(', ')}
+      {t('brandNoData')}<br/>{t('brandKeys')} {keywords.join(', ')}
     </div>
   );
 
@@ -744,17 +745,17 @@ function BrandedChart({ siteDbId, period, keywords }: { siteDbId: string; period
       {/* Summary */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
         <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
-          <span style={{ color: '#818cf8', fontWeight: 700 }}>{totalBranded.toLocaleString()}</span> брендовых кликов ({brandedPct}%)
+          <span style={{ color: '#818cf8', fontWeight: 700 }}>{totalBranded.toLocaleString()}</span> {t('brandedClicksLabel')} ({brandedPct}%)
         </div>
         <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
-          <span style={{ color: '#10b981', fontWeight: 700 }}>{totalNon.toLocaleString()}</span> небрендовых ({100 - brandedPct}%)
+          <span style={{ color: '#10b981', fontWeight: 700 }}>{totalNon.toLocaleString()}</span> {t('brandNonBrandedLabel')} ({100 - brandedPct}%)
         </div>
       </div>
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
-        {(['Trend', 'Comparison'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{ padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', border: `1px solid ${tab === t ? '#3B82F6' : 'var(--color-border)'}`, background: tab === t ? 'rgba(59,130,246,0.1)' : 'transparent', color: tab === t ? '#3B82F6' : 'var(--color-text-secondary)' }}>{t}</button>
+        {(['Trend', 'Comparison'] as const).map(tb => (
+          <button key={tb} onClick={() => setTab(tb)} style={{ padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', border: `1px solid ${tab === tb ? '#3B82F6' : 'var(--color-border)'}`, background: tab === tb ? 'rgba(59,130,246,0.1)' : 'transparent', color: tab === tb ? '#3B82F6' : 'var(--color-text-secondary)' }}>{tb === 'Trend' ? t('brandTrend') : t('brandComparison')}</button>
         ))}
       </div>
 
@@ -764,18 +765,18 @@ function BrandedChart({ siteDbId, period, keywords }: { siteDbId: string; period
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
             <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--color-text-secondary)' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
             <YAxis tick={{ fontSize: 10, fill: 'var(--color-text-secondary)' }} axisLine={false} tickLine={false} width={32} />
-            <Tooltip formatter={(v: any, name: any) => [v, name === 'branded' ? 'Брендовые' : 'Небрендовые']} contentStyle={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 8, fontSize: 12 }} />
+            <Tooltip formatter={(v: any, name: any) => [v, name === 'branded' ? t('brandBranded') : t('brandNonBranded')]} contentStyle={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 8, fontSize: 12 }} />
             <Line type="monotone" dataKey="branded" stroke="#818cf8" strokeWidth={2} dot={false} name="branded" />
             <Line type="monotone" dataKey="nonBranded" stroke="#10b981" strokeWidth={2} dot={false} name="nonBranded" />
           </LineChart>
         </ResponsiveContainer>
       ) : (
         <ResponsiveContainer width="100%" height={180}>
-          <BarChart data={[{ name: 'Клики', branded: totalBranded, nonBranded: totalNon }]} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+          <BarChart data={[{ name: t('brandClicks'), branded: totalBranded, nonBranded: totalNon }]} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
             <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--color-text-secondary)' }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fontSize: 10, fill: 'var(--color-text-secondary)' }} axisLine={false} tickLine={false} width={40} />
-            <Tooltip formatter={(v: any, name: any) => [v.toLocaleString(), name === 'branded' ? 'Брендовые' : 'Небрендовые']} contentStyle={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 8, fontSize: 12 }} />
+            <Tooltip formatter={(v: any, name: any) => [v.toLocaleString(), name === 'branded' ? t('brandBranded') : t('brandNonBranded')]} contentStyle={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 8, fontSize: 12 }} />
             <Bar dataKey="branded" fill="#818cf8" name="branded" radius={[4,4,0,0]} />
             <Bar dataKey="nonBranded" fill="#10b981" name="nonBranded" radius={[4,4,0,0]} />
           </BarChart>
@@ -851,9 +852,9 @@ function BrandedKeywordsModal({ siteDbId, domain, initial, onClose, onSaved }: {
         {/* AI suggest button */}
         <button onClick={suggestWithAI} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '10px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)', color: '#818cf8', cursor: loading ? 'wait' : 'pointer', fontSize: '13px', fontWeight: 600, width: 'fit-content' }}>
           <span>✨</span>
-          {loading ? 'Анализирую запросы...' : 'Предложить ИИ'}
+          {loading ? t('aiAnalyzing') : t('aiSuggest')}
         </button>
-        {aiGenerated && <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '-12px' }}>✓ Сгенерировано ИИ — проверьте и отредактируйте при необходимости</p>}
+        {aiGenerated && <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '-12px' }}>✓ {t('aiGeneratedNote')}</p>}
 
         {/* Keyword chips */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', minHeight: '40px' }}>
@@ -879,9 +880,9 @@ function BrandedKeywordsModal({ siteDbId, domain, initial, onClose, onSaved }: {
 
         {/* Save */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-          <button onClick={onClose} style={{ padding: '10px 20px', borderRadius: '10px', background: 'transparent', border: '1px solid var(--color-border)', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: '13px' }}>Отмена</button>
+          <button onClick={onClose} style={{ padding: '10px 20px', borderRadius: '10px', background: 'transparent', border: '1px solid var(--color-border)', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: '13px' }}>{t('cancel')}</button>
           <button onClick={save} disabled={saving || keywords.length === 0} style={{ padding: '10px 24px', borderRadius: '10px', background: '#3B82F6', border: 'none', color: '#fff', cursor: saving ? 'wait' : 'pointer', fontSize: '13px', fontWeight: 600 }}>
-            {saving ? 'Сохранение...' : 'Сохранить'}
+            {saving ? t('btnSaving') : t('setSave')}
           </button>
         </div>
       </div>
@@ -1993,7 +1994,7 @@ function BacklinksTab({ siteDbId }: { siteDbId: string }) {
         body: JSON.stringify({ siteDbId, ids, forceAll: all }),
       });
       const d = await res.json();
-      setActionMsg(`✓ Перевірено ${d.checked}: живих ${d.alive}, мертвих ${d.dead}`);
+      setActionMsg(`✓ ${t("idxChecked")} ${d.checked}: ${t("blAlive")} ${d.alive}, ${t("blDead")} ${d.dead}`);
       await load();
     } catch (e: any) { setActionMsg(`✗ ${e.message}`); }
     setChecking404(false);
@@ -2009,7 +2010,7 @@ function BacklinksTab({ siteDbId }: { siteDbId: string }) {
         body: JSON.stringify({ siteDbId, ids }),
       });
       const d = await res.json();
-      setActionMsg(`✓ XML River: перевірено ${d.checked}`);
+      setActionMsg(`✓ XML River: ${t("idxChecked")} ${d.checked}`);
       await load();
     } catch (e: any) { setActionMsg(`✗ ${e.message}`); }
     setCheckingXr(false);
@@ -2202,7 +2203,7 @@ function BacklinksTab({ siteDbId }: { siteDbId: string }) {
                       <td style={{ padding: "8px 12px", whiteSpace: "nowrap" }}>
                         {link.xrStatus
                           ? <span style={{ fontSize: "11px", color: link.xrStatus === "indexed" ? "#4ADE80" : link.xrStatus === "error" ? "#F87171" : "#FBBF24", fontWeight: 600 }}>
-                              {link.xrStatus === "indexed" ? "✓ В індексі" : link.xrStatus === "error" ? "⚠ Error" : "✗ Не в індексі"}
+                              {link.xrStatus === "indexed" ? `✓ ${t("idxInIndex")}` : link.xrStatus === "error" ? "⚠ Error" : `✗ ${t("idxNotInIndex")}`}
                             </span>
                           : <span style={{ color: "rgba(255,255,255,0.2)", fontSize: "11px" }}>—</span>
                         }
@@ -2210,7 +2211,7 @@ function BacklinksTab({ siteDbId }: { siteDbId: string }) {
                       {/* 2index */}
                       <td style={{ padding: "8px 12px" }}>
                         {link.twoIndexStatus === "submitted"
-                          ? <span style={{ fontSize: "11px", color: "#34d399", fontWeight: 600 }}>✓ Надіслано</span>
+                          ? <span style={{ fontSize: "11px", color: "#34d399", fontWeight: 600 }}>✓ {t("idxSent")}</span>
                           : <span style={{ color: "rgba(255,255,255,0.2)", fontSize: "11px" }}>—</span>
                         }
                       </td>
@@ -2259,7 +2260,7 @@ function BacklinksTab({ siteDbId }: { siteDbId: string }) {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
                 <thead>
                   <tr style={{ background: "rgba(255,255,255,0.02)" }}>
-                    {["ОПЕРАЦІЯ", "ПІДСУМОК", "ДАТА"].map(h => (
+                    {[t("blColOperation"), t("idxColSummary"), t("idxColDate")].map(h => (
                       <th key={h} style={{ textAlign: "left", padding: "8px 14px", color: "var(--color-text-secondary)", fontWeight: 500, fontSize: "10px", letterSpacing: "0.06em" }}>{h}</th>
                     ))}
                   </tr>
@@ -2289,6 +2290,7 @@ function BacklinksTab({ siteDbId }: { siteDbId: string }) {
 }
 
 function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string }) {
+  const { t } = useLanguage();
   // ── URL list state ──
   const [urlRows,    setUrlRows]    = useState<any[]>([]);
   const [counters,   setCounters]   = useState<any>({});
@@ -2388,7 +2390,7 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
         body: JSON.stringify({ siteDbId, urls: urls.slice(0, 50) }),
       });
       const d = await res.json();
-      setCheckMsg(`✓ Перевірено ${d.checked ?? 0} URLs${d.errors ? ` · ${d.errors} помилок` : ""}`);
+      setCheckMsg(`✓ ${t("idxChecked")} ${d.checked ?? 0} URLs${d.errors ? ` · ${d.errors} ${t("idxErrors")}` : ""}`);
       await loadUrls(page, statusFilter, search);
     } catch (e: any) { setCheckMsg(`✗ ${e.message}`); }
     setChecking(false);
@@ -2460,29 +2462,29 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
   };
   const googleStatusLabel = (s: string | null) => {
     if (!s) return "—";
-    if (/submitted and indexed/i.test(s)) return "В індексі";
-    if (/not on google/i.test(s)) return "Не знайдено Google";
-    if (/crawled/i.test(s)) return "Проіндексовано, не в індексі";
-    if (/discovered/i.test(s)) return "Виявлено, не проіндексовано";
-    if (/blocked/i.test(s)) return "Заблоковано";
+    if (/submitted and indexed/i.test(s)) return t("idxInIndex");
+    if (/not on google/i.test(s)) return t("idxNotFoundGoogle");
+    if (/crawled/i.test(s)) return t("idxCrawledNotIndexed");
+    if (/discovered/i.test(s)) return t("idxDiscoveredNotIndexed");
+    if (/blocked/i.test(s)) return t("idxBlocked");
     return s;
   };
-  const opTypeLabel = (t: string) => {
+  const opTypeLabel = (type: string) => {
     const m: Record<string,string> = {
       sitemap_sync: "Sync sitemap", google_check: "Google check",
       xr_check: "XML River", "2index_submit": "2index submit", neural_submit: "NeuralIndexer",
     };
-    return m[t] ?? t;
+    return m[type] ?? type;
   };
 
   const hasData = urlRows.length > 0 || counters.total > 0;
 
   const COUNTER_CHIPS = [
-    { label: "Всього", value: counters.total ?? 0, color: "var(--color-text-primary)", filter: "all" },
-    { label: "В індексі", value: counters.indexed ?? 0, color: "#4ADE80", filter: "indexed" },
-    { label: "Не в індексі", value: counters.notIndexed ?? 0, color: "#F87171", filter: "not_indexed" },
-    { label: "Не перевірено", value: counters.notChecked ?? 0, color: "#FBBF24", filter: "not_checked" },
-    { label: "Neural надіслано", value: counters.neuralSubmitted ?? 0, color: "#a78bfa", filter: "all" },
+    { label: t("idxTotal"), value: counters.total ?? 0, color: "var(--color-text-primary)", filter: "all" },
+    { label: t("idxInIndex"), value: counters.indexed ?? 0, color: "#4ADE80", filter: "indexed" },
+    { label: t("idxNotInIndex"), value: counters.notIndexed ?? 0, color: "#F87171", filter: "not_indexed" },
+    { label: t("idxNotChecked"), value: counters.notChecked ?? 0, color: "#FBBF24", filter: "not_checked" },
+    { label: t("idxNeuralSent"), value: counters.neuralSubmitted ?? 0, color: "#a78bfa", filter: "all" },
   ];
 
   return (
@@ -2493,24 +2495,24 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
       <div style={{ background: "var(--color-card)", borderRadius: "12px", border: "1px solid var(--color-border)", overflow: "hidden" }}>
         <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>🗺 Автообхід sitemap</span>
+            <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>🗺 {t("idxAutoCrawl")}</span>
             {meta.lastSitemapSync && (
               <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
-                · Оновлено {timeAgo(new Date(meta.lastSitemapSync))}
+                · {t("idxUpdated")} {timeAgo(new Date(meta.lastSitemapSync))}
               </span>
             )}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Інтервал:</span>
+            <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{t("idxInterval")}</span>
             <select value={crawlInterval} onChange={e => setCrawlInterval(e.target.value)}
               style={{ fontSize: "12px", padding: "4px 8px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", cursor: "pointer" }}>
-              {[["disabled","Виключити"],["daily","Щодня"],["weekly","Щотижня"],["monthly","Щомісяця"]].map(([v,l]) => (
+              {[["disabled",t("idxDisabled")],["daily",t("idxDaily")],["weekly",t("idxWeekly")],["monthly",t("idxMonthly")]].map(([v,l]) => (
                 <option key={v} value={v}>{l}</option>
               ))}
             </select>
             <button onClick={runSync} disabled={syncing}
               style={{ padding: "6px 16px", borderRadius: "8px", border: "none", background: syncing ? "rgba(59,130,246,0.3)" : "#3B82F6", color: "#fff", fontSize: "12px", fontWeight: 600, cursor: syncing ? "not-allowed" : "pointer" }}>
-              {syncing ? "Синхронізація…" : "Синхронізувати сторінки"}
+              {syncing ? t("idxSyncing") : t("idxSyncPages")}
             </button>
           </div>
         </div>
@@ -2550,12 +2552,12 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
           <input
             value={search} onChange={e => setSearch(e.target.value)}
             onKeyDown={e => e.key === "Enter" && loadUrls(1, statusFilter, search)}
-            placeholder="Пошук по URL…"
+            placeholder={t("idxSearchUrl")}
             style={{ fontSize: "12px", padding: "6px 12px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-primary)", minWidth: "200px" }}
           />
           <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); loadUrls(1, e.target.value, search); }}
             style={{ fontSize: "12px", padding: "6px 10px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-primary)", cursor: "pointer" }}>
-            {[["all","Всі статуси"],["indexed","В індексі"],["not_indexed","Не в індексі"],["not_checked","Не перевірено"]].map(([v,l]) => (
+            {[["all",t("idxAllStatuses")],["indexed",t("idxInIndex")],["not_indexed",t("idxNotInIndex")],["not_checked",t("idxNotChecked")]].map(([v,l]) => (
               <option key={v} value={v}>{l}</option>
             ))}
           </select>
@@ -2564,7 +2566,7 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
           <button onClick={runGoogleCheck} disabled={checking}
             style={{ display: "flex", alignItems: "center", gap: "5px", padding: "6px 12px", borderRadius: "8px", border: "1px solid rgba(66,133,244,0.35)", background: "rgba(66,133,244,0.08)", color: "#60a5fa", fontSize: "12px", fontWeight: 600, cursor: checking ? "not-allowed" : "pointer", opacity: checking ? 0.6 : 1 }}>
             <GoogleIcon size={13} />
-            {checking ? "Перевірка…" : selected.size > 0 ? `Google API (${selected.size})` : "Google API check"}
+            {checking ? t("idxChecking") : selected.size > 0 ? `Google API (${selected.size})` : t("idxGoogleApiCheck")}
           </button>
 
           {checkMsg && (
@@ -2573,7 +2575,7 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
 
           {selected.size > 0 && (
             <span style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginLeft: "4px" }}>
-              Обрано {selected.size}
+              {t("idxSelected")} {selected.size}
               <button onClick={() => setSelected(new Set())} style={{ marginLeft: "6px", background: "none", border: "none", color: "var(--color-text-secondary)", cursor: "pointer", fontSize: "11px" }}>✕</button>
             </span>
           )}
@@ -2588,7 +2590,7 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
               <div style={{ width: 22, height: 22, borderRadius: "5px", background: "linear-gradient(135deg,rgba(139,92,246,0.3),rgba(59,130,246,0.3))", border: "1px solid rgba(139,92,246,0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 800, color: "#a78bfa" }}>NI</div>
               <span style={{ fontSize: "12px", fontWeight: 700, color: "#a78bfa" }}>NeuralIndexer</span>
               <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
-                {selected.size > 0 ? `· ${selected.size} обрано` : `· ${(counters.total ?? 0) - (counters.neuralSubmitted ?? 0)} ще не надіслано`}
+                {selected.size > 0 ? `· ${selected.size} ${t("idxSelectedLower")}` : `· ${(counters.total ?? 0) - (counters.neuralSubmitted ?? 0)} ${t("idxNotSentYet")}`}
               </span>
               {(["slow","fast","yandex"] as const).map(q => (
                 <button key={q} onClick={() => setNnQueue(q)}
@@ -2598,13 +2600,13 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
               ))}
               <button onClick={runNeuralSubmit} disabled={submitting}
                 style={{ padding: "6px 14px", borderRadius: "7px", border: "none", background: submitting ? "rgba(139,92,246,0.2)" : "rgba(139,92,246,0.85)", color: "#fff", fontSize: "12px", fontWeight: 700, cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.7 : 1 }}>
-                {submitting ? "Надсилання…" : "▶ Відправити на індексацію"}
+                {submitting ? t("idxSending") : `▶ ${t("idxSubmitToIndex")}`}
               </button>
               {submitResult?.ok && (
                 <span style={{ fontSize: "12px", color: "#4ADE80", fontWeight: 600 }}>
-                  ✓ Прийнято {submitResult.accepted} URL
-                  {submitResult.charged != null && ` · $${Number(submitResult.charged).toFixed(4)} списано`}
-                  {submitResult.balance != null && ` · баланс $${Number(submitResult.balance).toFixed(4)}`}
+                  ✓ {t("idxAccepted")} {submitResult.accepted} URL
+                  {submitResult.charged != null && ` · $${Number(submitResult.charged).toFixed(4)} ${t("idxCharged")}`}
+                  {submitResult.balance != null && ` · ${t("idxBalance")} $${Number(submitResult.balance).toFixed(4)}`}
                 </span>
               )}
               {submitResult?.error && <span style={{ fontSize: "12px", color: "#F87171" }}>✗ {submitResult.error}</span>}
@@ -2612,12 +2614,12 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
           )}
           {(hasXmlRiver || hasTwoIndex) && (
             <div style={{ padding: "8px 14px", display: "flex", alignItems: "center", gap: "8px", background: "rgba(255,255,255,0.01)" }}>
-              <span style={{ fontSize: "10px", fontWeight: 700, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Додатково:</span>
+              <span style={{ fontSize: "10px", fontWeight: 700, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{t("idxAdditional")}</span>
               {hasTwoIndex && (
                 <button onClick={runTwoIndexSubmit} disabled={submitting}
                   style={{ display: "flex", alignItems: "center", gap: "4px", padding: "4px 10px", borderRadius: "6px", border: "1px solid rgba(16,185,129,0.3)", background: "transparent", color: "#34d399", fontSize: "11px", fontWeight: 600, cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.6 : 1 }}>
                   <span style={{ fontSize: "9px", fontWeight: 800 }}>2I</span>
-                  {submitting ? "Надсилання…" : "Відправити в 2index"}
+                  {submitting ? t("idxSending") : t("idxSendTo2index")}
                 </button>
               )}
             </div>
@@ -2636,9 +2638,9 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
       {!loading && counters.total === 0 && (
         <div style={{ textAlign: "center", padding: "60px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
           <Globe size={36} color="var(--color-text-secondary)" style={{ opacity: 0.25 }} />
-          <div style={{ fontSize: "15px", fontWeight: 600, color: "var(--color-text-primary)" }}>Список сторінок пустий</div>
+          <div style={{ fontSize: "15px", fontWeight: 600, color: "var(--color-text-primary)" }}>{t("idxPagesEmpty")}</div>
           <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", maxWidth: "380px", lineHeight: 1.6 }}>
-            Натисніть <strong>Синхронізувати сторінки</strong>, щоб зібрати URL з sitemap.
+            {t("idxPagesEmptyHint1")} <strong>{t("idxSyncPages")}</strong>, {t("idxPagesEmptyHint2")}
           </p>
         </div>
       )}
@@ -2647,16 +2649,16 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
       {urlRows.length > 0 && (
         <div style={{ background: "var(--color-card)", borderRadius: "12px", border: "1px solid var(--color-border)", overflow: "hidden" }}>
           <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--color-border)", display: "flex", alignItems: "center", gap: "8px" }}>
-            <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-primary)" }}>📋 Список сторінок</span>
+            <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-primary)" }}>📋 {t("idxPagesList")}</span>
             <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>· {total} URL</span>
             <div style={{ marginLeft: "auto", display: "flex", gap: "8px", alignItems: "center" }}>
               <button onClick={() => { const p = Math.max(1, page - 1); setPage(p); loadUrls(p, statusFilter, search); }}
                 disabled={page <= 1 || loading}
-                style={{ padding: "3px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", fontSize: "12px", cursor: page <= 1 ? "not-allowed" : "pointer", opacity: page <= 1 ? 0.4 : 1 }}>← Назад</button>
-              <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Стор. {page} з {pages}</span>
+                style={{ padding: "3px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", fontSize: "12px", cursor: page <= 1 ? "not-allowed" : "pointer", opacity: page <= 1 ? 0.4 : 1 }}>← {t("idxBack")}</button>
+              <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{t("idxPageWord")} {page} {t("idxOf")} {pages}</span>
               <button onClick={() => { const p = Math.min(pages, page + 1); setPage(p); loadUrls(p, statusFilter, search); }}
                 disabled={page >= pages || loading}
-                style={{ padding: "3px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", fontSize: "12px", cursor: page >= pages ? "not-allowed" : "pointer", opacity: page >= pages ? 0.4 : 1 }}>Вперед →</button>
+                style={{ padding: "3px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", fontSize: "12px", cursor: page >= pages ? "not-allowed" : "pointer", opacity: page >= pages ? 0.4 : 1 }}>{t("idxNext")} →</button>
             </div>
           </div>
           <div style={{ overflowX: "auto" }}>
@@ -2667,7 +2669,7 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
                     <input type="checkbox" checked={selected.size === urlRows.length && urlRows.length > 0} onChange={toggleAll}
                       style={{ cursor: "pointer", width: 13, height: 13, accentColor: "#3B82F6" }} />
                   </th>
-                  {["URL","СТАТУС GOOGLE","XML RIVER","2INDEX","NEURAL","ПЕРЕВІРЕНО"].map(h => (
+                  {["URL",t("idxColGoogleStatus"),"XML RIVER","2INDEX","NEURAL",t("idxColChecked")].map(h => (
                     <th key={h} style={{ textAlign: "left", padding: "9px 12px", color: "var(--color-text-secondary)", fontWeight: 500, fontSize: "10px", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
@@ -2700,13 +2702,13 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
                       <td style={{ padding: "8px 12px" }}>
                         {row.xrStatus ? (
                           <span style={{ fontSize: "11px", color: row.xrStatus === "indexed" ? "#4ADE80" : "#FBBF24", fontWeight: 600 }}>
-                            {row.xrStatus === "indexed" ? "✓ В індексі" : "✗ Не в індексі"}
+                            {row.xrStatus === "indexed" ? `✓ ${t("idxInIndex")}` : `✗ ${t("idxNotInIndex")}`}
                           </span>
                         ) : <span style={{ color: "rgba(255,255,255,0.2)", fontSize: "11px" }}>—</span>}
                       </td>
                       <td style={{ padding: "8px 12px" }}>
                         {row.twoIndexStatus === "submitted"
-                          ? <span style={{ fontSize: "11px", color: "#34d399", fontWeight: 600 }}>✓ Надіслано</span>
+                          ? <span style={{ fontSize: "11px", color: "#34d399", fontWeight: 600 }}>✓ {t("idxSent")}</span>
                           : <span style={{ color: "rgba(255,255,255,0.2)", fontSize: "11px" }}>—</span>}
                       </td>
                       <td style={{ padding: "8px 12px" }}>
@@ -2729,10 +2731,10 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
       {/* ── Operations history ── */}
       <div style={{ background: "var(--color-card)", borderRadius: "12px", border: "1px solid var(--color-border)", overflow: "hidden" }}>
         <div style={{ padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>🕐 Історія операцій</span>
+          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>🕐 {t("idxHistory")}</span>
           <button onClick={() => { setShowOps(o => !o); if (!showOps) loadOps(); }}
             style={{ fontSize: "12px", padding: "4px 12px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", cursor: "pointer" }}>
-            {showOps ? "Згорнути" : "Оновити історію"}
+            {showOps ? t("idxCollapse") : t("idxRefreshHistory")}
           </button>
         </div>
         {showOps && (
@@ -2742,12 +2744,12 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
                 <div style={{ width: 18, height: 18, border: "2px solid var(--color-border)", borderTopColor: "#3B82F6", borderRadius: "50%", animation: "spin 0.8s linear infinite", display: "inline-block" }} />
               </div>
             ) : ops.length === 0 ? (
-              <div style={{ padding: "20px", textAlign: "center", fontSize: "12px", color: "var(--color-text-secondary)" }}>Історія поки пуста</div>
+              <div style={{ padding: "20px", textAlign: "center", fontSize: "12px", color: "var(--color-text-secondary)" }}>{t("idxHistoryEmpty")}</div>
             ) : (
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
                 <thead>
                   <tr style={{ background: "rgba(255,255,255,0.02)" }}>
-                    {["ТИП","ПІДСУМОК","ДЕТАЛЬ","ДАТА"].map(h => (
+                    {[t("idxColType"),t("idxColSummary"),t("idxColDetail"),t("idxColDate")].map(h => (
                       <th key={h} style={{ textAlign: "left", padding: "8px 14px", color: "var(--color-text-secondary)", fontWeight: 500, fontSize: "10px", letterSpacing: "0.06em" }}>{h}</th>
                     ))}
                   </tr>
@@ -3831,7 +3833,7 @@ export default function SitePage() {
             <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
               <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>{t("brandedVsNonBranded")}</h3>
               {brandedKeywords.length > 0 && (
-                <button onClick={() => setShowBrandedModal(true)} style={{ fontSize: "11px", color: "#3B82F6", background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.2)", borderRadius: "6px", cursor: "pointer", padding: "2px 8px" }}>✎ ключи</button>
+                <button onClick={() => setShowBrandedModal(true)} style={{ fontSize: "11px", color: "#3B82F6", background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.2)", borderRadius: "6px", cursor: "pointer", padding: "2px 8px" }}>✎ {t("brandEditKeys")}</button>
               )}
             </div>
             {brandedKeywords.length > 0 ? (

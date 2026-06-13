@@ -356,6 +356,7 @@ function TagInput({ initialValue, onSave, onCancel, placeholder }: {
   onCancel: () => void;
   placeholder?: string;
 }) {
+  const { t } = useLanguage();
   const [value, setValue] = useState(initialValue);
   return (
     <div
@@ -370,7 +371,7 @@ function TagInput({ initialValue, onSave, onCancel, placeholder }: {
           if (e.key === "Enter") { e.preventDefault(); onSave(value); }
           if (e.key === "Escape") { e.preventDefault(); onCancel(); }
         }}
-        placeholder={placeholder || "тег1, тег2"}
+        placeholder={placeholder || t("tagsExample")}
         style={{
           flex: 1, minWidth: 0, padding: "5px 9px",
           borderRadius: "7px", border: "1.5px solid var(--color-accent-blue)",
@@ -1171,7 +1172,7 @@ export default function PortfolioPage() {
                 }).catch(() => {});
               }}
               onCancel={() => setEditingTagSiteId(null)}
-              placeholder={t("tagsPrompt") || "тег1, тег2"}
+              placeholder={t("tagsPrompt") || t("tagsExample")}
             />
           )}
 
@@ -1208,7 +1209,7 @@ export default function PortfolioPage() {
 
               {/* Tag */}
               <CardBtn
-                tooltip={t("tagsPrompt") || "Добавить тег (через запятую)"}
+                tooltip={t("tagsPrompt")}
                 active={editingTagSiteId === site.id}
                 activeColor="var(--color-accent-blue)"
                 onClick={e => {
@@ -1261,7 +1262,7 @@ export default function PortfolioPage() {
         <div style={{marginBottom:"10px",padding:"10px 14px",borderRadius:"12px",background:"var(--color-card)",border:"1px solid var(--color-border)",display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
           <span style={{fontSize:"11px",fontWeight:700,color:"var(--color-text-secondary)",textTransform:"uppercase",letterSpacing:"0.06em",whiteSpace:"nowrap",marginRight:"2px"}}>{t("googleAccountsLabel")}</span>
           <div style={{display:"flex",alignItems:"center",gap:"6px",padding:"4px 12px",borderRadius:"20px",fontSize:"12px",fontWeight:600,cursor:"default",border:"1px solid rgba(59,130,246,0.4)",background:"rgba(59,130,246,0.12)",color:"#3B82F6",whiteSpace:"nowrap"}}>
-            Все сайты (<span style={{filter:blur?"blur(5px)":"none",transition:"filter 0.25s"}}>{sites.length}</span>)
+            {t("allSitesSection")} (<span style={{filter:blur?"blur(5px)":"none",transition:"filter 0.25s"}}>{sites.length}</span>)
           </div>
           {accounts.map(acc => (
             <div key={acc.id} style={{display:"flex",alignItems:"center",gap:"5px",padding:"4px 10px",borderRadius:"20px",fontSize:"12px",background:"var(--color-bg-secondary,rgba(255,255,255,0.04))",border:"1px solid var(--color-border)"}}>
@@ -1325,7 +1326,7 @@ export default function PortfolioPage() {
         <button
           onClick={handleSync}
           disabled={syncStatus === "syncing"}
-          title={syncedAt ? `Последняя синхронизация: ${syncedAt.toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" })} ${syncedAt.toLocaleDateString("ru", { day: "numeric", month: "short" })}` : "Синхронизировать данные GSC"}
+          title={syncedAt ? `${t("dashLastSync")} ${syncedAt.toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" })} ${syncedAt.toLocaleDateString("ru", { day: "numeric", month: "short" })}` : t("dashSyncGscTitle")}
           style={{
             display: "flex", alignItems: "center", gap: "6px",
             padding: "6px 12px", borderRadius: "8px", fontSize: "12px", fontWeight: 500,
@@ -1350,12 +1351,12 @@ export default function PortfolioPage() {
               <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
             </svg>
           )}
-          {syncStatus === "syncing" ? "Синхронизация…"
-            : syncStatus === "done" ? `Готово · ${syncedAt?.toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" })}`
-            : syncStatus === "reauth" ? "Требуется вход"
-            : syncStatus === "error" ? "Ошибка синхр."
+          {syncStatus === "syncing" ? t("idxSyncing")
+            : syncStatus === "done" ? `${t("dashDone")} · ${syncedAt?.toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" })}`
+            : syncStatus === "reauth" ? t("dashReauthNeeded")
+            : syncStatus === "error" ? t("dashSyncErrorShort")
             : syncedAt ? syncedAt.toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" })
-            : "Sync GSC"}
+            : t("dashSyncGsc")}
         </button>
       </div>
 
@@ -1368,13 +1369,13 @@ export default function PortfolioPage() {
           <div style={{ flex: 1 }}>
             {syncWarning === "reauth" ? (
               <>
-                <span style={{ fontSize: "13px", fontWeight: 600, color: "#EF4444" }}>Синхронизация не выполнена — требуется повторная авторизация Google.</span>
+                <span style={{ fontSize: "13px", fontWeight: 600, color: "#EF4444" }}>{t("dashSyncFailedReauth")}</span>
                 <span style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginLeft: "6px" }}>
-                  Перейди в <a href="/settings" style={{ color: "#3B82F6", textDecoration: "underline" }}>Настройки</a> и переподключи Google аккаунт.
+                  {t("dashGoToSettings1")} <a href="/settings" style={{ color: "#3B82F6", textDecoration: "underline" }}>{t("navSettings")}</a> {t("dashGoToSettings2")}
                 </span>
               </>
             ) : (
-              <span style={{ fontSize: "13px", fontWeight: 600, color: "#EF4444" }}>Синхронизация завершилась с ошибками. Проверь логи сервера.</span>
+              <span style={{ fontSize: "13px", fontWeight: 600, color: "#EF4444" }}>{t("dashSyncErrorsLog")}</span>
             )}
           </div>
           <button onClick={() => setSyncWarning(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--color-text-secondary)", padding: "2px" }}>
