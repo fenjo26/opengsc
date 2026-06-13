@@ -1642,11 +1642,23 @@ function GA4Tab({ domain, period, setPeriod, periodOptions }: {
             </button>
           </div>
 
-          <p style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
-            {properties.length === 0 && !propsLoading
-              ? "No properties? Make sure your Google account has access to a GA4 property and that the Analytics API scope is granted (re-connect the account)."
-              : "You can always unlink your GA4 property later."}
-          </p>
+          {properties.length === 0 && !propsLoading ? (
+            <div style={{ maxWidth: "460px", display: "flex", flexDirection: "column", gap: "8px" }}>
+              <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+                No GA4 properties found across {propsMeta?.connected ?? 0} connected account(s). Likely causes: the Analytics scope wasn’t granted (re-connect the account in Settings), the Analytics Data/Admin APIs aren’t enabled in Google Cloud, or this Google account has no access to any GA4 property.
+              </p>
+              {propsMeta?.errors && propsMeta.errors.length > 0 && (
+                <div style={{ fontSize: "11px", color: "#F87171", background: "var(--color-bg)", padding: "8px 10px", borderRadius: "8px", textAlign: "left", lineHeight: 1.5, overflow: "auto" }}>
+                  <div style={{ fontWeight: 700, marginBottom: 4, color: "var(--color-text-secondary)" }}>Google API said:</div>
+                  {propsMeta.errors.map((e, i) => <div key={i}>{e}</div>)}
+                </div>
+              )}
+            </div>
+          ) : (
+            <p style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
+              You can always unlink your GA4 property later.
+            </p>
+          )}
         </div>
       ) : report?.error ? (
         /* Linked but the API call failed */
