@@ -1474,6 +1474,47 @@ function fmtMetric(key: GA4Metric, v: number): string {
   return v.toLocaleString();
 }
 
+type GA4Row = { label: string; value: number; sub?: number };
+type GA4Breakdowns = {
+  topPages?: GA4Row[]; channels?: GA4Row[]; sources?: GA4Row[];
+  countries?: GA4Row[]; devices?: GA4Row[]; events?: GA4Row[];
+  realtime?: { activeUsers: number; byCountry: GA4Row[] };
+};
+
+// Compact ranked table: label + value with a proportional bar.
+function GA4Table({ title, caption, rows, color }: {
+  title: string; caption: string; rows?: GA4Row[]; color: string;
+}) {
+  const { t } = useLanguage();
+  const data = (rows ?? []).slice(0, 8);
+  const max = Math.max(1, ...data.map(r => r.value));
+  return (
+    <div style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: "12px", padding: "14px 16px", display: "flex", flexDirection: "column", gap: "10px", minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "8px" }}>
+        <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)" }}>{title}</span>
+        <span style={{ fontSize: "11px", color: "var(--color-text-secondary)", textTransform: "lowercase" }}>{caption}</span>
+      </div>
+      {data.length === 0 ? (
+        <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", padding: "6px 0" }}>{t("ga4NoRows")}</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "7px" }}>
+          {data.map((r, i) => (
+            <div key={i} style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px" }}>
+                <span title={r.label} style={{ fontSize: "12px", color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.label || "—"}</span>
+                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-primary)", flexShrink: 0 }}>{r.value.toLocaleString()}</span>
+              </div>
+              <div style={{ height: "3px", borderRadius: "2px", background: "var(--color-border)", overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${(r.value / max) * 100}%`, background: color, borderRadius: "2px" }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Friendly first-run setup guide shown when no GA4 properties are available yet.
 // Keeps the raw Google API error tucked behind a "technical details" toggle so a
 // first-time user sees clear steps instead of a scary red message.
@@ -1552,6 +1593,7 @@ function GA4Tab({ domain, period, setPeriod, periodOptions }: {
   const [loading, setLoading] = useState(true);
   const [linking, setLinking] = useState(false);
   const [propsMeta, setPropsMeta] = useState<{ connected: number; errors?: string[] } | null>(null);
+  const [bd, setBd] = useState<GA4Breakdowns | null>(null);
   const { t } = useLanguage();
 
   const metricLabel = (key: GA4Metric) =>
@@ -1569,11 +1611,23 @@ function GA4Tab({ domain, period, setPeriod, periodOptions }: {
       const res = await fetch(`/api/ga4/report?domain=${encodeURIComponent(domain)}&period=${encodeURIComponent(period)}`);
       const data: GA4Report = await res.json();
       setReport(data);
-      if (!data.linked) loadProperties();
+      if (!data.linked) { loadProperties(); setBd(null); }
+      else if (!data.error) loadBreakdowns();
+      else setBd(null);
     } catch {
       setReport({ linked: false });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadBreakdowns = async () => {
+    try {
+      const res = await fetch(`/api/ga4/breakdowns?domain=${encodeURIComponent(domain)}&period=${encodeURIComponent(period)}`);
+      const data = await res.json();
+      setBd(data.linked && !data.error ? data : null);
+    } catch {
+      setBd(null);
     }
   };
 
@@ -1797,6 +1851,31 @@ function GA4Tab({ domain, period, setPeriod, periodOptions }: {
           ) : (
             <div style={{ height: "200px", borderRadius: "12px", background: "var(--color-bg)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-secondary)", fontSize: "13px" }}>
               {t("ga4NoData")}
+            </div>
+          )}
+
+          {/* Realtime strip */}
+          {bd?.realtime && (
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", padding: "10px 14px", borderRadius: "10px", background: "var(--color-bg)", border: "1px solid var(--color-border)" }}>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#10B981", boxShadow: "0 0 0 3px rgba(16,185,129,0.15)" }} />
+              <span style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>{t("ga4Realtime")}:</span>
+              <span style={{ fontSize: "18px", fontWeight: 700, color: "var(--color-text-primary)" }}>{bd.realtime.activeUsers.toLocaleString()}</span>
+              <div style={{ flex: 1 }} />
+              <span style={{ fontSize: "12px", color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "60%" }}>
+                {bd.realtime.byCountry.slice(0, 5).map(c => `${c.label} ${c.value}`).join(" · ")}
+              </span>
+            </div>
+          )}
+
+          {/* Breakdown tables */}
+          {bd && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "14px" }}>
+              <GA4Table title={t("ga4TopPages")} caption={t("ga4CapViews")} rows={bd.topPages} color="#3B82F6" />
+              <GA4Table title={t("ga4Channels")} caption={t("ga4CapSessions")} rows={bd.channels} color="#8B5CF6" />
+              <GA4Table title={t("ga4Sources")} caption={t("ga4CapSessions")} rows={bd.sources} color="#10B981" />
+              <GA4Table title={t("ga4Countries")} caption={t("ga4CapUsers")} rows={bd.countries} color="#3B82F6" />
+              <GA4Table title={t("ga4Devices")} caption={t("ga4CapSessions")} rows={bd.devices} color="#F59E0B" />
+              <GA4Table title={t("ga4Events")} caption={t("ga4CapEvents")} rows={bd.events} color="#8B5CF6" />
             </div>
           )}
 
