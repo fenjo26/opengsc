@@ -1474,6 +1474,70 @@ function fmtMetric(key: GA4Metric, v: number): string {
   return v.toLocaleString();
 }
 
+// Friendly first-run setup guide shown when no GA4 properties are available yet.
+// Keeps the raw Google API error tucked behind a "technical details" toggle so a
+// first-time user sees clear steps instead of a scary red message.
+function GA4SetupSteps({ errors }: { errors?: string[] }) {
+  const { t } = useLanguage();
+  const [showDetails, setShowDetails] = useState(false);
+
+  const linkStyle: React.CSSProperties = { color: "#3B82F6", fontWeight: 600, textDecoration: "none" };
+  const stepTitle: React.CSSProperties = { fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "3px" };
+  const stepDesc: React.CSSProperties = { fontSize: "12.5px", color: "var(--color-text-secondary)", lineHeight: 1.6 };
+
+  return (
+    <div style={{ width: "100%", maxWidth: "560px", textAlign: "left", background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: "12px", padding: "20px 22px", display: "flex", flexDirection: "column", gap: "16px" }}>
+      <div>
+        <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "4px" }}>{t("ga4SetupTitle")}</div>
+        <div style={{ fontSize: "12.5px", color: "var(--color-text-secondary)" }}>{t("ga4SetupIntro")}</div>
+      </div>
+
+      <div>
+        <div style={stepTitle}>{t("ga4Step1Title")}</div>
+        <div style={stepDesc}>
+          {t("ga4Step1Desc")}
+          <div style={{ display: "flex", flexDirection: "column", gap: "2px", marginTop: "6px" }}>
+            <a href="https://console.cloud.google.com/apis/library/analyticsdata.googleapis.com" target="_blank" rel="noreferrer" style={linkStyle}>{t("ga4EnableDataApi")}</a>
+            <a href="https://console.cloud.google.com/apis/library/analyticsadmin.googleapis.com" target="_blank" rel="noreferrer" style={linkStyle}>{t("ga4EnableAdminApi")}</a>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div style={stepTitle}>{t("ga4Step2Title")}</div>
+        <div style={stepDesc}>
+          {t("ga4Step2Desc")}{" "}
+          <a href="/settings" style={linkStyle}>{t("ga4OpenSettings")}</a>
+        </div>
+      </div>
+
+      <div>
+        <div style={stepTitle}>{t("ga4Step3Title")}</div>
+        <div style={stepDesc}>
+          {t("ga4Step3Desc")}{" "}
+          <a href="https://analytics.google.com/" target="_blank" rel="noreferrer" style={linkStyle}>{t("ga4OpenAnalytics")}</a>
+        </div>
+      </div>
+
+      <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", fontStyle: "italic" }}>{t("ga4SetupAfter")}</div>
+
+      {errors && errors.length > 0 && (
+        <div>
+          <button onClick={() => setShowDetails(v => !v)} style={{ fontSize: "11.5px", color: "var(--color-text-secondary)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }}>
+            {showDetails ? t("ga4HideDetails") : t("ga4ShowDetails")}
+          </button>
+          {showDetails && (
+            <div style={{ marginTop: "8px", fontSize: "11px", color: "#F87171", background: "var(--color-card)", padding: "8px 10px", borderRadius: "8px", lineHeight: 1.5, overflow: "auto" }}>
+              <div style={{ fontWeight: 700, marginBottom: 4, color: "var(--color-text-secondary)" }}>{t("ga4ApiSaid")}</div>
+              {errors.map((e, i) => <div key={i}>{e}</div>)}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function GA4Tab({ domain, period, setPeriod, periodOptions }: {
   domain: string;
   period: string;
@@ -1650,17 +1714,7 @@ function GA4Tab({ domain, period, setPeriod, periodOptions }: {
           </div>
 
           {properties.length === 0 && !propsLoading ? (
-            <div style={{ maxWidth: "460px", display: "flex", flexDirection: "column", gap: "8px" }}>
-              <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
-                {t("ga4NoPropsLead")} {propsMeta?.connected ?? 0} {t("ga4AccountsConnected")}. {t("ga4NoPropsCauses")}
-              </p>
-              {propsMeta?.errors && propsMeta.errors.length > 0 && (
-                <div style={{ fontSize: "11px", color: "#F87171", background: "var(--color-bg)", padding: "8px 10px", borderRadius: "8px", textAlign: "left", lineHeight: 1.5, overflow: "auto" }}>
-                  <div style={{ fontWeight: 700, marginBottom: 4, color: "var(--color-text-secondary)" }}>{t("ga4ApiSaid")}</div>
-                  {propsMeta.errors.map((e, i) => <div key={i}>{e}</div>)}
-                </div>
-              )}
-            </div>
+            <GA4SetupSteps errors={propsMeta?.errors} />
           ) : (
             <p style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
               {t("ga4CanUnlinkLater")}
@@ -1668,12 +1722,12 @@ function GA4Tab({ domain, period, setPeriod, periodOptions }: {
           )}
         </div>
       ) : report?.error ? (
-        /* Linked but the API call failed */
+        /* Linked but the API call failed — show the same friendly guide + details */
         <div style={{ background: "var(--color-card)", borderRadius: "16px", border: "1px solid var(--color-border)", padding: "32px", display: "flex", flexDirection: "column", gap: "16px", alignItems: "center", textAlign: "center" }}>
           <p style={{ fontSize: "14px", color: "var(--color-text-secondary)", maxWidth: "460px", lineHeight: 1.6 }}>
             {t("ga4LoadError")}
           </p>
-          <code style={{ fontSize: "12px", color: "#F87171", background: "var(--color-bg)", padding: "6px 10px", borderRadius: "6px", maxWidth: "100%", overflow: "auto" }}>{report.error}</code>
+          <GA4SetupSteps errors={[report.error]} />
           <button onClick={unlinkProperty} style={{ fontSize: "12px", color: "var(--color-text-secondary)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
             {t("ga4Unlink")}
           </button>
