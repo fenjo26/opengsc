@@ -68,6 +68,7 @@ export const authOptions: NextAuthOptions = {
             refresh_token: account.refresh_token ?? existing.refresh_token,
             expires_at:    account.expires_at,
             id_token:      account.id_token,
+            scope:         account.scope ?? existing.scope,
           },
         });
       } else {

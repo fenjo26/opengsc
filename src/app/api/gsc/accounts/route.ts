@@ -12,6 +12,7 @@ export async function GET() {
   }
 
   const GSC_SCOPE = 'https://www.googleapis.com/auth/webmasters.readonly';
+  const GA4_SCOPE = 'https://www.googleapis.com/auth/analytics.readonly';
 
   const accounts = await prisma.account.findMany({
     where: { userId, provider: 'google' },
@@ -23,6 +24,7 @@ export async function GET() {
     accounts.map(async (acc: typeof accounts[number]) => {
       // Check scope stored in DB first (fast, no API call needed)
       const gscAccess = acc.scope ? acc.scope.includes(GSC_SCOPE) : false;
+      const ga4Access = acc.scope ? acc.scope.includes(GA4_SCOPE) : false;
 
       try {
         const oauth2Client = new google.auth.OAuth2(
@@ -41,9 +43,10 @@ export async function GET() {
           picture: info.data.picture,
           connected: true,
           gscAccess,
+          ga4Access,
         };
       } catch {
-        return { id: acc.id, email: acc.providerAccountId, picture: null, connected: false, gscAccess };
+        return { id: acc.id, email: acc.providerAccountId, picture: null, connected: false, gscAccess, ga4Access };
       }
     })
   );

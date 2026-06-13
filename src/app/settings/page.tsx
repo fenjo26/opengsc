@@ -13,7 +13,7 @@ import { useLanguage } from "@/lib/i18n/LanguageProvider";
 type NavItem = "accounts" | "teams" | "api" | "indexing-api" | "members" | "preferences" | "supersites";
 
 interface ConnectedAccount {
-  id: string; email: string; picture: string | null; connected: boolean; gscAccess: boolean;
+  id: string; email: string; picture: string | null; connected: boolean; gscAccess: boolean; ga4Access?: boolean;
 }
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
@@ -87,7 +87,11 @@ function AccountsSection({ user, accounts, loadingAccounts, removing, onAdd, onR
                 {t("scStatus")}: <span style={{ color: "#10B981" }}>{t("scConnected")}</span>
               </span>
               <span style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>
-                {t("ga4Status")}: <span style={{ color: "#F59E0B" }}>{t("scNotConnected")}</span>
+                {t("ga4Status")}: {accounts.some(a => a.ga4Access) ? (
+                  <span style={{ color: "#10B981" }}>{t("scConnected")}</span>
+                ) : (
+                  <span style={{ color: "#F59E0B" }}>{t("scNotConnected")}</span>
+                )}
               </span>
             </div>
             <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.7 }}>
@@ -154,6 +158,9 @@ function AccountsSection({ user, accounts, loadingAccounts, removing, onAdd, onR
                   </div>
                   <span style={{ fontSize: "11px", display: "flex", alignItems: "center", gap: "3px", color: acc.gscAccess ? "#10B981" : "#f87171", flexShrink: 0 }}>
                     GSC {acc.gscAccess ? <CheckCircle size={11} color="#10B981" /> : <AlertCircle size={11} color="#f87171" />}
+                  </span>
+                  <span style={{ fontSize: "11px", display: "flex", alignItems: "center", gap: "3px", color: acc.ga4Access ? "#10B981" : "var(--color-text-secondary)", flexShrink: 0 }}>
+                    GA4 {acc.ga4Access ? <CheckCircle size={11} color="#10B981" /> : <AlertCircle size={11} color="#94a3b8" />}
                   </span>
                   {/* Delete button */}
                   {confirmDeleteId !== acc.id && (

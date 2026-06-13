@@ -1487,6 +1487,7 @@ function GA4Tab({ domain, period, setPeriod, periodOptions }: {
   const [report, setReport] = useState<GA4Report | null>(null);
   const [loading, setLoading] = useState(true);
   const [linking, setLinking] = useState(false);
+  const [propsMeta, setPropsMeta] = useState<{ connected: number; errors?: string[] } | null>(null);
 
   const ga4Linked = report?.linked === true;
 
@@ -1511,8 +1512,10 @@ function GA4Tab({ domain, period, setPeriod, periodOptions }: {
       const res = await fetch(`/api/ga4/properties`);
       const data = await res.json();
       setProperties(data.properties ?? []);
+      setPropsMeta({ connected: data.connected_accounts ?? 0, errors: data.errors });
     } catch {
       setProperties([]);
+      setPropsMeta(null);
     } finally {
       setPropsLoading(false);
     }
