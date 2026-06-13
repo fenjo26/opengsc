@@ -195,6 +195,8 @@
   "ga4CapUsers": "users",
   "ga4CapEvents": "events",
   "ga4NoRows": "No data",
+  "ga4AccountsTitle": "Connected accounts",
+  "ga4PropsCount": "properties",
   "idxChecked": "Checked",
   "idxErrors": "errors",
   "idxInIndex": "In index",

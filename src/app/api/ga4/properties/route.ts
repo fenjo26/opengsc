@@ -11,8 +11,15 @@ export type GA4Property = {
   account: string;     // owning GA4 account display name
 };
 
+export type GA4AccountInfo = {
+  email: string;       // the connected Google login
+  count: number;       // GA4 properties found via this account
+  error?: string;      // Admin API error, if any
+};
+
 // GET /api/ga4/properties
-// Lists every GA4 property visible across all linked Google accounts.
+// Lists every GA4 property visible across ALL linked Google accounts, plus a
+// per-account breakdown so the user can see what each account contributed.
 export async function GET() {
   const session = await getServerSession(authOptions);
   const userId = (session?.user as any)?.id as string | undefined;
@@ -20,31 +27,38 @@ export async function GET() {
 
   const accounts = (await prisma.account.findMany({
     where: { userId, provider: 'google' },
-    select: { id: true, access_token: true, refresh_token: true, expires_at: true },
-  })) as GoogleAccount[];
+    select: { id: true, providerAccountId: true, access_token: true, refresh_token: true, expires_at: true },
+  })) as (GoogleAccount & { providerAccountId: string })[];
 
   if (accounts.length === 0) {
-    return NextResponse.json({ properties: [], connected_accounts: 0 });
+    return NextResponse.json({ properties: [], connected_accounts: 0, accountsInfo: [] });
   }
 
   const byId = new Map<string, GA4Property>();
-  const errors: string[] = [];
+  const accountsInfo: GA4AccountInfo[] = [];
 
   await Promise.allSettled(
     accounts.map(async (account) => {
+      const oauth2 = makeOAuth2(account);
+
+      // Resolve a friendly email label for this account (best-effort).
+      let email = account.providerAccountId;
       try {
-        const oauth2 = makeOAuth2(account);
+        const info = await google.oauth2({ version: 'v2', auth: oauth2 }).userinfo.get();
+        if (info.data.email) email = info.data.email;
+      } catch { /* keep providerAccountId */ }
+
+      let count = 0;
+      try {
         const admin = google.analyticsadmin({ version: 'v1beta', auth: oauth2 });
-        // accountSummaries.list returns accounts AND their property summaries
-        // in a single paginated call — exactly what we need for a picker.
         let pageToken: string | undefined;
         do {
           const res = await admin.accountSummaries.list({ pageSize: 200, pageToken });
           for (const acc of res.data.accountSummaries ?? []) {
             for (const prop of acc.propertySummaries ?? []) {
-              // prop.property looks like "properties/123456789"
               const id = (prop.property ?? '').split('/')[1];
               if (!id) continue;
+              count++;
               if (!byId.has(id)) {
                 byId.set(id, {
                   id,
@@ -56,19 +70,21 @@ export async function GET() {
           }
           pageToken = res.data.nextPageToken ?? undefined;
         } while (pageToken);
+        accountsInfo.push({ email, count });
       } catch (err: any) {
-        errors.push(`Account ${account.id}: ${err?.message ?? 'error'}`);
+        accountsInfo.push({ email, count: 0, error: err?.message ?? 'error' });
       }
     })
   );
 
-  const properties = Array.from(byId.values()).sort((a, b) =>
-    a.name.localeCompare(b.name)
-  );
+  const properties = Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
+  accountsInfo.sort((a, b) => a.email.localeCompare(b.email));
+  const errors = accountsInfo.filter(a => a.error).map(a => `${a.email}: ${a.error}`);
 
   return NextResponse.json({
     properties,
     connected_accounts: accounts.length,
+    accountsInfo,
     errors: errors.length ? errors : undefined,
   });
 }

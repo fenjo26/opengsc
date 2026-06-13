@@ -1593,7 +1593,7 @@ function GA4Tab({ domain, period, setPeriod, periodOptions }: {
   const [report, setReport] = useState<GA4Report | null>(null);
   const [loading, setLoading] = useState(true);
   const [linking, setLinking] = useState(false);
-  const [propsMeta, setPropsMeta] = useState<{ connected: number; errors?: string[] } | null>(null);
+  const [propsMeta, setPropsMeta] = useState<{ connected: number; errors?: string[]; accountsInfo?: { email: string; count: number; error?: string }[] } | null>(null);
   const [bd, setBd] = useState<GA4Breakdowns | null>(null);
   const { t } = useLanguage();
 
@@ -1638,7 +1638,7 @@ function GA4Tab({ domain, period, setPeriod, periodOptions }: {
       const res = await fetch(`/api/ga4/properties`);
       const data = await res.json();
       setProperties(data.properties ?? []);
-      setPropsMeta({ connected: data.connected_accounts ?? 0, errors: data.errors });
+      setPropsMeta({ connected: data.connected_accounts ?? 0, errors: data.errors, accountsInfo: data.accountsInfo });
     } catch {
       setProperties([]);
       setPropsMeta(null);
@@ -1767,6 +1767,23 @@ function GA4Tab({ domain, period, setPeriod, periodOptions }: {
               <Link2 size={15} /> {linking ? t("ga4Linking") : t("ga4LinkBtn")}
             </button>
           </div>
+
+          {/* Per-account breakdown — which connected account contributed what */}
+          {propsMeta?.accountsInfo && propsMeta.accountsInfo.length > 0 && (
+            <div style={{ width: "100%", maxWidth: "460px", textAlign: "left", display: "flex", flexDirection: "column", gap: "6px" }}>
+              <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{t("ga4AccountsTitle")}</div>
+              {propsMeta.accountsInfo.map((a, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", fontSize: "12px", padding: "5px 0", borderBottom: "1px solid var(--color-border)" }}>
+                  <span style={{ color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.email}</span>
+                  {a.error ? (
+                    <span title={a.error} style={{ color: "#F87171", flexShrink: 0, maxWidth: "55%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>⚠ {a.error}</span>
+                  ) : (
+                    <span style={{ color: a.count > 0 ? "#10B981" : "var(--color-text-secondary)", fontWeight: 600, flexShrink: 0 }}>{a.count} {t("ga4PropsCount")}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
 
           {properties.length === 0 && !propsLoading ? (
             <GA4SetupSteps errors={propsMeta?.errors} />
