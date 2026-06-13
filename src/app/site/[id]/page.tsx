@@ -1457,21 +1457,91 @@ function FilterDd({ positionFilter, onPositionFilter, filterDimension, filterTex
 }
 
 // ─── GA4 Tab ──────────────────────────────────────────────────────────────────
+type GA4Property = { id: string; name: string; account: string };
+type GA4Report = {
+  linked: boolean;
+  property?: { id: string; name: string };
+  totals?: { sessions: number; engagement: number; events: number; revenue: number };
+  deltas?: { sessions: number; engagement: number; events: number; revenue: number };
+  series?: { date: string; sessions: number; engagement: number; events: number; revenue: number }[];
+  error?: string;
+};
+
+function fmtMetric(key: GA4Metric, v: number): string {
+  if (key === "engagement") return `${v}%`;
+  if (key === "revenue") return v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  if (v >= 1000) return `${(v / 1000).toFixed(1)}k`;
+  return v.toLocaleString();
+}
+
 function GA4Tab({ domain, period, setPeriod, periodOptions }: {
   domain: string;
   period: string;
   setPeriod: (p: string) => void;
   periodOptions: string[];
 }) {
-  const [ga4Linked, setGA4Linked] = useState(false);
   const [activeMetrics, setActiveMetrics] = useState<Set<GA4Metric>>(new Set(["sessions", "engagement", "events", "revenue"]));
   const [selectedProp, setSelectedProp] = useState("");
+  const [properties, setProperties] = useState<GA4Property[]>([]);
+  const [propsLoading, setPropsLoading] = useState(false);
+  const [report, setReport] = useState<GA4Report | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [linking, setLinking] = useState(false);
 
-  const mockProps = [
-    `${domain} - GA4`,
-    `${domain} (All Web Site Data)`,
-    `${domain} - Prod`,
-  ];
+  const ga4Linked = report?.linked === true;
+
+  // Fetch the report (and, if not linked, the available properties)
+  const loadReport = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/ga4/report?domain=${encodeURIComponent(domain)}&period=${encodeURIComponent(period)}`);
+      const data: GA4Report = await res.json();
+      setReport(data);
+      if (!data.linked) loadProperties();
+    } catch {
+      setReport({ linked: false });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadProperties = async () => {
+    setPropsLoading(true);
+    try {
+      const res = await fetch(`/api/ga4/properties`);
+      const data = await res.json();
+      setProperties(data.properties ?? []);
+    } catch {
+      setProperties([]);
+    } finally {
+      setPropsLoading(false);
+    }
+  };
+
+  useEffect(() => { loadReport(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [domain, period]);
+
+  const linkProperty = async () => {
+    const prop = properties.find(p => p.id === selectedProp);
+    if (!prop) return;
+    setLinking(true);
+    try {
+      await fetch(`/api/ga4/link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain, propertyId: prop.id, propertyName: prop.name }),
+      });
+      await loadReport();
+    } finally {
+      setLinking(false);
+    }
+  };
+
+  const unlinkProperty = async () => {
+    await fetch(`/api/ga4/link?domain=${encodeURIComponent(domain)}`, { method: "DELETE" });
+    setSelectedProp("");
+    setReport({ linked: false });
+    loadProperties();
+  };
 
   const toggleMetric = (m: GA4Metric) => setActiveMetrics(p => {
     const n = new Set(p); n.has(m) ? n.delete(m) : n.add(m); return n;
@@ -1522,8 +1592,13 @@ function GA4Tab({ domain, period, setPeriod, periodOptions }: {
         </SimpleDropdown>
       </div>
 
-      {/* Onboarding card */}
-      {!ga4Linked ? (
+      {/* Initial load */}
+      {loading && !report ? (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "80px 32px", color: "var(--color-text-secondary)", fontSize: "13px" }}>
+          Loading GA4…
+        </div>
+      ) : !ga4Linked ? (
+        /* Onboarding card — pick a real GA4 property */
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "20px", padding: "64px 32px", background: "var(--color-card)", borderRadius: "16px", border: "1px solid var(--color-border)", textAlign: "center" }}>
           {/* GA logo */}
           <div style={{ width: "56px", height: "56px", borderRadius: "14px", background: "linear-gradient(135deg, #e8710a 0%, #f9a825 100%)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "26px", boxShadow: "0 4px 16px rgba(232,113,10,0.3)" }}>
@@ -1543,41 +1618,112 @@ function GA4Tab({ domain, period, setPeriod, periodOptions }: {
             <select
               value={selectedProp}
               onChange={e => setSelectedProp(e.target.value)}
+              disabled={propsLoading || properties.length === 0}
               style={{ width: "100%", padding: "10px 14px", borderRadius: "10px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: selectedProp ? "var(--color-text-primary)" : "var(--color-text-secondary)", fontSize: "14px", outline: "none", cursor: "pointer" }}
             >
-              <option value="">Select GA4 Property…</option>
-              {mockProps.map(p => <option key={p} value={p}>{p}</option>)}
+              <option value="">
+                {propsLoading ? "Loading properties…" : properties.length === 0 ? "No GA4 properties found" : "Select GA4 Property…"}
+              </option>
+              {properties.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.name}{p.account ? ` — ${p.account}` : ""} ({p.id})
+                </option>
+              ))}
             </select>
             <button
-              onClick={() => { if (selectedProp) setGA4Linked(true); }}
-              style={{ width: "100%", padding: "10px 20px", borderRadius: "10px", border: "none", background: selectedProp ? "#3B82F6" : "var(--color-border)", color: selectedProp ? "#fff" : "var(--color-text-secondary)", fontSize: "14px", fontWeight: 600, cursor: selectedProp ? "pointer" : "not-allowed", transition: "all 0.15s", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
+              onClick={linkProperty}
+              disabled={!selectedProp || linking}
+              style={{ width: "100%", padding: "10px 20px", borderRadius: "10px", border: "none", background: selectedProp && !linking ? "#3B82F6" : "var(--color-border)", color: selectedProp && !linking ? "#fff" : "var(--color-text-secondary)", fontSize: "14px", fontWeight: 600, cursor: selectedProp && !linking ? "pointer" : "not-allowed", transition: "all 0.15s", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
             >
-              <Link2 size={15} /> Link Property
+              <Link2 size={15} /> {linking ? "Linking…" : "Link Property"}
             </button>
           </div>
 
           <p style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
-            You can always unlink your GA4 property later.
+            {properties.length === 0 && !propsLoading
+              ? "No properties? Make sure your Google account has access to a GA4 property and that the Analytics API scope is granted (re-connect the account)."
+              : "You can always unlink your GA4 property later."}
           </p>
         </div>
+      ) : report?.error ? (
+        /* Linked but the API call failed */
+        <div style={{ background: "var(--color-card)", borderRadius: "16px", border: "1px solid var(--color-border)", padding: "32px", display: "flex", flexDirection: "column", gap: "16px", alignItems: "center", textAlign: "center" }}>
+          <p style={{ fontSize: "14px", color: "var(--color-text-secondary)", maxWidth: "460px", lineHeight: 1.6 }}>
+            Couldn’t load GA4 data for this property. The linked Google account may have lost access, or the Analytics scope hasn’t been granted yet. Try re-connecting the account, or unlink and pick another property.
+          </p>
+          <code style={{ fontSize: "12px", color: "#F87171", background: "var(--color-bg)", padding: "6px 10px", borderRadius: "6px", maxWidth: "100%", overflow: "auto" }}>{report.error}</code>
+          <button onClick={unlinkProperty} style={{ fontSize: "12px", color: "var(--color-text-secondary)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+            Unlink GA4
+          </button>
+        </div>
       ) : (
-        /* Linked state — placeholder chart area */
-        <div style={{ background: "var(--color-card)", borderRadius: "16px", border: "1px solid var(--color-border)", padding: "32px", display: "flex", flexDirection: "column", gap: "24px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-            {GA4_METRICS.filter(m => activeMetrics.has(m.key)).map(m => (
-              <div key={m.key} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ color: m.color }}>{m.icon}</span>
-                <span style={{ fontSize: "22px", fontWeight: 700, color: "var(--color-text-primary)" }}>
-                  {m.key === "sessions" ? "4.2k" : m.key === "engagement" ? "61.3%" : m.key === "events" ? "128" : "$0"}
-                </span>
-                <span style={{ fontSize: "12px", color: "#10B981", fontWeight: 600 }}>+18%</span>
-              </div>
-            ))}
+        /* Linked state — real metrics + chart */
+        <div style={{ background: "var(--color-card)", borderRadius: "16px", border: "1px solid var(--color-border)", padding: "32px", display: "flex", flexDirection: "column", gap: "24px", position: "relative" }}>
+          {loading && (
+            <div style={{ position: "absolute", top: 14, right: 18, fontSize: "11px", color: "var(--color-text-secondary)" }}>Updating…</div>
+          )}
+          {report?.property?.name && (
+            <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
+              {report.property.name} · property {report.property.id}
+            </div>
+          )}
+          <div style={{ display: "flex", alignItems: "center", gap: "28px", flexWrap: "wrap" }}>
+            {GA4_METRICS.filter(m => activeMetrics.has(m.key)).map(m => {
+              const val = report?.totals?.[m.key] ?? 0;
+              const delta = report?.deltas?.[m.key] ?? 0;
+              return (
+                <div key={m.key} style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+                  <span style={{ color: m.color }}>{m.icon}</span>
+                  <span style={{ fontSize: "22px", fontWeight: 700, color: "var(--color-text-primary)" }}>
+                    {fmtMetric(m.key, val)}
+                  </span>
+                  <span style={{ fontSize: "12px", color: delta >= 0 ? "#10B981" : "#EF4444", fontWeight: 600 }}>
+                    {delta >= 0 ? "+" : ""}{delta}%
+                  </span>
+                </div>
+              );
+            })}
           </div>
-          <div style={{ height: "200px", borderRadius: "12px", background: "var(--color-bg)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-secondary)", fontSize: "13px" }}>
-            GA4 chart will appear here
-          </div>
-          <button onClick={() => setGA4Linked(false)} style={{ alignSelf: "flex-end", fontSize: "12px", color: "var(--color-text-secondary)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+
+          {report?.series && report.series.length > 0 ? (
+            <div style={{ height: "260px" }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={report.series} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
+                  <XAxis dataKey="date" tickFormatter={(d: string) => (typeof d === "string" && d.length >= 10 ? d.slice(5) : d)} tick={{ fontSize: 10, fill: "var(--color-text-secondary)" }} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={24} />
+                  <YAxis yAxisId="left" tick={{ fontSize: 10, fill: "var(--color-text-secondary)" }} axisLine={false} tickLine={false} width={40} />
+                  <YAxis yAxisId="right" orientation="right" domain={[0, 100]} tick={{ fontSize: 10, fill: "var(--color-text-secondary)" }} axisLine={false} tickLine={false} width={36} />
+                  <Tooltip
+                    contentStyle={{ background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 12 }}
+                    formatter={(value: any, name: any) => {
+                      if (name === "Engagement Rate") return [`${value}%`, name];
+                      if (name === "Revenue") return [`$${value}`, name];
+                      return [Number(value).toLocaleString(), name];
+                    }}
+                  />
+                  {GA4_METRICS.filter(m => activeMetrics.has(m.key)).map(m => (
+                    <Line
+                      key={m.key}
+                      yAxisId={m.key === "engagement" ? "right" : "left"}
+                      type="monotone"
+                      dataKey={m.key}
+                      name={m.label}
+                      stroke={m.color}
+                      strokeWidth={2}
+                      dot={false}
+                      isAnimationActive={false}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div style={{ height: "200px", borderRadius: "12px", background: "var(--color-bg)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-secondary)", fontSize: "13px" }}>
+              No data for this period
+            </div>
+          )}
+
+          <button onClick={unlinkProperty} style={{ alignSelf: "flex-end", fontSize: "12px", color: "var(--color-text-secondary)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
             Unlink GA4
           </button>
         </div>

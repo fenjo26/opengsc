@@ -90,6 +90,10 @@ model Site {
   clarityToken          String?   // Data Export API token (per-project in Clarity)
   clarityProjectId      String?   // Clarity project ID (shown in Clarity dashboard URL)
 
+  // Google Analytics 4 integration
+  ga4PropertyId         String?   // GA4 numeric property ID (e.g. "123456789")
+  ga4PropertyName       String?   // GA4 property display name (cached for UI)
+
   @@unique([userId, siteId])
 }
 
