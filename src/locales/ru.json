@@ -231,6 +231,7 @@
   "idxBalance": "баланс",
   "idxAdditional": "Дополнительно:",
   "idxSendTo2index": "Отправить в 2index",
+  "idxCheckIndex": "Проверить индексацию",
   "idxPagesEmpty": "Список страниц пуст",
   "idxPagesEmptyHint1": "Нажмите",
   "idxPagesEmptyHint2": "чтобы собрать URL из sitemap.",

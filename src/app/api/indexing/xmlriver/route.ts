@@ -3,9 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
-// POST { urls: string[] }
-// Checks each URL's Google indexation status via XML River API.
-// Returns { results: [{ url, indexed: bool, status: string }] }
+// POST { siteDbId: string, urls: string[] }
+// Checks each URL's indexation status via XML River API and persists results.
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   const userId = (session?.user as any)?.id as string | undefined;
@@ -21,35 +20,54 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json();
+  const siteDbId: string | undefined = body.siteDbId;
   const urls: string[] = (body.urls ?? []).slice(0, 50);
 
   if (urls.length === 0) {
     return NextResponse.json({ error: 'No URLs provided' }, { status: 400 });
   }
 
-  const results: Array<{ url: string; indexed: boolean; status: string; error?: string }> = [];
+  let checked = 0;
+  let errors = 0;
 
   for (const url of urls) {
     try {
       const apiUrl = `https://xmlriver.com/search_console/json/?user=${encodeURIComponent(user.xmlRiverUserId)}&key=${encodeURIComponent(user.xmlRiverApiKey)}&url=${encodeURIComponent(url)}`;
       const res = await fetch(apiUrl, { signal: AbortSignal.timeout(10000) });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
-      if (data?.error) {
-        results.push({ url, indexed: false, status: 'error', error: data.error });
-        continue;
+      const xrStatus = data?.error
+        ? 'error'
+        : !!(data?.indexed === true || data?.content?.indexed === true || data?.content?.index === 'yes')
+          ? 'indexed'
+          : 'not_indexed';
+
+      if (siteDbId) {
+        await prisma.sitemapUrl.upsert({
+          where: { siteId_url: { siteId: siteDbId, url } },
+          create: { siteId: siteDbId, url, xrStatus, xrChecked: new Date() },
+          update: { xrStatus, xrChecked: new Date() },
+        });
       }
 
-      // XML River returns "content" field with indexation data
-      // Typical response: { content: { indexed: true/false, ... } } or similar
-      const indexed = !!(data?.content?.index === 'yes' || data?.indexed === true || data?.content?.indexed === true);
-      const status = indexed ? 'Indexed' : 'Not indexed';
-
-      results.push({ url, indexed, status });
-    } catch (e: any) {
-      results.push({ url, indexed: false, status: 'error', error: e?.message ?? 'Request failed' });
+      if (xrStatus === 'error') errors++; else checked++;
+      await new Promise(r => setTimeout(r, 300));
+    } catch {
+      errors++;
     }
   }
 
-  return NextResponse.json({ results });
+  if (siteDbId) {
+    await prisma.indexingOperation.create({
+      data: {
+        siteId: siteDbId,
+        type: 'xr_check',
+        result: errors > 0 ? 'partial' : 'success',
+        detail: `checked: ${checked}, errors: ${errors}`,
+        urlCount: checked,
+      },
+    });
+  }
+
+  return NextResponse.json({ ok: true, checked, errors });
 }

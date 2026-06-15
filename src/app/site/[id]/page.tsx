@@ -2342,6 +2342,10 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
   const [checking,  setChecking]  = useState(false);
   const [checkMsg,  setCheckMsg]  = useState("");
 
+  // ── XR / Neural indexation check ──
+  const [xrChecking,  setXrChecking]  = useState(false);
+  const [xrCheckMsg,  setXrCheckMsg]  = useState("");
+
   // ── Operations history ──
   const [ops,      setOps]      = useState<any[]>([]);
   const [showOps,  setShowOps]  = useState(false);
@@ -2431,6 +2435,30 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
       if (d.ok) await loadUrls(page, statusFilter, search);
     } catch {}
     setSubmitting(false);
+  };
+
+  // ── XMLRiver / NeuralIndexer indexation check ──
+  const runXrCheck = async (via: "xr" | "neural") => {
+    const urls = selected.size > 0 ? [...selected] : urlRows.map(r => r.url);
+    if (!urls.length) return;
+    setXrChecking(true); setXrCheckMsg("");
+    try {
+      const endpoint = via === "neural"
+        ? "/api/indexing/neural/check"
+        : "/api/indexing/xmlriver";
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteDbId, urls: urls.slice(0, 50) }),
+      });
+      const d = await res.json();
+      if (!res.ok) { setXrCheckMsg(`✗ ${d.error ?? "Error"}`); return; }
+      const ok = d.checked ?? 0;
+      const err = d.errors ?? 0;
+      setXrCheckMsg(`✓ ${t("idxChecked")} ${ok} URLs${err ? ` · ${err} ${t("idxErrors")}` : ""}${d.charged != null ? ` · $${Number(d.charged).toFixed(4)}` : ""}`);
+      await loadUrls(page, statusFilter, search);
+    } catch (e: any) { setXrCheckMsg(`✗ ${e.message}`); }
+    setXrChecking(false);
   };
 
   // ── 2index.ninja submit ──
@@ -2630,7 +2658,7 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
             </div>
           )}
           {(hasXmlRiver || hasTwoIndex) && (
-            <div style={{ padding: "8px 14px", display: "flex", alignItems: "center", gap: "8px", background: "rgba(255,255,255,0.01)" }}>
+            <div style={{ padding: "8px 14px", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", background: "rgba(255,255,255,0.01)" }}>
               <span style={{ fontSize: "10px", fontWeight: 700, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{t("idxAdditional")}</span>
               {hasTwoIndex && (
                 <button onClick={runTwoIndexSubmit} disabled={submitting}
@@ -2638,6 +2666,23 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
                   <span style={{ fontSize: "9px", fontWeight: 800 }}>2I</span>
                   {submitting ? t("idxSending") : t("idxSendTo2index")}
                 </button>
+              )}
+              {hasXmlRiver && (
+                <button onClick={() => runXrCheck("xr")} disabled={xrChecking}
+                  style={{ display: "flex", alignItems: "center", gap: "4px", padding: "4px 10px", borderRadius: "6px", border: "1px solid rgba(251,191,36,0.3)", background: "transparent", color: "#fbbf24", fontSize: "11px", fontWeight: 600, cursor: xrChecking ? "not-allowed" : "pointer", opacity: xrChecking ? 0.6 : 1 }}>
+                  <span style={{ fontSize: "9px", fontWeight: 800 }}>XR</span>
+                  {xrChecking ? t("idxChecking") : t("idxCheckIndex")}
+                </button>
+              )}
+              {hasNeural && (
+                <button onClick={() => runXrCheck("neural")} disabled={xrChecking}
+                  style={{ display: "flex", alignItems: "center", gap: "4px", padding: "4px 10px", borderRadius: "6px", border: "1px solid rgba(139,92,246,0.3)", background: "transparent", color: "#a78bfa", fontSize: "11px", fontWeight: 600, cursor: xrChecking ? "not-allowed" : "pointer", opacity: xrChecking ? 0.6 : 1 }}>
+                  <span style={{ fontSize: "9px", fontWeight: 800 }}>NI</span>
+                  {xrChecking ? t("idxChecking") : t("idxCheckIndex")}
+                </button>
+              )}
+              {xrCheckMsg && (
+                <span style={{ fontSize: "11px", color: xrCheckMsg.startsWith("✓") ? "#4ADE80" : "#F87171", fontWeight: 600 }}>{xrCheckMsg}</span>
               )}
             </div>
           )}
