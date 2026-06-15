@@ -66,27 +66,11 @@ export async function POST(req: Request) {
   let firstError: any = null;
   const GSC_API = 'https://searchconsole.googleapis.com/v1/urlInspection/index:inspect';
 
-  // Debug: probe with just 1 URL first and return early if all URLs will fail anyway
-  const testUrl = urls[0];
-  const testRes = await fetch(GSC_API, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ inspectionUrl: testUrl, siteUrl: site.siteId }),
-    signal: AbortSignal.timeout(10000),
-  });
-  if (!testRes.ok) {
-    const errBody = await testRes.json().catch(() => ({}));
-    return NextResponse.json({
-      ok: false,
-      checked: 0,
-      errors: urls.length,
-      debug: {
-        httpStatus: testRes.status,
-        siteId: site.siteId,
-        inspectionUrl: testUrl,
-        googleError: errBody,
-      },
-    });
+  // URL Inspection API does not support sc-domain: properties.
+  // Convert to https:// URL-prefix format as a fallback.
+  let siteUrl = site.siteId;
+  if (siteUrl.startsWith('sc-domain:')) {
+    siteUrl = 'https://' + siteUrl.slice('sc-domain:'.length) + '/';
   }
 
   for (const url of urls.slice(0, 200)) {
@@ -97,7 +81,7 @@ export async function POST(req: Request) {
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ inspectionUrl: url, siteUrl: site.siteId }),
+        body: JSON.stringify({ inspectionUrl: url, siteUrl }),
         signal: AbortSignal.timeout(10000),
       });
 

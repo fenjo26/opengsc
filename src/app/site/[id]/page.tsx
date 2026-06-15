@@ -2411,12 +2411,8 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
         body: JSON.stringify({ siteDbId, urls: urls.slice(0, 50) }),
       });
       const d = await res.json();
-      if (d.debug) {
-        setCheckMsg(`✗ HTTP ${d.debug.httpStatus} · siteId: ${d.debug.siteId} · ${JSON.stringify(d.debug.googleError?.error?.message ?? d.debug.googleError)}`);
-      } else {
-        setCheckMsg(`✓ ${t("idxChecked")} ${d.checked ?? 0} URLs${d.errors ? ` · ${d.errors} ${t("idxErrors")}` : ""}`);
-        await loadUrls(page, statusFilter, search);
-      }
+      setCheckMsg(`✓ ${t("idxChecked")} ${d.checked ?? 0} URLs${d.errors ? ` · ${d.errors} ${t("idxErrors")}` : ""}`);
+      await loadUrls(page, statusFilter, search);
     } catch (e: any) { setCheckMsg(`✗ ${e.message}`); }
     setChecking(false);
   };
