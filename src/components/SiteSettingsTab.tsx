@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Database, BarChart3, Settings, Sparkles, Plus, X, Copy, Check, Trash2 } from "lucide-react";
+import { Settings, Sparkles, Plus, X, Copy, Check, Trash2 } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -307,7 +307,7 @@ function ClustersSection({ siteDbId }: { siteDbId: string }) {
         </div>
       ) : (
         <div style={{ padding: "20px 0", fontSize: "13px", color: "var(--color-text-secondary)", marginBottom: "12px" }}>
-          No clusters yet. Use 1-click or add manually.
+          {t("setNoClusters")}
         </div>
       )}
 
@@ -317,18 +317,18 @@ function ClustersSection({ siteDbId }: { siteDbId: string }) {
           <input
             value={newName}
             onChange={e => setNewName(e.target.value)}
-            placeholder="Cluster name (e.g. Pricing)"
+            placeholder={t("setClusterNamePlaceholder")}
             style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-primary)", fontSize: "13px", outline: "none" }}
           />
           <input
             value={newKws}
             onChange={e => setNewKws(e.target.value)}
-            placeholder="Keywords separated by commas (e.g. price, cost, plan)"
+            placeholder={t("setClusterKwPlaceholder")}
             style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-primary)", fontSize: "13px", outline: "none" }}
           />
           <div style={{ display: "flex", gap: "8px" }}>
-            <button onClick={addCluster} style={{ padding: "8px 20px", borderRadius: "6px", border: "none", background: "#8B5CF6", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>Save</button>
-            <button onClick={() => { setAdding(false); setNewName(''); setNewKws(''); }} style={{ padding: "8px 16px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", fontSize: "13px", cursor: "pointer" }}>Cancel</button>
+            <button onClick={addCluster} style={{ padding: "8px 20px", borderRadius: "6px", border: "none", background: "#8B5CF6", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>{t("setSave")}</button>
+            <button onClick={() => { setAdding(false); setNewName(''); setNewKws(''); }} style={{ padding: "8px 16px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", fontSize: "13px", cursor: "pointer" }}>{t("setCancel")}</button>
           </div>
         </div>
       ) : (
@@ -470,7 +470,7 @@ function GroupsSection({ siteDbId }: { siteDbId: string }) {
         </div>
       ) : (
         <div style={{ padding: "20px 0", fontSize: "13px", color: "var(--color-text-secondary)", marginBottom: "12px" }}>
-          No groups yet. Use 1-click or add manually.
+          {t("setNoGroups")}
         </div>
       )}
 
@@ -479,18 +479,18 @@ function GroupsSection({ siteDbId }: { siteDbId: string }) {
           <input
             value={newName}
             onChange={e => setNewName(e.target.value)}
-            placeholder="Group name (e.g. Blog)"
+            placeholder={t("setGroupNamePlaceholder")}
             style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-primary)", fontSize: "13px", outline: "none" }}
           />
           <input
             value={newPattern}
             onChange={e => setNewPattern(e.target.value)}
-            placeholder="URL pattern (e.g. /blog)"
+            placeholder={t("setUrlPatternPlaceholder")}
             style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-primary)", fontSize: "13px", outline: "none" }}
           />
           <div style={{ display: "flex", gap: "8px" }}>
-            <button onClick={addGroup} style={{ padding: "8px 20px", borderRadius: "6px", border: "none", background: "#8B5CF6", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>Save</button>
-            <button onClick={() => { setAdding(false); setNewName(''); setNewPattern(''); }} style={{ padding: "8px 16px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", fontSize: "13px", cursor: "pointer" }}>Cancel</button>
+            <button onClick={addGroup} style={{ padding: "8px 20px", borderRadius: "6px", border: "none", background: "#8B5CF6", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>{t("setSave")}</button>
+            <button onClick={() => { setAdding(false); setNewName(''); setNewPattern(''); }} style={{ padding: "8px 16px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", fontSize: "13px", cursor: "pointer" }}>{t("setCancel")}</button>
           </div>
         </div>
       ) : (
@@ -569,12 +569,12 @@ function SharedLinkSection({ siteDbId, domain }: { siteDbId: string; domain: str
             </span>
             <button onClick={copy} style={{ display: "flex", alignItems: "center", gap: "4px", padding: "4px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: copied ? "rgba(16,185,129,0.1)" : "transparent", color: copied ? "#10B981" : "var(--color-text-secondary)", fontSize: "12px", cursor: "pointer", flexShrink: 0 }}>
               {copied ? <Check size={12} /> : <Copy size={12} />}
-              {copied ? "Copied!" : "Copy"}
+              {copied ? t("setCopied") : t("setCopy")}
             </button>
           </div>
           <div style={{ display: "flex", gap: "10px" }}>
             <button onClick={revoke} style={{ padding: "8px 16px", borderRadius: "8px", border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.05)", color: "#EF4444", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
-              Revoke link
+              {t("setRevokeLink")}
             </button>
           </div>
           <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", margin: 0 }}>{t("setSharedLinkNote")}</p>
@@ -601,26 +601,26 @@ export default function SiteSettingsTab({ domain, siteDbId }: { domain: string; 
   const { t } = useLanguage();
 
   return (
-    <div style={{ padding: "24px 32px", display: "flex", flexDirection: "column", gap: "24px", maxWidth: "1200px" }}>
+    <div style={{ padding: "24px 32px", display: "flex", flexDirection: "column", gap: "24px", width: "100%", boxSizing: "border-box" }}>
 
       {/* Hero */}
       <div style={{
         background: "linear-gradient(to right, rgba(167,139,250,0.05), rgba(167,139,250,0.15))",
-        borderRadius: "12px", border: "1px solid rgba(167,139,250,0.2)", padding: "32px",
+        borderRadius: "12px", border: "1px solid rgba(167,139,250,0.2)", padding: "28px 32px",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
           <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "rgba(59,130,246,0.1)", display: "flex", alignItems: "center", justifyContent: "center", color: "#3B82F6" }}>
             <Settings size={18} />
           </div>
-          <h2 style={{ fontSize: "20px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>
+          <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>
             {t("setHelpTitle")}
           </h2>
         </div>
-        <p style={{ fontSize: "14px", color: "var(--color-text-secondary)", maxWidth: "800px", lineHeight: "1.6", marginBottom: "24px" }}>
+        <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: "1.6", margin: "0 0 20px" }}>
           {t("setHelpDesc")}
         </p>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "24px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "20px" }}>
           {[
             { color: "#10B981", bg: "rgba(16,185,129,0.1)", icon: <div style={{ width: "10px", height: "10px", borderRadius: "50%", border: "2px solid currentColor" }} />, title: t("setBrandMonitor"), desc: t("setBrandMonitorDesc") },
             { color: "#A78BFA", bg: "rgba(167,139,250,0.1)", icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>, title: t("setContentGroups"), desc: t("setContentGroupsDesc") },
@@ -631,8 +631,8 @@ export default function SiteSettingsTab({ domain, siteDbId }: { domain: string; 
                 {item.icon}
               </div>
               <div>
-                <h4 style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)", margin: "0 0 6px" }}>{item.title}</h4>
-                <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: "1.5", margin: 0 }}>{item.desc}</p>
+                <h4 style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)", margin: "0 0 4px" }}>{item.title}</h4>
+                <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5", margin: 0 }}>{item.desc}</p>
               </div>
             </div>
           ))}
@@ -644,112 +644,6 @@ export default function SiteSettingsTab({ domain, siteDbId }: { domain: string; 
       <ClustersSection siteDbId={siteDbId} />
       <GroupsSection siteDbId={siteDbId} />
       <SharedLinkSection siteDbId={siteDbId} domain={domain} />
-
-      {/* Super Site */}
-      <div style={{ background: "var(--color-card)", borderRadius: "12px", border: "1px solid var(--color-border)", padding: "24px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
-          <div style={{ color: "#A78BFA" }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
-            </svg>
-          </div>
-          <h3 style={{ fontSize: "16px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>{t("setSuperSite")}</h3>
-        </div>
-        <p style={{ fontSize: "13px", color: "var(--color-text-primary)", marginBottom: "4px" }}>{t("setSuperSiteDesc1")}</p>
-        <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", marginBottom: "16px" }}>{t("setSuperSiteDesc2")}</p>
-
-        <div style={{ background: "rgba(245,158,11,0.05)", border: "1px solid rgba(245,158,11,0.2)", borderRadius: "8px", padding: "12px 16px", marginBottom: "16px", display: "inline-flex", alignItems: "center", gap: "8px" }}>
-          <span>👑</span>
-          <span style={{ fontSize: "13px", color: "var(--color-text-primary)" }}>
-            {t("setUpgradeDomain").replace("{domain}", domain)}
-          </span>
-        </div>
-
-        <textarea
-          placeholder={t("setSitemapPlaceholder")}
-          style={{
-            display: "block", width: "100%", height: "100px", padding: "12px", borderRadius: "8px",
-            border: "1px solid var(--color-border)", background: "var(--color-bg)",
-            color: "var(--color-text-primary)", fontSize: "13px", fontFamily: "monospace",
-            resize: "none", outline: "none", boxSizing: "border-box", marginBottom: "12px",
-          }}
-        />
-        <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "16px" }}>{t("setSitemapNote")}</p>
-
-        <div style={{ display: "flex", gap: "12px" }}>
-          <button style={{ padding: "10px 24px", borderRadius: "8px", border: "none", background: "var(--color-text-secondary)", color: "#fff", fontSize: "14px", fontWeight: 600, cursor: "pointer" }}>
-            {t("setSave")}
-          </button>
-        </div>
-      </div>
-
-      {/* Data Source */}
-      <div style={{ background: "var(--color-card)", borderRadius: "12px", border: "1px solid var(--color-border)", padding: "24px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
-          <div style={{ color: "#3B82F6" }}><Database size={16} /></div>
-          <h3 style={{ fontSize: "16px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>{t("setDataSource")}</h3>
-        </div>
-        <p style={{ fontSize: "13px", color: "var(--color-text-primary)", marginBottom: "20px" }}>
-          {t("setDataSourceDesc").replace("{domain}", domain)}
-        </p>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
-          <div style={{ background: "var(--color-bg)", borderRadius: "8px", padding: "16px", border: "1px solid var(--color-border)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-              <div style={{ color: "#10B981" }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
-                </svg>
-              </div>
-              <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)" }}>📊 {t("setGsc")}</span>
-            </div>
-            <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: 0, lineHeight: "1.5" }}>{t("setGscDesc")}</p>
-          </div>
-          <div style={{ background: "var(--color-bg)", borderRadius: "8px", padding: "16px", border: "1px solid var(--color-border)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-              <div style={{ width: "14px", height: "14px", borderRadius: "50%", border: "2px solid var(--color-border)", flexShrink: 0 }} />
-              <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)" }}>✨ {t("setExtended")}</span>
-            </div>
-            <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: 0, lineHeight: "1.5" }}>
-              {t("setExtendedDesc1")} {t("setExtendedDesc2")}
-            </p>
-          </div>
-          <div style={{ background: "var(--color-bg)", borderRadius: "8px", padding: "16px", border: "1px solid var(--color-border)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-              <div style={{ width: "14px", height: "14px", borderRadius: "50%", border: "2px solid var(--color-border)", flexShrink: 0 }} />
-              <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)" }}>🔍 {t("setBigQuery")}</span>
-            </div>
-            <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: 0, lineHeight: "1.5" }}>{t("setBigQueryDesc")}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* GA4 */}
-      <div style={{ background: "var(--color-card)", borderRadius: "12px", border: "1px solid var(--color-border)", padding: "24px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
-          <div style={{ color: "#F59E0B" }}><BarChart3 size={16} /></div>
-          <h3 style={{ fontSize: "16px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>{t("setGa4")}</h3>
-        </div>
-        <p style={{ fontSize: "13px", color: "var(--color-text-primary)", marginBottom: "16px" }}>{t("setGa4Desc")}</p>
-
-        <select style={{
-          width: "300px", padding: "10px 14px", borderRadius: "8px", border: "1px solid var(--color-border)",
-          background: "var(--color-card)", color: "var(--color-text-primary)", fontSize: "13px", outline: "none",
-          marginBottom: "16px", appearance: "none", cursor: "pointer",
-        }}>
-          <option value="">{t("setSelectGa4")}</option>
-        </select>
-
-        <div style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: "8px", padding: "12px 16px", maxWidth: "600px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px", color: "#3B82F6" }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
-            </svg>
-            <span style={{ fontSize: "12px", fontWeight: 600 }}>{t("setGa4Note")}</span>
-          </div>
-          <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", margin: 0, lineHeight: "1.5" }}>{t("setGa4Sources")}</p>
-        </div>
-      </div>
 
     </div>
   );
