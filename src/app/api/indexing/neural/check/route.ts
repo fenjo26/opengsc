@@ -116,12 +116,12 @@ export async function POST(req: Request) {
             create: {
               siteId: siteDbId,
               url: r.url,
-              xrStatus: r.indexed ? 'indexed' : 'not_indexed',
-              xrChecked: now,
+              neuralStatus: r.indexed ? 'indexed' : 'not_indexed',
+              neuralAt: now,
             },
             update: {
-              xrStatus: r.indexed ? 'indexed' : 'not_indexed',
-              xrChecked: now,
+              neuralStatus: r.indexed ? 'indexed' : 'not_indexed',
+              neuralAt: now,
             },
           }),
         ),

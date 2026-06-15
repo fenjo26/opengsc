@@ -2446,10 +2446,10 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
   };
 
   // ── XMLRiver / NeuralIndexer indexation check ──
-  const runXrCheck = async (via: "xr" | "neural") => {
+  const runXrCheck = async (via: "xr" | "neural", retryCount = 0) => {
     const urls = selected.size > 0 ? [...selected] : urlRows.map(r => r.url);
     if (!urls.length) return;
-    setXrChecking(true); setXrCheckMsg("");
+    if (retryCount === 0) { setXrChecking(true); setXrCheckMsg(""); }
     try {
       const endpoint = via === "neural"
         ? "/api/indexing/neural/check"
@@ -2460,16 +2460,25 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
         body: JSON.stringify({ siteDbId, urls: urls.slice(0, 50) }),
       });
       const d = await res.json();
-      if (!res.ok) { setXrCheckMsg(`✗ ${d.error ?? "Error"}`); return; }
+      if (!res.ok) { setXrCheckMsg(`✗ ${d.error ?? "Error"}`); setXrChecking(false); return; }
       if (d.pending) {
-        setXrCheckMsg(`⏳ ${t("idxCheckPending")}`);
+        if (retryCount < 4) {
+          // Auto-retry every 30s (up to 4 times = 2 min total)
+          const secsLeft = 30;
+          setXrCheckMsg(`⏳ NeuralIndexer обрабатывает... повтор через ${secsLeft} сек (${retryCount + 1}/4)`);
+          await new Promise(r => setTimeout(r, 30000));
+          await runXrCheck(via, retryCount + 1);
+        } else {
+          setXrCheckMsg(`⏳ ${t("idxCheckPending")}`);
+          setXrChecking(false);
+        }
         return;
       }
       const ok = d.checked ?? 0;
       const err = d.errors ?? 0;
       setXrCheckMsg(`✓ ${t("idxChecked")} ${ok} URLs${err ? ` · ${err} ${t("idxErrors")}` : ""}${d.charged != null ? ` · $${Number(d.charged).toFixed(4)}` : ""}`);
       await loadUrls(page, statusFilter, search);
-    } catch (e: any) { setXrCheckMsg(`✗ ${e.message}`); }
+    } catch (e: any) { setXrCheckMsg(`✗ ${(e as any).message}`); }
     setXrChecking(false);
   };
 
@@ -2783,8 +2792,12 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
                           : <span style={{ color: "rgba(255,255,255,0.2)", fontSize: "11px" }}>—</span>}
                       </td>
                       <td style={{ padding: "8px 12px" }}>
-                        {row.neuralStatus === "submitted"
-                          ? <span style={{ fontSize: "11px", color: "#a78bfa", fontWeight: 600 }}>✓ {row.neuralQueue ?? "slow"}</span>
+                        {row.neuralStatus === "indexed"
+                          ? <span style={{ fontSize: "11px", color: "#4ADE80", fontWeight: 600 }}>✓ {t("idxInIndex")}</span>
+                          : row.neuralStatus === "not_indexed"
+                          ? <span style={{ fontSize: "11px", color: "#FBBF24", fontWeight: 600 }}>✗ {t("idxNotInIndex")}</span>
+                          : row.neuralStatus === "submitted"
+                          ? <span style={{ fontSize: "11px", color: "#a78bfa", fontWeight: 600 }}>↑ {row.neuralQueue ?? "slow"}</span>
                           : <span style={{ color: "rgba(255,255,255,0.2)", fontSize: "11px" }}>—</span>}
                       </td>
                       <td style={{ padding: "8px 12px", color: "var(--color-text-secondary)", fontSize: "11px", whiteSpace: "nowrap" }}>
