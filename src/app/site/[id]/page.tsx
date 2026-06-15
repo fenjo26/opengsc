@@ -2461,6 +2461,10 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
       });
       const d = await res.json();
       if (!res.ok) { setXrCheckMsg(`✗ ${d.error ?? "Error"}`); return; }
+      if (d.pending) {
+        setXrCheckMsg(`⏳ ${t("idxCheckPending")}`);
+        return;
+      }
       const ok = d.checked ?? 0;
       const err = d.errors ?? 0;
       setXrCheckMsg(`✓ ${t("idxChecked")} ${ok} URLs${err ? ` · ${err} ${t("idxErrors")}` : ""}${d.charged != null ? ` · $${Number(d.charged).toFixed(4)}` : ""}`);

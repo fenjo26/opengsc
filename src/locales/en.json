@@ -234,6 +234,7 @@
   "idxAdditional": "More:",
   "idxSendTo2index": "Submit to 2index",
   "idxCheckIndex": "Check indexation",
+  "idxCheckPending": "Task created — NeuralIndexer is processing, results will appear in a few minutes",
   "idxPagesEmpty": "Page list is empty",
   "idxPagesEmptyHint1": "Click",
   "idxPagesEmptyHint2": "to collect URLs from the sitemap.",

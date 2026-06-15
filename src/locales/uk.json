@@ -234,6 +234,7 @@
   "idxAdditional": "Додатково:",
   "idxSendTo2index": "Відправити в 2index",
   "idxCheckIndex": "Перевірити індексацію",
+  "idxCheckPending": "Задачу створено — NeuralIndexer обробляє, результати з'являться за кілька хвилин",
   "idxPagesEmpty": "Список сторінок пустий",
   "idxPagesEmptyHint1": "Натисніть",
   "idxPagesEmptyHint2": "щоб зібрати URL з sitemap.",
