@@ -305,7 +305,7 @@
   "linkedAccounts": "Пов'язані акаунти",
   "account": "акаунт",
   "accounts": "акаунтів",
-  "addAccount": "+ Акаунт",
+  "addAccount": "Акаунт",
   "loadingAccounts": "Завантаження…",
   "noAccountsLinked": "Акаунти не прив'язані.",
   "noAccountsLinkedHint": "Натисніть «+Акаунт», щоб підключити Google.",

@@ -305,7 +305,7 @@
   "linkedAccounts": "Linked Accounts",
   "account": "account",
   "accounts": "accounts",
-  "addAccount": "+ Account",
+  "addAccount": "Account",
   "loadingAccounts": "Loading…",
   "noAccountsLinked": "No accounts linked yet.",
   "noAccountsLinkedHint": "Click \"+Account\" to connect Google.",
