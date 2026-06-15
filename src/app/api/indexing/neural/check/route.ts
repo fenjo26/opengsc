@@ -44,9 +44,12 @@ export async function POST(req: Request) {
 
     const schedData = await schedRes.json().catch(() => ({}));
 
+    // DEBUG: log full response so we can see the actual shape
+    console.log('[neural/check] schedule response HTTP', schedRes.status, JSON.stringify(schedData));
+
     if (!schedRes.ok || schedData?.error) {
       return NextResponse.json(
-        { error: schedData?.error ?? schedData?.message ?? `HTTP ${schedRes.status}` },
+        { error: schedData?.error ?? schedData?.message ?? `HTTP ${schedRes.status}`, debug: schedData },
         { status: schedRes.ok ? 400 : schedRes.status },
       );
     }
@@ -80,9 +83,13 @@ export async function POST(req: Request) {
         signal: AbortSignal.timeout(10000),
       });
 
-      if (!pollRes.ok) continue;
+      if (!pollRes.ok) {
+        console.log('[neural/check] poll HTTP', pollRes.status, 'attempt', attempt);
+        continue;
+      }
 
       const pollData = await pollRes.json().catch(() => ({}));
+      console.log('[neural/check] poll attempt', attempt, 'status=', pollData?.status ?? pollData?.check?.status, JSON.stringify(pollData).slice(0, 300));
       const status: string = pollData?.status ?? pollData?.check?.status ?? '';
 
       if (status === 'completed' || status === 'done') {
