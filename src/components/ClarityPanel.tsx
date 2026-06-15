@@ -265,7 +265,7 @@ function SetupGuide() {
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export function ClarityPanel({ siteDbId }: { siteDbId: string }) {
+export function ClarityPanel({ siteDbId, domain }: { siteDbId: string; domain?: string }) {
   const { t, language } = useLanguage();
   const [copied, setCopied] = useState(false);
 
@@ -369,9 +369,19 @@ export function ClarityPanel({ siteDbId }: { siteDbId: string }) {
       const parsed = parseSnapshot(snapshot);
       const raw = JSON.stringify(snapshot.data.traffic ?? []).slice(0, 6000);
       const langName = language === "ru" ? "Russian" : language === "uk" ? "Ukrainian" : "English";
-      const prompt = `You are a CRO and SEO expert. Analyze this Microsoft Clarity UX data (period: ${snapshot.periodDays} days) and give actionable, specific insights, most critical first. Call out which pages need fixing and why (dead clicks, low scroll depth, rage clicks, JS errors).
+      const site = domain || projectId || "the site";
+      const prompt = `You are a senior CRO (Conversion Rate Optimization) and SEO expert analyzing Microsoft Clarity UX data for ${site} (period: ${snapshot.periodDays} days). Produce a deep, client-ready audit — not a generic checklist. Dig into ROOT CAUSES: for each problem explain WHY it happens (cite the specific pages and numbers from the data), WHAT it costs the business, and HOW to fix it concretely.
 
-Write the answer in ${langName}, as clean PLAIN TEXT suitable for sending to a client. Strict formatting rules: do NOT use any Markdown — no "#", no "*", no "**" bold, no backticks, no markdown tables. Use short paragraphs. For section titles, put the title on its own line ending with a colon. For lists, start each item with "- " on a new line. Keep it concise.
+Structure the report exactly like this:
+1) A title line: "UX-аудит — ${site}" (translated) and a second line with the period.
+2) "🎯 Краткая сводка" — 2-3 sentences on the overall picture.
+3) "🔴 Критические находки (где теряем деньги)" — the 1-3 biggest issues. For each: the problem, the root cause with specific pages/numbers, the business impact (estimate lost conversions/clicks where possible), and a concrete fix.
+4) "⚠️ Что стоит проверить" — secondary issues.
+5) "✅ Рекомендации" — prioritized next steps.
+
+Use relevant emoji as section/point accents (🎯 🔴 ⚠️ ✅ 🖱️ 📊 📉 💰) to guide the eye — emojis are encouraged.
+
+Formatting rules (IMPORTANT): write in ${langName}, as clean text suitable to paste into a client report. Do NOT use Markdown syntax: no "#", no "*", no "**" for bold, no backticks, no markdown tables. Put each section title on its own line. For lists, start each item with "- ". Keep it specific and concrete, reference real page paths and numbers.
 
 Summary metrics: ${JSON.stringify(parsed.metrics)}. Top problem pages: ${JSON.stringify(parsed.pages)}. Raw per-URL data: ${raw}`;
 
@@ -598,7 +608,7 @@ Summary metrics: ${JSON.stringify(parsed.metrics)}. Top problem pages: ${JSON.st
       {/* Metrics grid */}
       {parsed && (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "12px", marginBottom: "24px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "12px", marginBottom: "24px" }}>
             {metricDefs.map(def => {
               const m = parsed.metrics.find(x => x.name === def.name);
               return (

@@ -3727,7 +3727,7 @@ export default function SitePage() {
       {activeTab === "health" && <SiteHealthPanel siteDbId={siteDbId} />}
 
       {/* ── UX / Clarity tab ── */}
-      {activeTab === "ux" && <ClarityPanel siteDbId={siteDbId} />}
+      {activeTab === "ux" && <ClarityPanel siteDbId={siteDbId} domain={domain} />}
 
       {/* ── Settings tab ── */}
       {activeTab === "settings" && (
