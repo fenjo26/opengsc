@@ -2411,8 +2411,16 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
         body: JSON.stringify({ siteDbId, urls: urls.slice(0, 50) }),
       });
       const d = await res.json();
-      setCheckMsg(`✓ ${t("idxChecked")} ${d.checked ?? 0} URLs${d.errors ? ` · ${d.errors} ${t("idxErrors")}` : ""}`);
-      await loadUrls(page, statusFilter, search);
+      if (d.hint === "sc-domain_not_supported") {
+        setCheckMsg(`⚠ ${t("idxGoogleScDomainError")}`);
+      } else if (d.hint === "property_not_verified") {
+        setCheckMsg(`⚠ ${t("idxGoogleNotVerifiedError")}`);
+      } else if (d.hint === "api_error") {
+        setCheckMsg(`✗ ${d.detail ?? t("idxErrors")}`);
+      } else {
+        setCheckMsg(`✓ ${t("idxChecked")} ${d.checked ?? 0} URLs${d.errors ? ` · ${d.errors} ${t("idxErrors")}` : ""}`);
+        await loadUrls(page, statusFilter, search);
+      }
     } catch (e: any) { setCheckMsg(`✗ ${e.message}`); }
     setChecking(false);
   };

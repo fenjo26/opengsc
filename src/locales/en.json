@@ -221,6 +221,8 @@
   "idxAllStatuses": "All statuses",
   "idxChecking": "Checking…",
   "idxGoogleApiCheck": "Google API check",
+  "idxGoogleScDomainError": "Google URL Inspection API does not support domain properties (sc-domain:). Add your site to Google Search Console as a URL-prefix property (https://...) and reconnect your account.",
+  "idxGoogleNotVerifiedError": "Site is not verified in Google Search Console for this account.",
   "idxSelected": "Selected",
   "idxSelectedLower": "selected",
   "idxNotSentYet": "not sent yet",

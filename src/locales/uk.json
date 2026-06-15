@@ -221,6 +221,8 @@
   "idxAllStatuses": "Всі статуси",
   "idxChecking": "Перевірка…",
   "idxGoogleApiCheck": "Google API check",
+  "idxGoogleScDomainError": "Google URL Inspection API не підтримує доменні властивості (sc-domain:). Додайте сайт до Google Search Console як URL-prefix (https://...) і перепідключіть акаунт.",
+  "idxGoogleNotVerifiedError": "Сайт не верифікований у Google Search Console для цього акаунту.",
   "idxSelected": "Обрано",
   "idxSelectedLower": "обрано",
   "idxNotSentYet": "ще не надіслано",

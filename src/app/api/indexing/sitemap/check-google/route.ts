@@ -63,14 +63,43 @@ export async function POST(req: Request) {
 
   let checked = 0;
   let errors = 0;
-  let firstError: any = null;
   const GSC_API = 'https://searchconsole.googleapis.com/v1/urlInspection/index:inspect';
 
   // URL Inspection API does not support sc-domain: properties.
   // Convert to https:// URL-prefix format as a fallback.
-  let siteUrl = site.siteId;
-  if (siteUrl.startsWith('sc-domain:')) {
-    siteUrl = 'https://' + siteUrl.slice('sc-domain:'.length) + '/';
+  const rawSiteId = site.siteId;
+  const isDomainProperty = rawSiteId.startsWith('sc-domain:');
+  let siteUrl = rawSiteId;
+  if (isDomainProperty) {
+    siteUrl = 'https://' + rawSiteId.slice('sc-domain:'.length) + '/';
+  }
+
+  // Probe with 1 URL first to detect permission errors before looping all URLs
+  const probeRes = await fetch(GSC_API, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ inspectionUrl: urls[0], siteUrl }),
+    signal: AbortSignal.timeout(10000),
+  }).catch(() => null);
+
+  if (probeRes && !probeRes.ok) {
+    const probeBody = await probeRes.json().catch(() => ({}));
+    const googleMsg: string = probeBody?.error?.message ?? '';
+    const isOwnershipError = probeRes.status === 403 &&
+      (googleMsg.includes('do not own') || googleMsg.includes('not part of this property'));
+
+    if (isOwnershipError) {
+      const hint = isDomainProperty
+        ? 'sc-domain_not_supported'
+        : 'property_not_verified';
+      return NextResponse.json({ ok: false, checked: 0, errors: urls.length, hint }, { status: 200 });
+    }
+
+    return NextResponse.json({
+      ok: false, checked: 0, errors: urls.length,
+      hint: 'api_error',
+      detail: `HTTP ${probeRes.status}: ${googleMsg}`,
+    }, { status: 200 });
   }
 
   for (const url of urls.slice(0, 200)) {
@@ -85,7 +114,7 @@ export async function POST(req: Request) {
         signal: AbortSignal.timeout(10000),
       });
 
-      if (!res.ok) { errors++; if (!firstError) firstError = await res.json().catch(() => null); continue; }
+      if (!res.ok) { errors++; continue; }
 
       const data = await res.json();
       const result = data?.inspectionResult;
