@@ -25,10 +25,41 @@ export async function POST(req: Request) {
   // Get a Google OAuth access token from the user's account
   const account = await prisma.account.findFirst({
     where: { userId, provider: 'google' },
-    select: { access_token: true },
+    select: { id: true, access_token: true, refresh_token: true, expires_at: true },
   });
   if (!account?.access_token)
     return NextResponse.json({ error: 'No Google account connected' }, { status: 400 });
+
+  // Refresh the access token if it's expired (expires_at is in seconds)
+  let accessToken = account.access_token;
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (account.expires_at && account.expires_at < nowSec + 60) {
+    if (!account.refresh_token) {
+      return NextResponse.json({ error: 'Access token expired and no refresh token available. Please reconnect your Google account.' }, { status: 401 });
+    }
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: process.env.GOOGLE_CLIENT_ID!,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+        refresh_token: account.refresh_token,
+        grant_type: 'refresh_token',
+      }),
+    });
+    if (!tokenRes.ok) {
+      return NextResponse.json({ error: 'Failed to refresh Google access token. Please reconnect your Google account.' }, { status: 401 });
+    }
+    const tokenData = await tokenRes.json();
+    accessToken = tokenData.access_token;
+    await prisma.account.update({
+      where: { id: account.id },
+      data: {
+        access_token: tokenData.access_token,
+        expires_at: Math.floor(Date.now() / 1000) + (tokenData.expires_in ?? 3600),
+      },
+    });
+  }
 
   let checked = 0;
   let errors = 0;
@@ -39,7 +70,7 @@ export async function POST(req: Request) {
       const res = await fetch(GSC_API, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${account.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ inspectionUrl: url, siteUrl: site.siteId }),
