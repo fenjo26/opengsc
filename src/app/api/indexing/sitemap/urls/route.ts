@@ -53,12 +53,25 @@ export async function GET(req: Request) {
     select: { googleStatus: true, xrStatus: true, twoIndexStatus: true, neuralStatus: true },
   });
 
+  const NEURAL_CHECK = new Set(['indexed', 'not_indexed']);
   const counters = {
     total: allRows.length,
-    indexed: allRows.filter((r: any) => /submitted and indexed/i.test(r.googleStatus ?? '')).length,
-    notIndexed: allRows.filter((r: any) => r.googleStatus && !/submitted and indexed/i.test(r.googleStatus)).length,
-    notChecked: allRows.filter((r: any) => !r.googleStatus).length,
+    // "В индексе" = Google says indexed OR Neural check says indexed
+    indexed: allRows.filter((r: any) =>
+      /submitted and indexed/i.test(r.googleStatus ?? '') || r.neuralStatus === 'indexed'
+    ).length,
+    // "Не в индексе" = Google says not indexed OR Neural check says not indexed
+    notIndexed: allRows.filter((r: any) =>
+      (r.googleStatus && !/submitted and indexed/i.test(r.googleStatus)) || r.neuralStatus === 'not_indexed'
+    ).length,
+    // "Не проверено" = no check from any source
+    notChecked: allRows.filter((r: any) =>
+      !r.googleStatus && !NEURAL_CHECK.has(r.neuralStatus ?? '') && !r.xrStatus
+    ).length,
+    // NeuralIndexer submissions (queue)
     neuralSubmitted: allRows.filter((r: any) => r.neuralStatus === 'submitted').length,
+    // NeuralIndexer check results
+    neuralChecked: allRows.filter((r: any) => NEURAL_CHECK.has(r.neuralStatus ?? '')).length,
     twoIndexSubmitted: allRows.filter((r: any) => r.twoIndexStatus === 'submitted').length,
   };
 

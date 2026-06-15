@@ -2408,7 +2408,7 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
       const res = await fetch("/api/indexing/sitemap/check-google", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ siteDbId, urls: urls.slice(0, 50) }),
+        body: JSON.stringify({ siteDbId, urls }),
       });
       const d = await res.json();
       if (d.hint === "sc-domain_not_supported") {
@@ -2447,7 +2447,19 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
 
   // ── XMLRiver / NeuralIndexer indexation check ──
   const runXrCheck = async (via: "xr" | "neural", retryCount = 0) => {
-    const urls = selected.size > 0 ? [...selected] : urlRows.map(r => r.url);
+    // If nothing selected — fetch ALL site URLs (not just current page)
+    let urls: string[];
+    if (selected.size > 0) {
+      urls = [...selected];
+    } else {
+      try {
+        const allRes = await fetch(`/api/indexing/sitemap/urls?siteDbId=${siteDbId}&page=1&limit=1000`);
+        const allData = await allRes.json();
+        urls = (allData.rows ?? []).map((r: any) => r.url);
+      } catch {
+        urls = urlRows.map(r => r.url);
+      }
+    }
     if (!urls.length) return;
     if (retryCount === 0) { setXrChecking(true); setXrCheckMsg(""); }
     try {
@@ -2457,7 +2469,7 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ siteDbId, urls: urls.slice(0, 50) }),
+        body: JSON.stringify({ siteDbId, urls }),
       });
       const d = await res.json();
       if (!res.ok) { setXrCheckMsg(`✗ ${d.error ?? "Error"}`); setXrChecking(false); return; }
@@ -2801,7 +2813,9 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
                           : <span style={{ color: "rgba(255,255,255,0.2)", fontSize: "11px" }}>—</span>}
                       </td>
                       <td style={{ padding: "8px 12px", color: "var(--color-text-secondary)", fontSize: "11px", whiteSpace: "nowrap" }}>
-                        {row.googleChecked ? timeAgo(new Date(row.googleChecked)) : "—"}
+                        {(row.googleChecked || row.neuralAt || row.xrChecked)
+                          ? timeAgo(new Date(row.googleChecked ?? row.neuralAt ?? row.xrChecked))
+                          : "—"}
                       </td>
                     </tr>
                   );

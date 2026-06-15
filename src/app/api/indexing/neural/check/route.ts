@@ -25,7 +25,7 @@ export async function POST(req: Request) {
 
   const body = await req.json();
   const siteDbId: string | undefined = body.siteDbId;
-  const urls: string[] = (body.urls ?? []).slice(0, 100);
+  const urls: string[] = (body.urls ?? []).slice(0, 500);
 
   if (urls.length === 0) {
     return NextResponse.json({ error: 'No URLs provided' }, { status: 400 });
