@@ -35,6 +35,19 @@ interface Snapshot {
   data: SnapshotData;
 }
 
+// Strip Markdown so the report reads cleanly (and is client-ready) regardless
+// of what the model returns: headings, bold, bullets, inline code → plain text.
+function cleanReport(s: string): string {
+  return (s || "")
+    .replace(/^\s*#{1,6}\s*/gm, "")          // # headings
+    .replace(/\*\*(.*?)\*\*/g, "$1")          // **bold**
+    .replace(/__(.*?)__/g, "$1")              // __bold__
+    .replace(/(^|\n)[ \t]*[*\-•]\s+/g, "$1• ") // bullet markers → •
+    .replace(/`([^`]+)`/g, "$1")              // `code`
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 // Normalize a Clarity metricName: strip non-alphanumerics, lowercase.
 // "Dead Click Count" → "deadclickcount", "ScrollDepth" → "scrolldepth".
 const norm = (s: string) => (s || "").replace(/[^a-z0-9]/gi, "").toLowerCase();
@@ -128,6 +141,13 @@ function parseSnapshot(snapshot: Snapshot): { metrics: ClarityMetric[]; pages: P
 
   return { metrics, pages };
 }
+
+const ghostBtn: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: "5px",
+  padding: "6px 12px", borderRadius: "9999px",
+  background: "transparent", color: "var(--color-text-secondary)",
+  border: "1px solid var(--color-border)", fontSize: "12px", fontWeight: 500, cursor: "pointer",
+};
 
 // ─── Small metric card ────────────────────────────────────────────────────────
 function MetricCard({
@@ -246,7 +266,8 @@ function SetupGuide() {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export function ClarityPanel({ siteDbId }: { siteDbId: string }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const [copied, setCopied] = useState(false);
 
   const [configured, setConfigured]     = useState(false);
   const [snapshot, setSnapshot]         = useState<Snapshot | null>(null);
@@ -347,7 +368,12 @@ export function ClarityPanel({ siteDbId }: { siteDbId: string }) {
 
       const parsed = parseSnapshot(snapshot);
       const raw = JSON.stringify(snapshot.data.traffic ?? []).slice(0, 6000);
-      const prompt = `You are a CRO and SEO expert. Analyze this Microsoft Clarity UX data (period: ${snapshot.periodDays} days) and give actionable, specific insights as 3-6 bullet points, most critical first. Call out which pages need fixing and why (dead clicks, low scroll depth, rage clicks, JS errors). Summary metrics: ${JSON.stringify(parsed.metrics)}. Top problem pages: ${JSON.stringify(parsed.pages)}. Raw per-URL data: ${raw}`;
+      const langName = language === "ru" ? "Russian" : language === "uk" ? "Ukrainian" : "English";
+      const prompt = `You are a CRO and SEO expert. Analyze this Microsoft Clarity UX data (period: ${snapshot.periodDays} days) and give actionable, specific insights, most critical first. Call out which pages need fixing and why (dead clicks, low scroll depth, rage clicks, JS errors).
+
+Write the answer in ${langName}, as clean PLAIN TEXT suitable for sending to a client. Strict formatting rules: do NOT use any Markdown — no "#", no "*", no "**" bold, no backticks, no markdown tables. Use short paragraphs. For section titles, put the title on its own line ending with a colon. For lists, start each item with "- " on a new line. Keep it concise.
+
+Summary metrics: ${JSON.stringify(parsed.metrics)}. Top problem pages: ${JSON.stringify(parsed.pages)}. Raw per-URL data: ${raw}`;
 
       const res = await fetch("/api/gsc/ai-summary", {
         method: "POST",
@@ -360,13 +386,61 @@ export function ClarityPanel({ siteDbId }: { siteDbId: string }) {
         setAiError(true);
         return;
       }
-      setAiAnalysis(data.summary ?? "");
+      setAiAnalysis(cleanReport(data.summary ?? ""));
     } catch {
       setAiErrorMsg(t("clarityAnalysisError"));
       setAiError(true);
     } finally {
       setAiLoading(false);
     }
+  };
+
+  // ── Report export helpers ────────────────────────────────────────────────────
+  const reportHeader = () => {
+    const date = snapshot ? new Date(snapshot.fetchedAt).toLocaleString() : new Date().toLocaleString();
+    const proj = projectId ? ` · ${projectId}` : "";
+    return `${t("clarityReportTitle")}${proj}\n${date}\n${"-".repeat(48)}\n\n`;
+  };
+
+  const copyReport = async () => {
+    if (!aiAnalysis) return;
+    try {
+      await navigator.clipboard.writeText(aiAnalysis);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard unavailable */ }
+  };
+
+  const downloadTxt = () => {
+    if (!aiAnalysis) return;
+    const blob = new Blob([reportHeader() + aiAnalysis], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `clarity-ux-report-${new Date().toISOString().slice(0, 10)}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Dependency-free PDF: open a clean print window; the user saves as PDF.
+  const downloadPdf = () => {
+    if (!aiAnalysis) return;
+    const w = window.open("", "_blank");
+    if (!w) return;
+    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const date = snapshot ? new Date(snapshot.fetchedAt).toLocaleString() : new Date().toLocaleString();
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(t("clarityReportTitle"))}</title>
+      <style>
+        body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#111;max-width:720px;margin:40px auto;padding:0 24px;line-height:1.6;font-size:14px}
+        h1{font-size:18px;margin:0 0 2px} .meta{color:#666;font-size:12px;margin-bottom:20px;border-bottom:1px solid #ddd;padding-bottom:12px}
+        pre{white-space:pre-wrap;word-wrap:break-word;font-family:inherit;font-size:14px;margin:0}
+      </style></head><body>
+      <h1>${esc(t("clarityReportTitle"))}${projectId ? " · " + esc(projectId) : ""}</h1>
+      <div class="meta">${esc(date)}</div>
+      <pre>${esc(aiAnalysis)}</pre>
+      <script>window.onload=function(){window.print();}</script>
+      </body></html>`);
+    w.document.close();
   };
 
   // ── Derived metrics ─────────────────────────────────────────────────────────
@@ -591,16 +665,27 @@ export function ClarityPanel({ siteDbId }: { siteDbId: string }) {
                 <Sparkles size={15} color="var(--color-accent-blue)" />
                 {t("clarityAnalysisTitle")}
               </div>
-              <button onClick={handleAiAnalysis} disabled={aiLoading} style={{
-                display: "flex", alignItems: "center", gap: "6px",
-                padding: "7px 16px", borderRadius: "9999px",
-                background: "var(--color-accent-blue)", color: "#fff",
-                border: "none", fontSize: "12px", fontWeight: 500, cursor: "pointer",
-                opacity: aiLoading ? 0.6 : 1,
-              }}>
-                <Sparkles size={12} />
-                {aiLoading ? t("clarityAnalyzing") : t("clarityAnalyzeBtn")}
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                {aiAnalysis && (
+                  <>
+                    <button onClick={copyReport} style={ghostBtn}>
+                      {copied ? `✓ ${t("clarityCopied")}` : t("clarityCopy")}
+                    </button>
+                    <button onClick={downloadTxt} style={ghostBtn}>{t("clarityDownloadTxt")}</button>
+                    <button onClick={downloadPdf} style={ghostBtn}>{t("clarityDownloadPdf")}</button>
+                  </>
+                )}
+                <button onClick={handleAiAnalysis} disabled={aiLoading} style={{
+                  display: "flex", alignItems: "center", gap: "6px",
+                  padding: "7px 16px", borderRadius: "9999px",
+                  background: "var(--color-accent-blue)", color: "#fff",
+                  border: "none", fontSize: "12px", fontWeight: 500, cursor: "pointer",
+                  opacity: aiLoading ? 0.6 : 1,
+                }}>
+                  <Sparkles size={12} />
+                  {aiLoading ? t("clarityAnalyzing") : t("clarityAnalyzeBtn")}
+                </button>
+              </div>
             </div>
 
             {aiError && (
