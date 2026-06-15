@@ -2647,6 +2647,13 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
                 style={{ padding: "6px 14px", borderRadius: "7px", border: "none", background: submitting ? "rgba(139,92,246,0.2)" : "rgba(139,92,246,0.85)", color: "#fff", fontSize: "12px", fontWeight: 700, cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.7 : 1 }}>
                 {submitting ? t("idxSending") : `▶ ${t("idxSubmitToIndex")}`}
               </button>
+              <button onClick={() => runXrCheck("neural")} disabled={xrChecking}
+                style={{ display: "flex", alignItems: "center", gap: "4px", padding: "6px 12px", borderRadius: "7px", border: "1px solid rgba(139,92,246,0.4)", background: "transparent", color: "#a78bfa", fontSize: "12px", fontWeight: 600, cursor: xrChecking ? "not-allowed" : "pointer", opacity: xrChecking ? 0.6 : 1 }}>
+                🔍 {xrChecking ? t("idxChecking") : t("idxCheckIndex")}
+              </button>
+              {xrCheckMsg && (
+                <span style={{ fontSize: "12px", color: xrCheckMsg.startsWith("✓") ? "#4ADE80" : "#F87171", fontWeight: 600 }}>{xrCheckMsg}</span>
+              )}
               {submitResult?.ok && (
                 <span style={{ fontSize: "12px", color: "#4ADE80", fontWeight: 600 }}>
                   ✓ {t("idxAccepted")} {submitResult.accepted} URL
@@ -2673,16 +2680,6 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
                   <span style={{ fontSize: "9px", fontWeight: 800 }}>XR</span>
                   {xrChecking ? t("idxChecking") : t("idxCheckIndex")}
                 </button>
-              )}
-              {hasNeural && (
-                <button onClick={() => runXrCheck("neural")} disabled={xrChecking}
-                  style={{ display: "flex", alignItems: "center", gap: "4px", padding: "4px 10px", borderRadius: "6px", border: "1px solid rgba(139,92,246,0.3)", background: "transparent", color: "#a78bfa", fontSize: "11px", fontWeight: 600, cursor: xrChecking ? "not-allowed" : "pointer", opacity: xrChecking ? 0.6 : 1 }}>
-                  <span style={{ fontSize: "9px", fontWeight: 800 }}>NI</span>
-                  {xrChecking ? t("idxChecking") : t("idxCheckIndex")}
-                </button>
-              )}
-              {xrCheckMsg && (
-                <span style={{ fontSize: "11px", color: xrCheckMsg.startsWith("✓") ? "#4ADE80" : "#F87171", fontWeight: 600 }}>{xrCheckMsg}</span>
               )}
             </div>
           )}
