@@ -365,6 +365,7 @@
   "navPreferences": "Предпочтения",
   "navSuperSites": "Супер-сайты",
   "apiKeyConfigured": "Настроен",
+  "apiKeyEnterToReplace": "Введите новый токен для замены",
   "apiKeyError": "Ошибка",
   "apiKeyChecking": "Проверка…",
   "apiKeyNotConfigured": "Не настроен",

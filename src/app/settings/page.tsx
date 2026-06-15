@@ -718,12 +718,13 @@ function IndexApiSection() {
   const { t } = useLanguage();
 
   // NeuralIndexer state
-  const [nnToken,   setNnToken]   = useState("");
-  const [nnStatus,  setNnStatus]  = useState<"idle"|"checking"|"ok"|"error">("idle");
-  const [nnMsg,     setNnMsg]     = useState("");
-  const [nnSaving,  setNnSaving]  = useState(false);
-  const [nnSaved,   setNnSaved]   = useState(false);
-  const [nnBalance, setNnBalance] = useState<number|null>(null);
+  const [nnToken,      setNnToken]      = useState("");
+  const [nnConfigured, setNnConfigured] = useState(false);
+  const [nnStatus,     setNnStatus]     = useState<"idle"|"checking"|"ok"|"error">("idle");
+  const [nnMsg,        setNnMsg]        = useState("");
+  const [nnSaving,     setNnSaving]     = useState(false);
+  const [nnSaved,      setNnSaved]      = useState(false);
+  const [nnBalance,    setNnBalance]    = useState<number|null>(null);
 
   // XML River state
   const [xrUserId,  setXrUserId]  = useState("");
@@ -734,25 +735,25 @@ function IndexApiSection() {
   const [xrSaved,   setXrSaved]   = useState(false);
 
   // 2index state
-  const [niToken,   setNiToken]   = useState("");
-  const [niStatus,  setNiStatus]  = useState<"idle"|"checking"|"ok"|"error">("idle");
-  const [niMsg,     setNiMsg]     = useState("");
-  const [niSaving,  setNiSaving]  = useState(false);
-  const [niSaved,   setNiSaved]   = useState(false);
-  const [niBalance, setNiBalance] = useState<number|null>(null);
+  const [niToken,      setNiToken]      = useState("");
+  const [niConfigured, setNiConfigured] = useState(false);
+  const [niStatus,     setNiStatus]     = useState<"idle"|"checking"|"ok"|"error">("idle");
+  const [niMsg,        setNiMsg]        = useState("");
+  const [niSaving,     setNiSaving]     = useState(false);
+  const [niSaved,      setNiSaved]      = useState(false);
+  const [niBalance,    setNiBalance]    = useState<number|null>(null);
 
   // Load existing (masked) state on mount
   useEffect(() => {
     fetch("/api/settings/api-keys")
       .then(r => r.json())
       .then(d => {
-        if (d.neuralIndexer?.token)       setNnToken(d.neuralIndexer.token);
-        if (d.neuralIndexer?.configured)  { setNnStatus("ok"); setNnBalance(d.neuralIndexer.balance); }
+        // NOTE: we do NOT load masked tokens into input fields to avoid overwriting real tokens on save
+        if (d.neuralIndexer?.configured)  { setNnConfigured(true); setNnStatus("ok"); setNnBalance(d.neuralIndexer.balance); }
         if (d.xmlRiver?.userId)           setXrUserId(d.xmlRiver.userId);
-        if (d.xmlRiver?.apiKey)           setXrApiKey(d.xmlRiver.apiKey);
+        // xrApiKey is masked — don't put it in the input; just track configured state
         if (d.xmlRiver?.configured)       setXrStatus("ok");
-        if (d.twoIndex?.token)            setNiToken(d.twoIndex.token);
-        if (d.twoIndex?.configured)       setNiStatus("ok");
+        if (d.twoIndex?.configured)       { setNiConfigured(true); setNiStatus("ok"); }
       })
       .catch(() => {});
   }, []);
@@ -771,14 +772,26 @@ function IndexApiSection() {
   };
 
   const saveNn = async () => {
+    if (!nnToken) return; // don't save empty/masked value
     setNnSaving(true);
     await fetch("/api/settings/api-keys", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ neuralIndexerToken: nnToken }),
     });
-    setNnSaving(false); setNnSaved(true);
+    setNnSaving(false); setNnSaved(true); setNnConfigured(true);
     setTimeout(() => setNnSaved(false), 2000);
+  };
+
+  const deleteNn = async () => {
+    setNnSaving(true);
+    await fetch("/api/settings/api-keys", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ neuralIndexerToken: null }),
+    });
+    setNnToken(""); setNnConfigured(false); setNnStatus("idle"); setNnMsg(""); setNnBalance(null);
+    setNnSaving(false);
   };
 
   const validateXr = async () => {
@@ -816,14 +829,26 @@ function IndexApiSection() {
   };
 
   const saveNi = async () => {
+    if (!niToken) return;
     setNiSaving(true);
     await fetch("/api/settings/api-keys", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ twoIndexToken: niToken }),
     });
-    setNiSaving(false); setNiSaved(true);
+    setNiSaving(false); setNiSaved(true); setNiConfigured(true);
     setTimeout(() => setNiSaved(false), 2000);
+  };
+
+  const deleteNi = async () => {
+    setNiSaving(true);
+    await fetch("/api/settings/api-keys", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ twoIndexToken: null }),
+    });
+    setNiToken(""); setNiConfigured(false); setNiStatus("idle"); setNiMsg(""); setNiBalance(null);
+    setNiSaving(false);
   };
 
   const statusColor = (s: string) => s === "ok" ? "#10B981" : s === "error" ? "#EF4444" : s === "checking" ? "#F59E0B" : "var(--color-text-secondary)";
@@ -899,9 +924,12 @@ function IndexApiSection() {
         </div>
 
         <label style={labelStyle}>API Token</label>
+        {nnConfigured && !nnToken && (
+          <p style={{ fontSize: "12px", color: "#4ADE80", marginBottom: "8px" }}>✓ {t("apiKeyConfigured")} · {t("apiKeyEnterToReplace")}</p>
+        )}
         <div style={rowStyle}>
           <input value={nnToken} onChange={e => setNnToken(e.target.value)}
-            placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+            placeholder={nnConfigured ? t("apiKeyEnterToReplace") : "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"}
             type="password" style={inputStyle} />
         </div>
 
@@ -916,8 +944,8 @@ function IndexApiSection() {
             style={{ ...btnStyle(true), opacity: !nnToken ? 0.4 : 1 }}>
             {nnSaved ? t("apiKeySaved") : nnSaving ? t("apiKeySaving") : t("apiKeySave")}
           </button>
-          {nnToken && (
-            <button onClick={() => { setNnToken(""); setNnStatus("idle"); setNnMsg(""); setNnBalance(null); saveNn(); }}
+          {nnConfigured && (
+            <button onClick={deleteNn} disabled={nnSaving}
               style={{ padding: "9px 12px", background: "transparent", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "8px", color: "#EF4444", fontSize: "12px", cursor: "pointer" }}>
               {t("apiKeyDelete")}
             </button>
@@ -1001,8 +1029,11 @@ function IndexApiSection() {
         </div>
 
         <label style={labelStyle}>Bearer token</label>
+        {niConfigured && !niToken && (
+          <p style={{ fontSize: "12px", color: "#4ADE80", marginBottom: "8px" }}>✓ {t("apiKeyConfigured")} · {t("apiKeyEnterToReplace")}</p>
+        )}
         <div style={rowStyle}>
-          <input value={niToken} onChange={e => setNiToken(e.target.value)} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" type="password" style={inputStyle} />
+          <input value={niToken} onChange={e => setNiToken(e.target.value)} placeholder={niConfigured ? t("apiKeyEnterToReplace") : "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"} type="password" style={inputStyle} />
         </div>
 
         {niMsg && <p style={{ fontSize: "12px", color: statusColor(niStatus), marginBottom: "10px" }}>{niMsg}</p>}
@@ -1014,8 +1045,8 @@ function IndexApiSection() {
           <button onClick={saveNi} disabled={!niToken || niSaving} style={{ ...btnStyle(true), opacity: !niToken ? 0.4 : 1 }}>
             {niSaved ? t("apiKeySaved") : niSaving ? t("apiKeySaving") : t("apiKeySave")}
           </button>
-          {niToken && (
-            <button onClick={() => { setNiToken(""); setNiStatus("idle"); setNiMsg(""); setNiBalance(null); saveNi(); }}
+          {niConfigured && (
+            <button onClick={deleteNi} disabled={niSaving}
               style={{ padding: "9px 12px", background: "transparent", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "8px", color: "#EF4444", fontSize: "12px", cursor: "pointer" }}>
               {t("apiKeyDelete")}
             </button>

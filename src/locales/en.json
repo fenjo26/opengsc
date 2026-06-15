@@ -365,6 +365,7 @@
   "navPreferences": "Preferences",
   "navSuperSites": "Super Sites",
   "apiKeyConfigured": "Configured",
+  "apiKeyEnterToReplace": "Enter new token to replace",
   "apiKeyError": "Error",
   "apiKeyChecking": "Checking…",
   "apiKeyNotConfigured": "Not configured",
