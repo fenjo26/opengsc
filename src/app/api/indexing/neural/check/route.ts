@@ -95,12 +95,37 @@ export async function POST(req: Request) {
       console.log('[neural/check] poll attempt', attempt, 'checkStatus=', checkStatus, 'ready=', isReady, JSON.stringify(pollData).slice(0, 400));
 
       if (checkStatus === 'completed' || checkStatus === 'done' || isReady) {
-        // Per-URL results are under pollData.check.results[]
-        // Each item: { url, is_indexed, ... }
-        const raw: Array<{ url?: string; link?: string; is_indexed?: boolean; indexed?: boolean }> =
-          pollData?.check?.results ?? pollData?.results ?? pollData?.links ?? [];
+        // Log full keys to understand response shape
+        const checkKeys = Object.keys(pollData?.check ?? {});
+        const topKeys = Object.keys(pollData ?? {});
+        console.log('[neural/check] COMPLETED top-level keys:', topKeys);
+        console.log('[neural/check] COMPLETED check keys:', checkKeys);
 
-        console.log('[neural/check] results count=', raw.length, 'sample=', JSON.stringify(raw[0]));
+        // Per-URL results may be at different paths depending on results_per_page
+        // Try to fetch results using the proper m-prefixed check_id from the response
+        const actualCheckId: string = pollData?.check?.check_id ?? `m${checkId}`;
+        let raw: Array<{ url?: string; link?: string; is_indexed?: boolean; indexed?: boolean }> =
+          pollData?.check?.results ?? pollData?.results ?? pollData?.links ?? pollData?.check?.links ?? [];
+
+        // If no per-URL results in current response, fetch explicitly with proper ID
+        if (raw.length === 0) {
+          console.log('[neural/check] no inline results, fetching', actualCheckId);
+          try {
+            const resRes = await fetch(`${BASE}/v2/checks/${actualCheckId}?results_per_page=1000`, {
+              headers: { Authorization: `Bearer ${token}` },
+              signal: AbortSignal.timeout(10000),
+            });
+            const resData = await resRes.json().catch(() => ({}));
+            console.log('[neural/check] explicit fetch keys:', Object.keys(resData));
+            console.log('[neural/check] explicit fetch check keys:', Object.keys(resData?.check ?? {}));
+            raw = resData?.check?.results ?? resData?.results ?? resData?.links ?? resData?.check?.links ?? [];
+            console.log('[neural/check] explicit fetch raw count=', raw.length, 'sample=', JSON.stringify(raw[0]));
+          } catch (e) {
+            console.log('[neural/check] explicit fetch failed:', e);
+          }
+        }
+
+        console.log('[neural/check] final results count=', raw.length);
 
         results = raw.map(r => ({
           url: r.url ?? r.link ?? '',
