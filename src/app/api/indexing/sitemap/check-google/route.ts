@@ -63,7 +63,31 @@ export async function POST(req: Request) {
 
   let checked = 0;
   let errors = 0;
+  let firstError: any = null;
   const GSC_API = 'https://searchconsole.googleapis.com/v1/urlInspection/index:inspect';
+
+  // Debug: probe with just 1 URL first and return early if all URLs will fail anyway
+  const testUrl = urls[0];
+  const testRes = await fetch(GSC_API, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ inspectionUrl: testUrl, siteUrl: site.siteId }),
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!testRes.ok) {
+    const errBody = await testRes.json().catch(() => ({}));
+    return NextResponse.json({
+      ok: false,
+      checked: 0,
+      errors: urls.length,
+      debug: {
+        httpStatus: testRes.status,
+        siteId: site.siteId,
+        inspectionUrl: testUrl,
+        googleError: errBody,
+      },
+    });
+  }
 
   for (const url of urls.slice(0, 200)) {
     try {
@@ -77,7 +101,7 @@ export async function POST(req: Request) {
         signal: AbortSignal.timeout(10000),
       });
 
-      if (!res.ok) { errors++; continue; }
+      if (!res.ok) { errors++; if (!firstError) firstError = await res.json().catch(() => null); continue; }
 
       const data = await res.json();
       const result = data?.inspectionResult;
