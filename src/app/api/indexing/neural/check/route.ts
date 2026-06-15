@@ -30,22 +30,21 @@ export async function POST(req: Request) {
   }
 
   try {
-    const res = await fetch(`${BASE}/check-index-task.php`, {
+    // check-index-task.php uses api_key param (like balance.php), not Bearer token
+    const apiUrl = `${BASE}/check-index-task.php?api_key=${encodeURIComponent(user.neuralIndexerToken)}`;
+    const res = await fetch(apiUrl, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${user.neuralIndexerToken}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ links: urls }),
       signal: AbortSignal.timeout(30000),
     });
 
     const data = await res.json().catch(() => ({}));
 
-    if (!res.ok) {
+    if (!res.ok || data?.error) {
       return NextResponse.json(
         { error: data?.error ?? data?.message ?? `HTTP ${res.status}` },
-        { status: res.status },
+        { status: res.ok ? 400 : res.status },
       );
     }
 
