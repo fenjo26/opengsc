@@ -89,13 +89,18 @@ export async function POST(req: Request) {
       }
 
       const pollData = await pollRes.json().catch(() => ({}));
-      console.log('[neural/check] poll attempt', attempt, 'status=', pollData?.status ?? pollData?.check?.status, JSON.stringify(pollData).slice(0, 300));
-      const status: string = pollData?.status ?? pollData?.check?.status ?? '';
+      // check.status is the real status; top-level status is always "ok"
+      const checkStatus: string = pollData?.check?.status ?? pollData?.status ?? '';
+      const isReady: boolean = pollData?.check?.ready === true;
+      console.log('[neural/check] poll attempt', attempt, 'checkStatus=', checkStatus, 'ready=', isReady, JSON.stringify(pollData).slice(0, 400));
 
-      if (status === 'completed' || status === 'done') {
-        // Results live under pollData.results or pollData.check.results
+      if (checkStatus === 'completed' || checkStatus === 'done' || isReady) {
+        // Per-URL results are under pollData.check.results[]
+        // Each item: { url, is_indexed, ... }
         const raw: Array<{ url?: string; link?: string; is_indexed?: boolean; indexed?: boolean }> =
-          pollData?.results ?? pollData?.check?.results ?? pollData?.links ?? [];
+          pollData?.check?.results ?? pollData?.results ?? pollData?.links ?? [];
+
+        console.log('[neural/check] results count=', raw.length, 'sample=', JSON.stringify(raw[0]));
 
         results = raw.map(r => ({
           url: r.url ?? r.link ?? '',
@@ -107,7 +112,7 @@ export async function POST(req: Request) {
         break;
       }
 
-      if (status === 'failed' || status === 'error') {
+      if (checkStatus === 'failed' || checkStatus === 'error') {
         return NextResponse.json({ error: 'Check failed on NeuralIndexer side' }, { status: 502 });
       }
       // still pending — keep polling
