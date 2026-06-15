@@ -268,6 +268,7 @@
   "aiGeneratedNote": "Сгенерировано ИИ — проверьте и отредактируйте при необходимости",
   "brandEditKeys": "ключи",
   "clarityConnected": "Clarity подключён",
+  "clarityNoAiKey": "Сначала добавьте AI-ключ: Настройки → API и MCP ключи.",
   "clarityOpen": "Открыть в Clarity",
   "setRemoveAccountQ1": "Удалить аккаунт",
   "setRemoveAccountQ2": "? Данные сайтов останутся в БД.",

@@ -35,10 +35,29 @@ interface Snapshot {
   data: SnapshotData;
 }
 
+// Normalize a Clarity metricName: strip non-alphanumerics, lowercase.
+// "Dead Click Count" → "deadclickcount", "ScrollDepth" → "scrolldepth".
+const norm = (s: string) => (s || "").replace(/[^a-z0-9]/gi, "").toLowerCase();
+
+// Pull the first numeric field from a row whose (normalized) key matches one of
+// the candidate substrings. Defensive against Clarity's casing/naming variants.
+function pickNum(row: any, candidates: string[]): number {
+  for (const k of Object.keys(row || {})) {
+    const kn = norm(k);
+    if (candidates.some(c => kn === c || kn.includes(c))) {
+      const n = Number(row[k]);
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  return 0;
+}
+
 // ─── Parse raw Clarity API response into summary metrics + page rows ──────────
 function parseSnapshot(snapshot: Snapshot): { metrics: ClarityMetric[]; pages: PageRow[] } {
-  const { traffic, ux } = snapshot.data;
-  const all: any[] = [...(traffic || []), ...(ux || [])];
+  // Use ONLY the URL-dimension response. The Clarity API returns every metric in
+  // a single call regardless of dimension, so the second (URL+Device) response
+  // would double-count if merged in.
+  const all: any[] = snapshot.data.traffic || [];
 
   let totalSessions = 0;
   let totalDeadClicks = 0;
@@ -53,7 +72,7 @@ function parseSnapshot(snapshot: Snapshot): { metrics: ClarityMetric[]; pages: P
   const pageMap: Record<string, PageRow> = {};
 
   for (const metric of all) {
-    const name: string = metric.metricName ?? "";
+    const n = norm(metric.metricName ?? "");
     const info: any[] = metric.information ?? [];
 
     for (const row of info) {
@@ -62,35 +81,29 @@ function parseSnapshot(snapshot: Snapshot): { metrics: ClarityMetric[]; pages: P
         pageMap[url] = { url, deadClicks: 0, rageClicks: 0, scrollDepth: 0, sessions: 0 };
       }
 
-      if (name === "Traffic") {
-        const s = Number(row.totalSessionCount ?? 0);
+      if (n === "traffic") {
+        const s = pickNum(row, ["totalsessioncount"]);
         totalSessions += s;
         if (url && pageMap[url]) pageMap[url].sessions += s;
-      }
-      if (name === "Dead Click Count") {
-        const d = Number(row.DeadClickCount ?? row.deadClickCount ?? 0);
+      } else if (n.includes("deadclick")) {
+        const d = pickNum(row, ["deadclickcount", "deadclick", "subtotal"]);
         totalDeadClicks += d;
         if (url && pageMap[url]) pageMap[url].deadClicks += d;
-      }
-      if (name === "Rage Click Count") {
-        const r = Number(row.RageClickCount ?? row.rageClickCount ?? 0);
+      } else if (n.includes("rageclick")) {
+        const r = pickNum(row, ["rageclickcount", "rageclick", "subtotal"]);
         totalRageClicks += r;
         if (url && pageMap[url]) pageMap[url].rageClicks += r;
-      }
-      if (name === "Quickback Click") {
-        totalQuickback += Number(row.QuickbackClickCount ?? row.quickbackClickCount ?? 0);
-      }
-      if (name === "Scroll Depth") {
-        const sd = Number(row.ScrollDepthPercentage ?? row.scrollDepthPercentage ?? 0);
+      } else if (n.includes("quickback")) {
+        totalQuickback += pickNum(row, ["quickbackclickcount", "quickbackclick", "quickback", "subtotal"]);
+      } else if (n.includes("scrolldepth")) {
+        const sd = pickNum(row, ["averagescrolldepth", "scrolldepth"]);
         if (sd > 0) { totalScrollDepth += sd; scrollCount++; }
-        if (url && pageMap[url]) pageMap[url].scrollDepth = sd;
-      }
-      if (name === "Engagement Time") {
-        const et = Number(row.EngagementTime ?? row.engagementTime ?? 0);
+        if (url && pageMap[url]) pageMap[url].scrollDepth = Math.round(sd);
+      } else if (n.includes("engagementtime")) {
+        const et = pickNum(row, ["activetime", "totaltime", "engagementtime"]);
         if (et > 0) { totalEngagement += et; engagementCount++; }
-      }
-      if (name === "Script Error Count") {
-        totalErrors += Number(row.ScriptErrorCount ?? row.scriptErrorCount ?? 0);
+      } else if (n.includes("scripterror") || n.includes("javascripterror") || n === "errorclickcount") {
+        totalErrors += pickNum(row, ["scripterrorcount", "errorcount", "scripterror", "subtotal"]);
       }
     }
   }
@@ -251,6 +264,7 @@ export function ClarityPanel({ siteDbId }: { siteDbId: string }) {
   const [aiAnalysis, setAiAnalysis]     = useState<string | null>(null);
   const [aiLoading, setAiLoading]       = useState(false);
   const [aiError, setAiError]           = useState(false);
+  const [aiErrorMsg, setAiErrorMsg]     = useState<string | null>(null);
 
   // ── Load config + latest snapshot ──────────────────────────────────────────
   const loadData = useCallback(async () => {
@@ -325,20 +339,30 @@ export function ClarityPanel({ siteDbId }: { siteDbId: string }) {
     if (!snapshot) return;
     setAiLoading(true);
     setAiError(false);
+    setAiErrorMsg(null);
     setAiAnalysis(null);
     try {
+      const provider = localStorage.getItem("aiProvider") || "anthropic";
+      const apiKey = localStorage.getItem(`aiKey_${provider}`) || localStorage.getItem("aiApiKey") || "";
+
       const parsed = parseSnapshot(snapshot);
-      const prompt = `You are a CRO and SEO expert. Analyze this Microsoft Clarity UX data and give actionable insights in 3-5 bullet points. Focus on the most critical issues first. Be specific about which pages need fixing and why. Data: ${JSON.stringify(parsed)}`;
+      const raw = JSON.stringify(snapshot.data.traffic ?? []).slice(0, 6000);
+      const prompt = `You are a CRO and SEO expert. Analyze this Microsoft Clarity UX data (period: ${snapshot.periodDays} days) and give actionable, specific insights as 3-6 bullet points, most critical first. Call out which pages need fixing and why (dead clicks, low scroll depth, rage clicks, JS errors). Summary metrics: ${JSON.stringify(parsed.metrics)}. Top problem pages: ${JSON.stringify(parsed.pages)}. Raw per-URL data: ${raw}`;
 
       const res = await fetch("/api/gsc/ai-summary", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ prompt, aiProvider: provider, aiApiKey: apiKey }),
       });
-      if (!res.ok) { setAiError(true); return; }
-      const data = await res.json();
-      setAiAnalysis(data.summary ?? data.result ?? "");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setAiErrorMsg(data?.error === "no_ai_key" ? t("clarityNoAiKey") : t("clarityAnalysisError"));
+        setAiError(true);
+        return;
+      }
+      setAiAnalysis(data.summary ?? "");
     } catch {
+      setAiErrorMsg(t("clarityAnalysisError"));
       setAiError(true);
     } finally {
       setAiLoading(false);
@@ -581,7 +605,7 @@ export function ClarityPanel({ siteDbId }: { siteDbId: string }) {
 
             {aiError && (
               <div style={{ padding: "10px 12px", background: "rgba(239,68,68,0.08)", borderRadius: "var(--radius-md)", fontSize: "13px", color: "var(--color-accent-red)" }}>
-                {t("clarityAnalysisError")}
+                {aiErrorMsg ?? t("clarityAnalysisError")}
               </div>
             )}
 
