@@ -89,6 +89,7 @@ model Site {
   // Microsoft Clarity integration
   clarityToken          String?   // Data Export API token (per-project in Clarity)
   clarityProjectId      String?   // Clarity project ID (shown in Clarity dashboard URL)
+  clarityInterval       String?   // auto-collect cadence: "disabled" | "daily"
 
   // Google Analytics 4 integration
   ga4PropertyId         String?   // GA4 numeric property ID (e.g. "123456789")

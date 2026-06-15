@@ -9,30 +9,19 @@ import {
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-interface ClarityMetric {
-  name: string;
-  value: string | number;
-  unit?: string;
-}
-
-interface PageRow {
-  url: string;
-  deadClicks: number;
-  rageClicks: number;
-  scrollDepth: number;
-  sessions: number;
-}
-
-interface SnapshotData {
-  traffic: any[];
-  ux: any[];
-  fetchedWith: { days: number };
-}
+import type { ClarityMetric, PageRow } from "@/lib/clarityParse";
 
 interface Snapshot {
   fetchedAt: string;
   periodDays: number;
-  data: SnapshotData;
+  data: { traffic: any[]; ux: any[]; fetchedWith: { days: number } };
+}
+
+// Aggregated view across collected snapshots (computed server-side).
+interface Aggregate {
+  metrics: ClarityMetric[];
+  pages: PageRow[];
+  daysCovered: number;
 }
 
 // Strip Markdown so the report reads cleanly (and is client-ready) regardless
@@ -46,100 +35,6 @@ function cleanReport(s: string): string {
     .replace(/`([^`]+)`/g, "$1")              // `code`
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-}
-
-// Normalize a Clarity metricName: strip non-alphanumerics, lowercase.
-// "Dead Click Count" → "deadclickcount", "ScrollDepth" → "scrolldepth".
-const norm = (s: string) => (s || "").replace(/[^a-z0-9]/gi, "").toLowerCase();
-
-// Pull the first numeric field from a row whose (normalized) key matches one of
-// the candidate substrings. Defensive against Clarity's casing/naming variants.
-function pickNum(row: any, candidates: string[]): number {
-  for (const k of Object.keys(row || {})) {
-    const kn = norm(k);
-    if (candidates.some(c => kn === c || kn.includes(c))) {
-      const n = Number(row[k]);
-      if (Number.isFinite(n)) return n;
-    }
-  }
-  return 0;
-}
-
-// ─── Parse raw Clarity API response into summary metrics + page rows ──────────
-function parseSnapshot(snapshot: Snapshot): { metrics: ClarityMetric[]; pages: PageRow[] } {
-  // Use ONLY the URL-dimension response. The Clarity API returns every metric in
-  // a single call regardless of dimension, so the second (URL+Device) response
-  // would double-count if merged in.
-  const all: any[] = snapshot.data.traffic || [];
-
-  let totalSessions = 0;
-  let totalDeadClicks = 0;
-  let totalRageClicks = 0;
-  let totalQuickback = 0;
-  let totalScrollDepth = 0;
-  let scrollCount = 0;
-  let totalEngagement = 0;
-  let engagementCount = 0;
-  let totalErrors = 0;
-
-  const pageMap: Record<string, PageRow> = {};
-
-  for (const metric of all) {
-    const n = norm(metric.metricName ?? "");
-    const info: any[] = metric.information ?? [];
-
-    for (const row of info) {
-      const url: string = row.URL ?? row.url ?? "";
-      if (!pageMap[url] && url) {
-        pageMap[url] = { url, deadClicks: 0, rageClicks: 0, scrollDepth: 0, sessions: 0 };
-      }
-
-      if (n === "traffic") {
-        const s = pickNum(row, ["totalsessioncount"]);
-        totalSessions += s;
-        if (url && pageMap[url]) pageMap[url].sessions += s;
-      } else if (n.includes("deadclick")) {
-        const d = pickNum(row, ["deadclickcount", "deadclick", "subtotal"]);
-        totalDeadClicks += d;
-        if (url && pageMap[url]) pageMap[url].deadClicks += d;
-      } else if (n.includes("rageclick")) {
-        const r = pickNum(row, ["rageclickcount", "rageclick", "subtotal"]);
-        totalRageClicks += r;
-        if (url && pageMap[url]) pageMap[url].rageClicks += r;
-      } else if (n.includes("quickback")) {
-        totalQuickback += pickNum(row, ["quickbackclickcount", "quickbackclick", "quickback", "subtotal"]);
-      } else if (n.includes("scrolldepth")) {
-        const sd = pickNum(row, ["averagescrolldepth", "scrolldepth"]);
-        if (sd > 0) { totalScrollDepth += sd; scrollCount++; }
-        if (url && pageMap[url]) pageMap[url].scrollDepth = Math.round(sd);
-      } else if (n.includes("engagementtime")) {
-        const et = pickNum(row, ["activetime", "totaltime", "engagementtime"]);
-        if (et > 0) { totalEngagement += et; engagementCount++; }
-      } else if (n.includes("scripterror") || n.includes("javascripterror") || n === "errorclickcount") {
-        totalErrors += pickNum(row, ["scripterrorcount", "errorcount", "scripterror", "subtotal"]);
-      }
-    }
-  }
-
-  const avgScroll = scrollCount > 0 ? Math.round(totalScrollDepth / scrollCount) : 0;
-  const avgEngagement = engagementCount > 0 ? Math.round(totalEngagement / engagementCount) : 0;
-
-  const metrics: ClarityMetric[] = [
-    { name: "dead",       value: totalDeadClicks },
-    { name: "rage",       value: totalRageClicks },
-    { name: "quickback",  value: totalQuickback },
-    { name: "scroll",     value: avgScroll,     unit: "%" },
-    { name: "sessions",   value: totalSessions },
-    { name: "engagement", value: avgEngagement, unit: "s" },
-    { name: "errors",     value: totalErrors },
-  ];
-
-  const pages = Object.values(pageMap)
-    .filter(p => p.url && (p.deadClicks > 0 || p.rageClicks > 0 || p.sessions > 0))
-    .sort((a, b) => (b.deadClicks + b.rageClicks) - (a.deadClicks + a.rageClicks))
-    .slice(0, 20);
-
-  return { metrics, pages };
 }
 
 const ghostBtn: React.CSSProperties = {
@@ -287,7 +182,11 @@ export function ClarityPanel({ siteDbId, domain }: { siteDbId: string; domain?: 
   const [aiError, setAiError]           = useState(false);
   const [aiErrorMsg, setAiErrorMsg]     = useState<string | null>(null);
 
-  // ── Load config + latest snapshot ──────────────────────────────────────────
+  const [aggregate, setAggregate]       = useState<Aggregate | null>(null);
+  const [interval, setIntervalVal]      = useState<string>("disabled");
+  const [savingInterval, setSavingInterval] = useState(false);
+
+  // ── Load config + latest snapshot + 30-day aggregate ───────────────────────
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -298,6 +197,8 @@ export function ClarityPanel({ siteDbId, domain }: { siteDbId: string; domain?: 
       setProjectId(data.clarityProjectId);
       if (data.clarityProjectId) setProjectIdInput(data.clarityProjectId);
       if (data.snapshot) setSnapshot(data.snapshot);
+      setAggregate(data.aggregate ?? null);
+      setIntervalVal(data.clarityInterval ?? "disabled");
     } finally {
       setLoading(false);
     }
@@ -331,6 +232,21 @@ export function ClarityPanel({ siteDbId, domain }: { siteDbId: string; domain?: 
     }
   };
 
+  // ── Toggle daily auto-collect ────────────────────────────────────────────────
+  const changeInterval = async (value: string) => {
+    setIntervalVal(value);
+    setSavingInterval(true);
+    try {
+      await fetch("/api/clarity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId: siteDbId, action: "save", clarityInterval: value }),
+      });
+    } finally {
+      setSavingInterval(false);
+    }
+  };
+
   // ── Fetch fresh Clarity data ────────────────────────────────────────────────
   const handleFetch = async () => {
     setFetching(true);
@@ -339,7 +255,7 @@ export function ClarityPanel({ siteDbId, domain }: { siteDbId: string; domain?: 
       const res = await fetch("/api/clarity", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ siteId: siteDbId, action: "fetch", numOfDays: 3 }),
+        body: JSON.stringify({ siteId: siteDbId, action: "fetch", numOfDays: 1 }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -348,8 +264,8 @@ export function ClarityPanel({ siteDbId, domain }: { siteDbId: string; domain?: 
         else setFetchError(data.message ?? "Error");
         return;
       }
-      if (data.snapshot) setSnapshot(data.snapshot);
       setConfigured(true);
+      await loadData(); // refresh snapshot + aggregate
     } finally {
       setFetching(false);
     }
@@ -357,7 +273,8 @@ export function ClarityPanel({ siteDbId, domain }: { siteDbId: string; domain?: 
 
   // ── AI analysis ─────────────────────────────────────────────────────────────
   const handleAiAnalysis = async () => {
-    if (!snapshot) return;
+    if (!aggregate) return;
+    const view = aggregate;
     setAiLoading(true);
     setAiError(false);
     setAiErrorMsg(null);
@@ -366,11 +283,11 @@ export function ClarityPanel({ siteDbId, domain }: { siteDbId: string; domain?: 
       const provider = localStorage.getItem("aiProvider") || "anthropic";
       const apiKey = localStorage.getItem(`aiKey_${provider}`) || localStorage.getItem("aiApiKey") || "";
 
-      const parsed = parseSnapshot(snapshot);
-      const raw = JSON.stringify(snapshot.data.traffic ?? []).slice(0, 6000);
+      const raw = JSON.stringify(snapshot?.data.traffic ?? []).slice(0, 6000);
       const langName = language === "ru" ? "Russian" : language === "uk" ? "Ukrainian" : "English";
       const site = domain || projectId || "the site";
-      const prompt = `You are a senior CRO (Conversion Rate Optimization) and SEO expert analyzing Microsoft Clarity UX data for ${site} (period: ${snapshot.periodDays} days). Produce a deep, client-ready audit — not a generic checklist. Dig into ROOT CAUSES: for each problem explain WHY it happens (cite the specific pages and numbers from the data), WHAT it costs the business, and HOW to fix it concretely.
+      const periodLabel = `${view.daysCovered} day(s) of collected data`;
+      const prompt = `You are a senior CRO (Conversion Rate Optimization) and SEO expert analyzing Microsoft Clarity UX data for ${site} (period: ${periodLabel}). Produce a deep, client-ready audit — not a generic checklist. Dig into ROOT CAUSES: for each problem explain WHY it happens (cite the specific pages and numbers from the data), WHAT it costs the business, and HOW to fix it concretely.
 
 Structure the report exactly like this:
 1) A title line: "UX-аудит — ${site}" (translated) and a second line with the period.
@@ -383,7 +300,7 @@ Use relevant emoji as section/point accents (🎯 🔴 ⚠️ ✅ 🖱️ 📊 �
 
 Formatting rules (IMPORTANT): write in ${langName}, as clean text suitable to paste into a client report. Do NOT use Markdown syntax: no "#", no "*", no "**" for bold, no backticks, no markdown tables. Put each section title on its own line. For lists, start each item with "- ". Keep it specific and concrete, reference real page paths and numbers.
 
-Summary metrics: ${JSON.stringify(parsed.metrics)}. Top problem pages: ${JSON.stringify(parsed.pages)}. Raw per-URL data: ${raw}`;
+Summary metrics (aggregated over ${view.daysCovered} day(s)): ${JSON.stringify(view.metrics)}. Top problem pages: ${JSON.stringify(view.pages)}. Raw per-URL data (latest day): ${raw}`;
 
       const res = await fetch("/api/gsc/ai-summary", {
         method: "POST",
@@ -453,8 +370,8 @@ Summary metrics: ${JSON.stringify(parsed.metrics)}. Top problem pages: ${JSON.st
     w.document.close();
   };
 
-  // ── Derived metrics ─────────────────────────────────────────────────────────
-  const parsed = snapshot ? parseSnapshot(snapshot) : null;
+  // ── Derived metrics (aggregated across collected snapshots) ──────────────────
+  const parsed = aggregate;
 
   const metricDefs = [
     { name: "dead",       icon: <MousePointerClick size={14} />, label: t("clarityMetricDeadClicks"),  desc: t("clarityMetricDeadClicksDesc"),  warn: true },
@@ -572,6 +489,18 @@ Summary metrics: ${JSON.stringify(parsed.metrics)}. Top problem pages: ${JSON.st
             {fetching ? t("clarityFetching") : snapshot ? t("clarityRefresh") : t("clarityFetch")}
           </button>
 
+          {/* Auto-collect toggle */}
+          {configured && (
+            <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "var(--color-text-secondary)" }} title={t("clarityAutoCollectHint")}>
+              <Clock size={13} /> {t("clarityAutoCollect")}
+              <select value={interval} onChange={e => changeInterval(e.target.value)} disabled={savingInterval}
+                style={{ fontSize: "12px", padding: "4px 8px", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", cursor: "pointer" }}>
+                <option value="disabled">{t("clarityAutoOff")}</option>
+                <option value="daily">{t("clarityAutoDaily")}</option>
+              </select>
+            </label>
+          )}
+
           {projectId && (
             <a href={`https://clarity.microsoft.com/projects/view/${projectId}/dashboard`}
               target="_blank" rel="noopener noreferrer"
@@ -608,6 +537,9 @@ Summary metrics: ${JSON.stringify(parsed.metrics)}. Top problem pages: ${JSON.st
       {/* Metrics grid */}
       {parsed && (
         <>
+          <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "10px" }}>
+            {t("clarityCoverage")}: {parsed.daysCovered} {parsed.daysCovered === 1 ? t("clarityDay") : t("clarityDays")}
+          </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "12px", marginBottom: "24px" }}>
             {metricDefs.map(def => {
               const m = parsed.metrics.find(x => x.name === def.name);
