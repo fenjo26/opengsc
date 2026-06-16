@@ -2446,7 +2446,7 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
   };
 
   // ── XMLRiver / NeuralIndexer indexation check ──
-  const runXrCheck = async (via: "xr" | "neural", retryCount = 0) => {
+  const runXrCheck = async (via: "xr" | "neural") => {
     // If nothing selected — fetch ALL site URLs (not just current page)
     let urls: string[];
     if (selected.size > 0) {
@@ -2461,11 +2461,10 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
       }
     }
     if (!urls.length) return;
-    if (retryCount === 0) { setXrChecking(true); setXrCheckMsg(""); }
+    setXrChecking(true); setXrCheckMsg("");
+
     try {
-      const endpoint = via === "neural"
-        ? "/api/indexing/neural/check"
-        : "/api/indexing/xmlriver";
+      const endpoint = via === "neural" ? "/api/indexing/neural/check" : "/api/indexing/xmlriver";
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2473,23 +2472,39 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
       });
       const d = await res.json();
       if (!res.ok) { setXrCheckMsg(`✗ ${d.error ?? "Error"}`); setXrChecking(false); return; }
-      if (d.pending) {
-        if (retryCount < 4) {
-          // Auto-retry every 30s (up to 4 times = 2 min total)
-          const secsLeft = 30;
-          setXrCheckMsg(`⏳ NeuralIndexer обрабатывает... повтор через ${secsLeft} сек (${retryCount + 1}/4)`);
-          await new Promise(r => setTimeout(r, 30000));
-          await runXrCheck(via, retryCount + 1);
-        } else {
-          setXrCheckMsg(`⏳ ${t("idxCheckPending")}`);
-          setXrChecking(false);
-        }
+
+      // XMLRiver: synchronous result
+      if (!d.pending) {
+        const ok = d.checked ?? 0;
+        const err = d.errors ?? 0;
+        setXrCheckMsg(`✓ ${t("idxChecked")} ${ok} URLs${err ? ` · ${err} ${t("idxErrors")}` : ""}${d.charged != null ? ` · $${Number(d.charged).toFixed(4)}` : ""}`);
+        await loadUrls(page, statusFilter, search);
+        setXrChecking(false);
         return;
       }
-      const ok = d.checked ?? 0;
-      const err = d.errors ?? 0;
-      setXrCheckMsg(`✓ ${t("idxChecked")} ${ok} URLs${err ? ` · ${err} ${t("idxErrors")}` : ""}${d.charged != null ? ` · $${Number(d.charged).toFixed(4)}` : ""}`);
-      await loadUrls(page, statusFilter, search);
+
+      // Neural: poll /status every 10s until done (no new tasks created)
+      const checkId: string = d.checkId;
+      const est: number = d.estimatedMinutes ?? 3;
+      setXrCheckMsg(`⏳ NeuralIndexer обрабатывает ${d.urlCount} URL (~${est} мин)...`);
+
+      const maxAttempts = Math.max(30, est * 8); // 10s × attempts ≥ estimated time
+      for (let i = 0; i < maxAttempts; i++) {
+        await new Promise(r => setTimeout(r, 10000)); // wait 10s
+        try {
+          const sRes = await fetch(`/api/indexing/neural/status?checkId=${encodeURIComponent(checkId)}&siteDbId=${siteDbId}`);
+          const s = await sRes.json();
+          if (s.failed) { setXrCheckMsg(`✗ NeuralIndexer: check failed`); break; }
+          if (s.done) {
+            setXrCheckMsg(`✓ ${t("idxChecked")} ${s.checked} URLs · ${s.indexed} ${t("idxInIndex")}${s.charged != null ? ` · $${Number(s.charged).toFixed(4)}` : ""}`);
+            await loadUrls(page, statusFilter, search);
+            break;
+          }
+          // Still processing — update progress
+          const pct = s.totalLinks > 0 ? Math.round((s.checkedLinks / s.totalLinks) * 100) : 0;
+          setXrCheckMsg(`⏳ NeuralIndexer: ${s.checkedLinks ?? 0}/${s.totalLinks ?? d.urlCount} URL проверено${pct > 0 ? ` (${pct}%)` : ""}...`);
+        } catch { /* network error, retry */ }
+      }
     } catch (e: any) { setXrCheckMsg(`✗ ${(e as any).message}`); }
     setXrChecking(false);
   };
