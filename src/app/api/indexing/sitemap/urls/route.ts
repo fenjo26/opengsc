@@ -25,9 +25,37 @@ export async function GET(req: Request) {
   // Build where clause
   const where: any = { siteId: siteDbId };
   if (search) where.url = { contains: search };
-  if (statusFilter === 'indexed')     where.googleStatus = { contains: 'indexed' };
-  if (statusFilter === 'not_indexed') where.googleStatus = { not: null, notIn: ['Submitted and indexed', 'indexed'] };
-  if (statusFilter === 'not_checked') where.googleStatus = null;
+  if (statusFilter === 'indexed') {
+    // Google indexed OR Neural check = indexed
+    where.OR = [
+      { googleStatus: { contains: 'indexed' } },
+      { neuralStatus: 'indexed' },
+      { xrStatus: 'indexed' },
+    ];
+  } else if (statusFilter === 'not_indexed') {
+    // Any source says not indexed, nothing says indexed
+    where.AND = [
+      { NOT: { googleStatus: { contains: 'indexed' } } },
+      { NOT: { neuralStatus: 'indexed' } },
+      { NOT: { xrStatus: 'indexed' } },
+      {
+        OR: [
+          { googleStatus: { not: null } },
+          { neuralStatus: 'not_indexed' },
+          { xrStatus: 'not_indexed' },
+        ],
+      },
+    ];
+  } else if (statusFilter === 'not_checked') {
+    // Nothing checked at all
+    where.googleStatus = null;
+    where.neuralStatus = null;
+    where.xrStatus = null;
+  } else if (statusFilter === 'neural_indexed') {
+    where.neuralStatus = 'indexed';
+  } else if (statusFilter === 'neural_not_indexed') {
+    where.neuralStatus = 'not_indexed';
+  }
 
   const [total, rows] = await Promise.all([
     prisma.sitemapUrl.count({ where }),

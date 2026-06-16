@@ -2574,10 +2574,11 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
 
   const COUNTER_CHIPS = [
     { label: t("idxTotal"), value: counters.total ?? 0, color: "var(--color-text-primary)", filter: "all" },
+    { label: `Neural ✓`, value: counters.neuralChecked ?? 0, color: "#a78bfa", filter: "neural_indexed" },
     { label: t("idxInIndex"), value: counters.indexed ?? 0, color: "#4ADE80", filter: "indexed" },
     { label: t("idxNotInIndex"), value: counters.notIndexed ?? 0, color: "#F87171", filter: "not_indexed" },
     { label: t("idxNotChecked"), value: counters.notChecked ?? 0, color: "#FBBF24", filter: "not_checked" },
-    { label: t("idxNeuralSent"), value: counters.neuralSubmitted ?? 0, color: "#a78bfa", filter: "all" },
+    { label: t("idxNeuralSent"), value: counters.neuralSubmitted ?? 0, color: "#64748b", filter: "all" },
   ];
 
   return (
@@ -2650,7 +2651,14 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
           />
           <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); loadUrls(1, e.target.value, search); }}
             style={{ fontSize: "12px", padding: "6px 10px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-primary)", cursor: "pointer" }}>
-            {[["all",t("idxAllStatuses")],["indexed",t("idxInIndex")],["not_indexed",t("idxNotInIndex")],["not_checked",t("idxNotChecked")]].map(([v,l]) => (
+            {[
+              ["all", t("idxAllStatuses")],
+              ["indexed", `✓ ${t("idxInIndex")}`],
+              ["not_indexed", `✗ ${t("idxNotInIndex")}`],
+              ["not_checked", t("idxNotChecked")],
+              ["neural_indexed", `Neural: ✓ ${t("idxInIndex")}`],
+              ["neural_not_indexed", `Neural: ✗ ${t("idxNotInIndex")}`],
+            ].map(([v,l]) => (
               <option key={v} value={v}>{l}</option>
             ))}
           </select>
