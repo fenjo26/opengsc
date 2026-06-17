@@ -286,6 +286,14 @@ export function ClarityPanel({ siteDbId, domain }: { siteDbId: string; domain?: 
       const raw = JSON.stringify(snapshot?.data.traffic ?? []).slice(0, 6000);
       const site = domain || projectId || "the site";
 
+      // Slavic plural agreement (1 сессия / 2 сессии / 5 сессий).
+      const plural = (n: number, forms: [string, string, string]) => {
+        const n10 = n % 10, n100 = n % 100;
+        if (n10 === 1 && n100 !== 11) return forms[0];
+        if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) return forms[1];
+        return forms[2];
+      };
+
       // Localized output strings: section titles must match the UI language so
       // an English/Ukrainian user never gets a Russian-titled report.
       const PROMPT_I18N = {
@@ -298,7 +306,7 @@ export function ClarityPanel({ siteDbId, domain }: { siteDbId: string; domain?: 
           sCheck: "⚠️ Worth checking",
           sRecs: "✅ Recommendations",
           lowSample: (n: number) =>
-            `Note: the sample is small (${n} sessions) — treat all conclusions as preliminary, not statistically reliable.`,
+            `Note: the sample is small (${n} ${n === 1 ? "session" : "sessions"}) — treat all conclusions as preliminary, not statistically reliable.`,
         },
         ru: {
           langName: "Russian",
@@ -309,7 +317,7 @@ export function ClarityPanel({ siteDbId, domain }: { siteDbId: string; domain?: 
           sCheck: "⚠️ Что стоит проверить",
           sRecs: "✅ Рекомендации",
           lowSample: (n: number) =>
-            `Примечание: выборка маленькая (${n} сессий) — все выводы предварительные, статистически недостоверные.`,
+            `Примечание: выборка маленькая (${n} ${plural(n, ["сессия", "сессии", "сессий"])}) — все выводы предварительные, статистически недостоверные.`,
         },
         uk: {
           langName: "Ukrainian",
@@ -320,7 +328,7 @@ export function ClarityPanel({ siteDbId, domain }: { siteDbId: string; domain?: 
           sCheck: "⚠️ Що варто перевірити",
           sRecs: "✅ Рекомендації",
           lowSample: (n: number) =>
-            `Примітка: вибірка мала (${n} сесій) — усі висновки попередні, статистично недостовірні.`,
+            `Примітка: вибірка мала (${n} ${plural(n, ["сесія", "сесії", "сесій"])}) — усі висновки попередні, статистично недостовірні.`,
         },
       } as const;
 
@@ -431,6 +439,19 @@ Summary metrics (aggregated over ${view.daysCovered} day(s)): ${JSON.stringify(v
       <script>window.onload=function(){window.print();}</script>
       </body></html>`);
     w.document.close();
+  };
+
+  // Download the exact raw Clarity API response (what the panel stored) so any
+  // metric in an AI report can be verified against the source data.
+  const downloadRawJson = () => {
+    if (!snapshot) return;
+    const blob = new Blob([JSON.stringify(snapshot.data, null, 2)], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `clarity-raw-${projectId || "data"}-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   // ── Derived metrics (aggregated across collected snapshots) ──────────────────
@@ -573,6 +594,12 @@ Summary metrics (aggregated over ${view.daysCovered} day(s)): ${JSON.stringify(v
               }}>
               <ExternalLink size={12} /> {t("clarityOpen")}
             </a>
+          )}
+
+          {snapshot && (
+            <button onClick={downloadRawJson} style={ghostBtn} title="Raw Clarity API response (for verifying AI report claims)">
+              <Code2 size={12} /> {t("clarityDownloadRaw")}
+            </button>
           )}
 
           {snapshot && (

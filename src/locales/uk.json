@@ -277,6 +277,7 @@
   "clarityCopied": "Скопійовано",
   "clarityDownloadTxt": "Завантажити .txt",
   "clarityDownloadPdf": "Завантажити PDF",
+  "clarityDownloadRaw": "Сирий JSON",
   "clarityReportTitle": "Clarity UX звіт",
   "clarityAutoCollect": "Автозбір:",
   "clarityAutoCollectHint": "Раз на день забирати дані Clarity та накопичувати до 30 днів для глибшого аналізу.",

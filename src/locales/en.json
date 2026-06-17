@@ -277,6 +277,7 @@
   "clarityCopied": "Copied",
   "clarityDownloadTxt": "Download .txt",
   "clarityDownloadPdf": "Download PDF",
+  "clarityDownloadRaw": "Raw JSON",
   "clarityReportTitle": "Clarity UX report",
   "clarityAutoCollect": "Auto-collect:",
   "clarityAutoCollectHint": "Fetch Clarity data once a day and accumulate up to 30 days for deeper analysis.",
