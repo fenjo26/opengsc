@@ -5,12 +5,13 @@ export async function fetchLLM(
   provider: string,
   apiKey: string,
   maxTokens = 1024,
+  modelOverride?: string,
 ): Promise<string | null> {
   try {
     let text = '';
     if (provider === 'anthropic' || provider === 'zai') {
       const baseUrl = provider === 'zai' ? 'https://api.z.ai/api/anthropic' : 'https://api.anthropic.com';
-      const model = provider === 'zai' ? 'glm-4.5-air' : 'claude-haiku-4-5-20251001';
+      const model = modelOverride ?? (provider === 'zai' ? 'glm-4.5-air' : 'claude-haiku-4-5-20251001');
       const res = await fetch(`${baseUrl}/v1/messages`, {
         method: 'POST',
         headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },

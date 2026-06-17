@@ -503,6 +503,7 @@ function PreferencesSection({ user }: { user: any }) {
         </div>
       </SectionCard>
       <AIConfigSection />
+      <SerpScrapeSection />
       <HealthApiKeysSection />
     </div>
   );
@@ -711,7 +712,136 @@ function AIConfigSection() {
   );
 }
 
+// ─── Section: SEO Tools — SERP & Scraping ─────────────────────────────────────
+// Keys for the SEO Tools tab (Outline Generator / Content Analysis).
+// Stored in localStorage, sent per-request — same convention as AI Providers.
+const SEO_PROVIDERS = [
+  {
+    id: "serper",
+    storageKey: "seoKey_serper",
+    name: "Serper.dev",
+    roleKey: "seoRoleSerp",
+    placeholder: "Serper API key",
+    hintKey: "seoSetHintSerper",
+    instrKey: "seoSetInstrSerper",
+    docsUrl: "https://serper.dev",
+    color: "#10A37F",
+    logo: "S",
+  },
+  {
+    id: "dataforseo",
+    storageKey: "seoKey_dataforseo",
+    name: "DataForSEO",
+    roleKey: "seoRoleDfs",
+    placeholder: "login:password",
+    hintKey: "seoSetHintDfs",
+    instrKey: "seoSetInstrDfs",
+    docsUrl: "https://app.dataforseo.com/api-access",
+    color: "#2997ff",
+    logo: "D",
+  },
+  {
+    id: "firecrawl",
+    storageKey: "seoKey_firecrawl",
+    name: "Firecrawl",
+    roleKey: "seoRoleFc",
+    placeholder: "fc-...",
+    hintKey: "seoSetHintFc",
+    instrKey: "seoSetInstrFc",
+    docsUrl: "https://www.firecrawl.dev/app/api-keys",
+    color: "#ff9f0a",
+    logo: "F",
+  },
+] as const;
 
+function SeoKeyCard({ provider }: { provider: typeof SEO_PROVIDERS[number] }) {
+  const { t } = useLanguage();
+  const [key, setKey] = useState("");
+  const [visible, setVisible] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const isConfigured = key.trim().length > 4;
+
+  useEffect(() => { setKey(localStorage.getItem(provider.storageKey) || ""); }, [provider.storageKey]);
+
+  const save = () => {
+    localStorage.setItem(provider.storageKey, key.trim());
+    // Default the active SERP provider to the first configured SERP key.
+    if (key.trim() && (provider.id === "serper" || provider.id === "dataforseo")) {
+      if (!localStorage.getItem("seoSerpProvider")) localStorage.setItem("seoSerpProvider", provider.id);
+    }
+    setSaved(true); setTimeout(() => setSaved(false), 2000);
+  };
+  const clear = () => { setKey(""); localStorage.removeItem(provider.storageKey); };
+
+  return (
+    <div style={{ padding: "16px", borderRadius: "10px", border: `1px solid ${isConfigured ? `${provider.color}40` : "var(--color-border)"}`, background: isConfigured ? `${provider.color}08` : "rgba(255,255,255,0.02)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+        <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: `${provider.color}20`, border: `1px solid ${provider.color}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: 700, color: provider.color, flexShrink: 0 }}>{provider.logo}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)" }}>{provider.name}</div>
+          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{t(provider.roleKey)}</div>
+        </div>
+        {isConfigured
+          ? <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", color: "#10B981", fontWeight: 600 }}><CheckCircle size={12} color="#10B981" /> Connected</span>
+          : <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Not set</span>}
+      </div>
+
+      <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+        <div style={{ flex: 1, position: "relative" }}>
+          <input type={visible ? "text" : "password"} placeholder={provider.placeholder} value={key} onChange={e => setKey(e.target.value)} onKeyDown={e => e.key === "Enter" && save()}
+            style={{ width: "100%", padding: "8px 36px 8px 12px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-primary)", fontSize: "12px", outline: "none", boxSizing: "border-box", fontFamily: "monospace" }} />
+          <button onClick={() => setVisible(v => !v)} style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--color-text-secondary)", padding: 0, display: "flex" }}>
+            <Eye size={14} style={{ opacity: visible ? 1 : 0.5 }} />
+          </button>
+        </div>
+        {isConfigured && <button onClick={clear} style={{ padding: "8px 10px", borderRadius: "8px", border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.08)", color: "#f87171", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center" }}><X size={13} /></button>}
+        <button onClick={save} disabled={!key.trim()} style={{ padding: "8px 14px", borderRadius: "8px", border: "none", background: saved ? "rgba(16,185,129,0.2)" : key.trim() ? `${provider.color}25` : "rgba(255,255,255,0.06)", color: saved ? "#10B981" : key.trim() ? provider.color : "var(--color-text-secondary)", fontSize: "12px", fontWeight: 600, cursor: key.trim() ? "pointer" : "not-allowed", display: "flex", alignItems: "center", gap: "4px" }}>
+          {saved ? <><CheckCircle size={12} /> Saved</> : "Save"}
+        </button>
+      </div>
+
+      <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: 1.5, marginBottom: "6px" }}>{t(provider.hintKey)}</div>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "10px" }}>
+        <span style={{ fontSize: "11px", color: "var(--color-text-tertiary)", lineHeight: 1.5, flex: 1 }}>📍 {t(provider.instrKey)}</span>
+        <a href={provider.docsUrl} target="_blank" rel="noreferrer" style={{ fontSize: "11px", color: "var(--color-accent-blue)", display: "flex", alignItems: "center", gap: "3px", textDecoration: "none", flexShrink: 0, whiteSpace: "nowrap" }}>Get key ↗</a>
+      </div>
+    </div>
+  );
+}
+
+function SerpScrapeSection() {
+  const { t } = useLanguage();
+  const [active, setActive] = useState("serper");
+  useEffect(() => { setActive(localStorage.getItem("seoSerpProvider") || "serper"); }, []);
+  const setProvider = (id: string) => { setActive(id); localStorage.setItem("seoSerpProvider", id); };
+
+  return (
+    <SectionCard>
+      <SectionTitle
+        icon={<Globe size={17} color="#10A37F" />}
+        title={t("seoSetTitle")}
+        sub={t("seoSetSub")}
+      />
+
+      <div style={{ marginBottom: "14px" }}>
+        <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "7px" }}>{t("seoSetActiveProvider")}</div>
+        <div style={{ display: "flex", gap: "8px" }}>
+          {[["serper", "Serper.dev"], ["dataforseo", "DataForSEO"]].map(([id, name]) => (
+            <button key={id} onClick={() => setProvider(id)} style={{ padding: "7px 14px", borderRadius: "8px", fontSize: "12px", fontWeight: 600, cursor: "pointer", border: `1px solid ${active === id ? "var(--color-accent-blue)" : "var(--color-border)"}`, background: active === id ? "rgba(41,151,255,0.1)" : "transparent", color: active === id ? "var(--color-accent-blue)" : "var(--color-text-secondary)" }}>{name}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        {SEO_PROVIDERS.map(p => <SeoKeyCard key={p.id} provider={p} />)}
+      </div>
+
+      <div style={{ marginTop: "14px", padding: "11px 14px", borderRadius: "8px", background: "rgba(16,163,127,0.06)", border: "1px solid rgba(16,163,127,0.18)", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+        💡 {t("seoSetTip")}
+      </div>
+    </SectionCard>
+  );
+}
 
 // ─── Section: Indexing API Keys ───────────────────────────────────────────────
 function IndexApiSection() {

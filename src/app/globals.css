@@ -290,6 +290,56 @@ button {
   to { transform: rotate(360deg); }
 }
 
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+/* ── SEO Tools shared primitives ───────────────────────────────────────────────
+ * Same look as the SectionCard pattern used across the app (settings, etc.):
+ * hairline border, 12px radius, no shadow. Centralised here so theme/geometry
+ * edits propagate to the whole SEO Tools tab automatically. */
+.panel {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.tool-input {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  font-size: 13px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease;
+}
+.tool-input:focus {
+  border-color: var(--color-accent-blue);
+}
+
+.tool-field-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: 5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tool-section-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+
 input::placeholder {
   color: var(--color-text-secondary);
   opacity: 0.7;

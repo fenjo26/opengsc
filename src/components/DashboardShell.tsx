@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useState } from "react";
-import { Settings, LogOut } from "lucide-react";
+import { Settings, LogOut, Sparkles } from "lucide-react";
 import { usePrivacy } from "@/lib/PrivacyContext";
 import { useTheme } from "@/lib/ThemeContext";
 import { useLayout } from "@/lib/LayoutContext";
@@ -441,6 +441,7 @@ function ChromeExtensionModal({ onClose }: { onClose: () => void }) {
 // ─── Top bar ──────────────────────────────────────────────────────────────────
 function TopBar() {
   const router = useRouter();
+  const pathname = usePathname();
   const { data: session } = useSession();
   const { blur, setBlur } = usePrivacy();
   const { dark, setDark } = useTheme();
@@ -480,6 +481,32 @@ function TopBar() {
           <img src="/logo.svg" alt="OpenGSC" height={18} style={{ display: "block" }} />
         </div>
       </button>
+
+      {/* Primary nav tabs */}
+      <nav style={{ display: "flex", alignItems: "center", gap: "4px", marginLeft: "20px", flex: 1 }}>
+        {(() => {
+          const active = pathname?.startsWith("/seo-tools");
+          return (
+            <button
+              onClick={() => router.push("/seo-tools")}
+              style={{
+                display: "flex", alignItems: "center", gap: "7px",
+                padding: "6px 14px", borderRadius: "8px",
+                fontSize: "13px", fontWeight: active ? 700 : 500,
+                cursor: "pointer", border: "none",
+                color: active ? "var(--color-accent-purple)" : "var(--color-text-secondary)",
+                background: active ? "rgba(191,90,242,0.12)" : "transparent",
+                transition: "all 0.15s",
+              }}
+              onMouseOver={e => { if (!active) e.currentTarget.style.background = "var(--color-card-hover)"; }}
+              onMouseOut={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
+            >
+              <Sparkles size={15} />
+              {t("seoNavTitle")}
+            </button>
+          );
+        })()}
+      </nav>
 
       {/* Avatar */}
       {user && (
