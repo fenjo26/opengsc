@@ -683,6 +683,8 @@
   "clarityMetricRageClicksDesc": "Багаторазові кліки від фрустрації",
   "clarityMetricQuickback": "Quickback",
   "clarityMetricQuickbackDesc": "Користувач повернувся назад одразу після переходу",
+  "clarityMetricExcessiveScroll": "Надмірний скрол",
+  "clarityMetricExcessiveScrollDesc": "Користувачі гарячково скролили — ознака, що вони загубилися на сторінці",
   "clarityMetricScroll": "Глибина скролу",
   "clarityMetricScrollDesc": "Середній % сторінки, який бачать користувачі",
   "clarityMetricSessions": "Сесії",

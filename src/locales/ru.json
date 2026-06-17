@@ -683,6 +683,8 @@
   "clarityMetricRageClicksDesc": "Многократные клики от фрустрации",
   "clarityMetricQuickback": "Quickback",
   "clarityMetricQuickbackDesc": "Пользователь вернулся назад сразу после перехода",
+  "clarityMetricExcessiveScroll": "Чрезмерный скролл",
+  "clarityMetricExcessiveScrollDesc": "Пользователи лихорадочно скроллили — признак, что они потерялись на странице",
   "clarityMetricScroll": "Глубина скролла",
   "clarityMetricScrollDesc": "Средний % страницы, который видят пользователи",
   "clarityMetricSessions": "Сессии",

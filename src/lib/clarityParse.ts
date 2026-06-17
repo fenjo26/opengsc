@@ -9,6 +9,7 @@ export interface ClarityTotals {
   dead: number;
   rage: number;
   quickback: number;
+  excessive: number;   // total excessive-scrolling events (users lost on page)
   errors: number;
   scrollSum: number;   // sum of per-URL avg scroll (for weighted-ish average)
   scrollCount: number;
@@ -18,7 +19,7 @@ export interface ClarityTotals {
 }
 
 export function emptyTotals(): ClarityTotals {
-  return { sessions: 0, dead: 0, rage: 0, quickback: 0, errors: 0, scrollSum: 0, scrollCount: 0, engSum: 0, engCount: 0, pages: {} };
+  return { sessions: 0, dead: 0, rage: 0, quickback: 0, excessive: 0, errors: 0, scrollSum: 0, scrollCount: 0, engSum: 0, engCount: 0, pages: {} };
 }
 
 // Normalize a Clarity metricName / field key: strip non-alphanumerics, lowercase.
@@ -59,6 +60,8 @@ export function parseTraffic(traffic: any[]): ClarityTotals {
         if (url) t.pages[url].rageClicks += r;
       } else if (n.includes("quickback")) {
         t.quickback += pickNum(row, ["quickbackclickcount", "quickbackclick", "quickback", "subtotal"]);
+      } else if (n.includes("excessivescroll")) {
+        t.excessive += pickNum(row, ["excessivescrollcount", "excessivescroll", "subtotal"]);
       } else if (n.includes("scrolldepth")) {
         const sd = pickNum(row, ["averagescrolldepth", "scrolldepth"]);
         if (sd > 0) { t.scrollSum += sd; t.scrollCount++; }
@@ -81,6 +84,7 @@ export function mergeTotals(a: ClarityTotals, b: ClarityTotals): ClarityTotals {
   out.dead = a.dead + b.dead;
   out.rage = a.rage + b.rage;
   out.quickback = a.quickback + b.quickback;
+  out.excessive = a.excessive + b.excessive;
   out.errors = a.errors + b.errors;
   out.scrollSum = a.scrollSum + b.scrollSum;
   out.scrollCount = a.scrollCount + b.scrollCount;
@@ -107,6 +111,7 @@ export function totalsToMetrics(t: ClarityTotals): ClarityMetric[] {
     { name: "dead", value: t.dead },
     { name: "rage", value: t.rage },
     { name: "quickback", value: t.quickback },
+    { name: "excessive", value: t.excessive },
     { name: "scroll", value: avgScroll, unit: "%" },
     { name: "sessions", value: t.sessions },
     { name: "engagement", value: avgEng, unit: "s" },

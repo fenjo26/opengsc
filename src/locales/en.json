@@ -683,6 +683,8 @@
   "clarityMetricRageClicksDesc": "Repeated clicks out of frustration",
   "clarityMetricQuickback": "Quickback",
   "clarityMetricQuickbackDesc": "User immediately navigated back after a click",
+  "clarityMetricExcessiveScroll": "Excessive Scroll",
+  "clarityMetricExcessiveScrollDesc": "Users scrolled frantically — a sign they were lost on the page",
   "clarityMetricScroll": "Scroll Depth",
   "clarityMetricScrollDesc": "Average % of page users scroll through",
   "clarityMetricSessions": "Sessions",

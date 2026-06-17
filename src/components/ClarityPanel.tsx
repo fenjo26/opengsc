@@ -5,7 +5,7 @@ import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import {
   MousePointerClick, AlertCircle, ArrowLeft, ScrollText,
   Users, Clock, Code2, RefreshCw, ExternalLink, ChevronDown,
-  ChevronUp, Sparkles, BookOpen, Info, Save, Eye, EyeOff,
+  ChevronUp, Sparkles, BookOpen, Info, Save, Eye, EyeOff, ChevronsDown,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -347,7 +347,9 @@ STRICT TRUTH RULES — follow exactly:
 - Distinguish clearly between FACTS (numbers from the data) and HYPOTHESES (your interpretation). Lead each interpretation with a hedge word.
 ${lowSample ? `- SMALL SAMPLE: only ${sessionsVal} sessions. Soften every conclusion accordingly. Do NOT write a sample-size disclaimer yourself — it is added automatically, so do not mention sample size or statistical reliability.` : ""}
 
-METRIC GLOSSARY (read carefully — misreading these is the most common error): every count is a TOTAL over the whole collected period, summed across ALL sessions and pages — it is NEVER a per-session value. "sessions" = total sessions in the period. "dead" / "rage" / "quickback" / "errors" = the total number of such events across all those sessions. "scroll" = average scroll depth in %. "engagement" = average engagement time in seconds. Example: "dead": 4 with "sessions": 91 means 4 dead-click events occurred across 91 sessions total (~4% of sessions) — it does NOT mean 4 per session. RULE: whenever you cite a count, relate it to total sessions (e.g. "4 of 91 sessions"), and never describe a small share as "high"/"высокий"; describe magnitude honestly (low/moderate/high) relative to the session total.
+METRIC GLOSSARY (read carefully — misreading these is the most common error): every count is a TOTAL over the whole collected period, summed across ALL sessions and pages — it is NEVER a per-session value. "sessions" = total sessions in the period. "dead" / "rage" / "quickback" / "excessive" / "errors" = the total number of such events across all those sessions ("excessive" = excessive-scrolling events, i.e. users scrolling frantically because they are lost). "scroll" = average scroll depth in %. "engagement" = average engagement time in seconds. Example: "dead": 4 with "sessions": 91 means 4 dead-click events occurred across 91 sessions total (~4% of sessions) — it does NOT mean 4 per session. RULE: whenever you cite a count, relate it to total sessions (e.g. "4 of 91 sessions"), and never describe a small share as "high"/"высокий"; describe magnitude honestly (low/moderate/high) relative to the session total.
+
+DATA-FIELD RULE: "sessions" and "page views" are different things — never call sessions "views"/"просмотры" or vice versa. In the raw per-URL data, "totalSessionCount" = sessions, "pagesViews" = page views; use the correct word for whichever you cite. GRAMMAR: in prose, decline the word for "sessions" correctly for the number (in Russian: 1 сессия, 2 сессии, 5 сессий, 91 сессия).
 
 LANGUAGE RULE (critical): Write the ENTIRE report in ${L.langName} only. Do NOT switch languages mid-text, do NOT insert words from other languages, and never output Chinese/Japanese/Korean characters. Every section title must be reproduced EXACTLY as given below, verbatim.
 
@@ -463,6 +465,7 @@ Summary metrics (aggregated over ${view.daysCovered} day(s)): ${JSON.stringify(v
     { name: "dead",       icon: <MousePointerClick size={14} />, label: t("clarityMetricDeadClicks"),  desc: t("clarityMetricDeadClicksDesc"),  warn: true },
     { name: "rage",       icon: <AlertCircle size={14} />,       label: t("clarityMetricRageClicks"),   desc: t("clarityMetricRageClicksDesc"),  warn: true },
     { name: "quickback",  icon: <ArrowLeft size={14} />,         label: t("clarityMetricQuickback"),    desc: t("clarityMetricQuickbackDesc"),   warn: true },
+    { name: "excessive",  icon: <ChevronsDown size={14} />,      label: t("clarityMetricExcessiveScroll"), desc: t("clarityMetricExcessiveScrollDesc"), warn: true },
     { name: "scroll",     icon: <ScrollText size={14} />,        label: t("clarityMetricScroll"),       desc: t("clarityMetricScrollDesc"),      warn: false },
     { name: "sessions",   icon: <Users size={14} />,             label: t("clarityMetricSessions"),     desc: "",                                warn: false },
     { name: "engagement", icon: <Clock size={14} />,             label: t("clarityMetricEngagement"),   desc: "",                                warn: false },
