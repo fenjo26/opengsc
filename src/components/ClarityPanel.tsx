@@ -347,6 +347,8 @@ STRICT TRUTH RULES — follow exactly:
 - Distinguish clearly between FACTS (numbers from the data) and HYPOTHESES (your interpretation). Lead each interpretation with a hedge word.
 ${lowSample ? `- SMALL SAMPLE: only ${sessionsVal} sessions. Soften every conclusion accordingly. Do NOT write a sample-size disclaimer yourself — it is added automatically, so do not mention sample size or statistical reliability.` : ""}
 
+METRIC GLOSSARY (read carefully — misreading these is the most common error): every count is a TOTAL over the whole collected period, summed across ALL sessions and pages — it is NEVER a per-session value. "sessions" = total sessions in the period. "dead" / "rage" / "quickback" / "errors" = the total number of such events across all those sessions. "scroll" = average scroll depth in %. "engagement" = average engagement time in seconds. Example: "dead": 4 with "sessions": 91 means 4 dead-click events occurred across 91 sessions total (~4% of sessions) — it does NOT mean 4 per session. RULE: whenever you cite a count, relate it to total sessions (e.g. "4 of 91 sessions"), and never describe a small share as "high"/"высокий"; describe magnitude honestly (low/moderate/high) relative to the session total.
+
 LANGUAGE RULE (critical): Write the ENTIRE report in ${L.langName} only. Do NOT switch languages mid-text, do NOT insert words from other languages, and never output Chinese/Japanese/Korean characters. Every section title must be reproduced EXACTLY as given below, verbatim.
 
 Structure the report exactly like this:
