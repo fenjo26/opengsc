@@ -337,7 +337,7 @@ STRICT TRUTH RULES — follow exactly:
 - Never state as fact what is physically on a page (e.g. "the page has no CTA", "broken widget", "banner without link", "page layout is X"). You cannot see pages. If you propose such a cause, you MUST label it as an unverified hypothesis to check manually (in the output language, e.g. "гипотеза — проверьте вручную").
 - Do NOT invent numbers. Only cite numbers that appear in the data below. Do NOT fabricate per-session events, dates, timings ("user left after 6 sec"), or money/lead estimates ("lose 2-3 leads/week", "X% of clients"). The API does not contain this. If you discuss business impact, keep it qualitative, not numeric.
 - Distinguish clearly between FACTS (numbers from the data) and HYPOTHESES (your interpretation). Lead each interpretation with a hedge word.
-${lowSample ? `- SMALL SAMPLE: only ${sessionsVal} sessions. Open the report with this disclaimer and soften every conclusion accordingly.` : ""}
+${lowSample ? `- SMALL SAMPLE: only ${sessionsVal} sessions. Soften every conclusion accordingly. Do NOT write a sample-size disclaimer yourself — it is added automatically, so do not mention sample size or statistical reliability.` : ""}
 
 LANGUAGE RULE (critical): Write the ENTIRE report in ${L.langName} only. Do NOT switch languages mid-text, do NOT insert words from other languages, and never output Chinese/Japanese/Korean characters. Every section title must be reproduced EXACTLY as given below, verbatim.
 
@@ -347,7 +347,6 @@ Structure the report exactly like this:
 3) "${L.sCritical}" — the 1-3 biggest data-supported issues. For each: the problem (with the actual metric/number), the most likely root cause clearly marked as a hypothesis to verify, and a concrete fix.
 4) "${L.sCheck}" — secondary things to check (clearly framed as "check", not as established facts).
 5) "${L.sRecs}" — prioritized next steps.
-${lowSample ? `\nBegin the Summary section with: "${L.lowSample(sessionsVal)}"` : ""}
 
 Use relevant emoji as accents (🎯 🔴 ⚠️ ✅ 🖱️ 📊 📉 💰). Do NOT use Markdown: no "#", no "*", no "**", no backticks, no tables. Each section title on its own line; list items start with "- ".
 
@@ -364,7 +363,20 @@ Summary metrics (aggregated over ${view.daysCovered} day(s)): ${JSON.stringify(v
         setAiError(true);
         return;
       }
-      setAiAnalysis(cleanReport(data.summary ?? ""));
+      // Inject the exact small-sample disclaimer right under the summary header
+      // (deterministic wording — the model is told not to write it itself).
+      let report = cleanReport(data.summary ?? "");
+      if (lowSample) {
+        const note = L.lowSample(sessionsVal);
+        const idx = report.indexOf(L.sSummary);
+        if (idx !== -1) {
+          const at = idx + L.sSummary.length;
+          report = report.slice(0, at) + "\n" + note + report.slice(at);
+        } else {
+          report = note + "\n\n" + report;
+        }
+      }
+      setAiAnalysis(report);
     } catch {
       setAiErrorMsg(t("clarityAnalysisError"));
       setAiError(true);
