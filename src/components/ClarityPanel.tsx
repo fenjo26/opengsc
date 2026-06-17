@@ -284,21 +284,72 @@ export function ClarityPanel({ siteDbId, domain }: { siteDbId: string; domain?: 
       const apiKey = localStorage.getItem(`aiKey_${provider}`) || localStorage.getItem("aiApiKey") || "";
 
       const raw = JSON.stringify(snapshot?.data.traffic ?? []).slice(0, 6000);
-      const langName = language === "ru" ? "Russian" : language === "uk" ? "Ukrainian" : "English";
       const site = domain || projectId || "the site";
-      const periodLabel = `${view.daysCovered} day(s) of collected data`;
-      const prompt = `You are a senior CRO (Conversion Rate Optimization) and SEO expert analyzing Microsoft Clarity UX data for ${site} (period: ${periodLabel}). Produce a deep, client-ready audit — not a generic checklist. Dig into ROOT CAUSES: for each problem explain WHY it happens (cite the specific pages and numbers from the data), WHAT it costs the business, and HOW to fix it concretely.
+
+      // Localized output strings: section titles must match the UI language so
+      // an English/Ukrainian user never gets a Russian-titled report.
+      const PROMPT_I18N = {
+        en: {
+          langName: "English",
+          auditTitle: "UX Audit",
+          periodLine: (d: number) => `Period: ${d} day(s) of collected data`,
+          sSummary: "🎯 Summary",
+          sCritical: "🔴 Critical findings (where money is lost)",
+          sCheck: "⚠️ Worth checking",
+          sRecs: "✅ Recommendations",
+          lowSample: (n: number) =>
+            `Note: the sample is small (${n} sessions) — treat all conclusions as preliminary, not statistically reliable.`,
+        },
+        ru: {
+          langName: "Russian",
+          auditTitle: "UX-аудит",
+          periodLine: (d: number) => `Период: ${d} дн. собранных данных`,
+          sSummary: "🎯 Краткая сводка",
+          sCritical: "🔴 Критические находки (где теряем деньги)",
+          sCheck: "⚠️ Что стоит проверить",
+          sRecs: "✅ Рекомендации",
+          lowSample: (n: number) =>
+            `Примечание: выборка маленькая (${n} сессий) — все выводы предварительные, статистически недостоверные.`,
+        },
+        uk: {
+          langName: "Ukrainian",
+          auditTitle: "UX-аудит",
+          periodLine: (d: number) => `Період: ${d} дн. зібраних даних`,
+          sSummary: "🎯 Короткий підсумок",
+          sCritical: "🔴 Критичні знахідки (де втрачаємо гроші)",
+          sCheck: "⚠️ Що варто перевірити",
+          sRecs: "✅ Рекомендації",
+          lowSample: (n: number) =>
+            `Примітка: вибірка мала (${n} сесій) — усі висновки попередні, статистично недостовірні.`,
+        },
+      } as const;
+
+      const L = PROMPT_I18N[language as "en" | "ru" | "uk"] ?? PROMPT_I18N.en;
+
+      const sessionsVal = Number(view.metrics.find(m => m.name === "sessions")?.value ?? 0);
+      const lowSample = sessionsVal > 0 && sessionsVal < 100;
+
+      const prompt = `You are a senior CRO (Conversion Rate Optimization) and SEO expert analyzing Microsoft Clarity UX data for ${site}. Produce a client-ready audit grounded ONLY in the data provided below.
+
+WHAT YOU HAVE: aggregated Clarity metrics (counts/averages) and a list of page URLs. WHAT YOU DO NOT HAVE: session recordings, click coordinates, screenshots, or the HTML/content of any page. You have NOT seen any page. This is critical.
+
+STRICT TRUTH RULES — follow exactly:
+- Never state as fact what is physically on a page (e.g. "the page has no CTA", "broken widget", "banner without link", "page layout is X"). You cannot see pages. If you propose such a cause, you MUST label it as an unverified hypothesis to check manually (in the output language, e.g. "гипотеза — проверьте вручную").
+- Do NOT invent numbers. Only cite numbers that appear in the data below. Do NOT fabricate per-session events, dates, timings ("user left after 6 sec"), or money/lead estimates ("lose 2-3 leads/week", "X% of clients"). The API does not contain this. If you discuss business impact, keep it qualitative, not numeric.
+- Distinguish clearly between FACTS (numbers from the data) and HYPOTHESES (your interpretation). Lead each interpretation with a hedge word.
+${lowSample ? `- SMALL SAMPLE: only ${sessionsVal} sessions. Open the report with this disclaimer and soften every conclusion accordingly.` : ""}
+
+LANGUAGE RULE (critical): Write the ENTIRE report in ${L.langName} only. Do NOT switch languages mid-text, do NOT insert words from other languages, and never output Chinese/Japanese/Korean characters. Every section title must be reproduced EXACTLY as given below, verbatim.
 
 Structure the report exactly like this:
-1) A title line: "UX-аудит — ${site}" (translated) and a second line with the period.
-2) "🎯 Краткая сводка" — 2-3 sentences on the overall picture.
-3) "🔴 Критические находки (где теряем деньги)" — the 1-3 biggest issues. For each: the problem, the root cause with specific pages/numbers, the business impact (estimate lost conversions/clicks where possible), and a concrete fix.
-4) "⚠️ Что стоит проверить" — secondary issues.
-5) "✅ Рекомендации" — prioritized next steps.
+1) Title line: "${L.auditTitle} — ${site}". Second line: "${L.periodLine(view.daysCovered)}".
+2) "${L.sSummary}" — 2-3 sentences on the overall picture, numbers only from the data.
+3) "${L.sCritical}" — the 1-3 biggest data-supported issues. For each: the problem (with the actual metric/number), the most likely root cause clearly marked as a hypothesis to verify, and a concrete fix.
+4) "${L.sCheck}" — secondary things to check (clearly framed as "check", not as established facts).
+5) "${L.sRecs}" — prioritized next steps.
+${lowSample ? `\nBegin the Summary section with: "${L.lowSample(sessionsVal)}"` : ""}
 
-Use relevant emoji as section/point accents (🎯 🔴 ⚠️ ✅ 🖱️ 📊 📉 💰) to guide the eye — emojis are encouraged.
-
-Formatting rules (IMPORTANT): write in ${langName}, as clean text suitable to paste into a client report. Do NOT use Markdown syntax: no "#", no "*", no "**" for bold, no backticks, no markdown tables. Put each section title on its own line. For lists, start each item with "- ". Keep it specific and concrete, reference real page paths and numbers.
+Use relevant emoji as accents (🎯 🔴 ⚠️ ✅ 🖱️ 📊 📉 💰). Do NOT use Markdown: no "#", no "*", no "**", no backticks, no tables. Each section title on its own line; list items start with "- ".
 
 Summary metrics (aggregated over ${view.daysCovered} day(s)): ${JSON.stringify(view.metrics)}. Top problem pages: ${JSON.stringify(view.pages)}. Raw per-URL data (latest day): ${raw}`;
 
