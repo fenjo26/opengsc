@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { OutlineStructure, OutlineEntities, GapReport } from "@/components/SeoRenderers";
+import SeoTextDetail from "@/components/SeoTextDetail";
 import { getHistoryItem, updateHistory, addHistory, HistoryItem } from "@/lib/seo/history";
 import { outlineToMarkdown, outlineToHtml, htmlDocument, outlineHeadings, outlineSummary } from "@/lib/seo/outlineFormat";
 import { getSeoGenCreds, loadPolicies, getActivePolicyName } from "@/lib/seo/keys";
@@ -89,6 +90,8 @@ export default function TaskDetailPage() {
       <button onClick={() => router.push("/seo-tools/history")} style={btnGhost}><ArrowLeft size={14} /> {t("seoBackToHistory")}</button>
     </div>
   );
+
+  if (item.type === "text") return <SeoTextDetail item={item} />;
 
   return (
     <div ref={topRef} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -253,7 +256,7 @@ function GenTextModal({ item, t, onClose, onDone }: { item: HistoryItem; t: any;
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || t("seoErrText")); setLoading(false); return; }
-      const rec = addHistory({ type: "text", keyword: item.keyword, data: data.text });
+      const rec = addHistory({ type: "text", keyword: item.keyword, data: data.text, meta: { outlineId: item.id, tone: tone || policy?.voice?.toneOfVoice || "" } });
       onDone(rec);
     } catch (e: any) { setErr(String(e?.message ?? e)); setLoading(false); }
   }

@@ -1,11 +1,12 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { FileText, Search, ScrollText, Sparkles, History } from "lucide-react";
+import { FileText, Search, ScrollText, Sparkles, History, PenLine } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 const TABS = [
   { href: "/seo-tools/outline", key: "seoTabOutline" as const, icon: FileText },
+  { href: "/seo-tools/text", key: "seoTabText" as const, icon: PenLine },
   { href: "/seo-tools/analysis", key: "seoTabAnalysis" as const, icon: Search },
   { href: "/seo-tools/policy", key: "seoTabPolicy" as const, icon: ScrollText },
   { href: "/seo-tools/history", key: "seoTabHistory" as const, icon: History },

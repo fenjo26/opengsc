@@ -25,6 +25,7 @@ export async function POST(req: Request) {
     tone: String(b.tone ?? "neutral, expert"),
     language: String(b.language ?? "ru"),
     custom: b.custom ? String(b.custom) : undefined,
+    promptType: b.promptType === "custom" ? "custom" : "service",
   });
   const model = b.model ? String(b.model) : undefined;
 

@@ -895,6 +895,51 @@ function ModelSelector() {
   );
 }
 
+function ToggleRowSetting({ label, desc, on, onToggle }: { label: string; desc: string; on: boolean; onToggle: () => void }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "14px", padding: "10px 0" }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{label}</div>
+        <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>{desc}</div>
+      </div>
+      <button onClick={onToggle} style={{ width: "42px", height: "24px", borderRadius: "999px", flexShrink: 0, border: "none", background: on ? "var(--color-accent-green)" : "var(--color-border)", position: "relative", cursor: "pointer", transition: "background 0.15s" }}>
+        <span style={{ position: "absolute", top: "2px", left: on ? "20px" : "2px", width: "20px", height: "20px", borderRadius: "50%", background: "#fff", transition: "left 0.15s", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }} />
+      </button>
+    </div>
+  );
+}
+
+function FactCheckSettings() {
+  const { t } = useLanguage();
+  const [autoFc, setAutoFc] = useState(true);
+  const [autoImg, setAutoImg] = useState(true);
+  const [srcCount, setSrcCount] = useState(6);
+  useEffect(() => {
+    setAutoFc((localStorage.getItem("seoAutoFactcheck") ?? "1") !== "0");
+    setAutoImg((localStorage.getItem("seoAutoImages") ?? "1") !== "0");
+    setSrcCount(parseInt(localStorage.getItem("seoFactSources") ?? "6", 10) || 6);
+  }, []);
+  const toggleFc = () => { const v = !autoFc; setAutoFc(v); localStorage.setItem("seoAutoFactcheck", v ? "1" : "0"); };
+  const toggleImg = () => { const v = !autoImg; setAutoImg(v); localStorage.setItem("seoAutoImages", v ? "1" : "0"); };
+  const setSrc = (n: number) => { const v = Math.max(0, Math.min(10, n)); setSrcCount(v); localStorage.setItem("seoFactSources", String(v)); };
+
+  return (
+    <div style={{ marginBottom: "18px", paddingBottom: "16px", borderBottom: "1px solid var(--color-border)" }}>
+      <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "4px" }}>🛡 {t("seoFcSettingsTitle")}</div>
+      <ToggleRowSetting label={t("seoAutoFactcheckLabel")} desc={t("seoAutoFactcheckDesc")} on={autoFc} onToggle={toggleFc} />
+      <ToggleRowSetting label={t("seoAutoImagesLabel")} desc={t("seoAutoImagesDesc")} on={autoImg} onToggle={toggleImg} />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "14px", padding: "10px 0" }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{t("seoFactSourcesLabel")}</div>
+          <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>{t("seoFactSourcesDesc")}</div>
+        </div>
+        <input type="number" min={0} max={10} value={srcCount} onChange={e => setSrc(parseInt(e.target.value, 10) || 0)}
+          style={{ width: "64px", padding: "8px 10px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-primary)", fontSize: "13px", outline: "none", textAlign: "center", flexShrink: 0 }} />
+      </div>
+    </div>
+  );
+}
+
 function SerpScrapeSection() {
   const { t } = useLanguage();
   const [active, setActive] = useState("serper");
@@ -910,6 +955,7 @@ function SerpScrapeSection() {
       />
 
       <ModelSelector />
+      <FactCheckSettings />
 
       <div style={{ marginBottom: "14px" }}>
         <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "7px" }}>{t("seoSetActiveProvider")}</div>

@@ -139,12 +139,31 @@ export function buildTextPrompt(args: {
   tone: string;
   language: string;
   custom?: string;
+  promptType?: "service" | "custom";
 }): string {
   const policyBlock = args.policy ? renderPolicy(args.policy) + "\n\n" : "";
+  const customLine = args.custom ? `Дополнительная инструкция автора (учесть обязательно): ${args.custom}\n` : "";
+
+  // Custom prompt type: the author's instruction drives the writing; service template is minimal.
+  if (args.promptType === "custom" && args.custom) {
+    return `${policyBlock}Тон повествования: ${args.tone}
+Язык вывода: ${args.language}
+
+ГЛАВНАЯ ИНСТРУКЦИЯ АВТОРА:
+${args.custom}
+
+Напиши статью по структуре ниже, следуя инструкции автора выше. Соблюдай word_count секций.
+ЖЁСТКИЕ ПРАВИЛА: не выдумывай лицензии/регалии/отзывы/цифры — ставь плейсхолдер [ЗАПОЛНИТЬ ВРУЧНУЮ: ...]; секции needs_real_experience=true — оставь [ВСТАВЬ РЕАЛЬНЫЙ ОПЫТ]; соблюдай ограничения политики.
+Верни готовый текст в Markdown.
+
+СТРУКТУРА (JSON):
+${JSON.stringify(args.outlineJson)}`;
+  }
+
   return `${policyBlock}Тон повествования: ${args.tone}
 Язык вывода: ${args.language}
-${args.custom ? args.custom + "\n" : ""}
-Напиши статью строго по структуре ниже. Для каждой секции — текст в рамках указанного word_count, не раздувай. Используй key_point, keywords и notes как ориентир.
+${customLine}
+Напиши статью строго по структуре ниже. Для каждой секции — текст в рамках указанного word_count, не раздувай. Используй summary, keywords, entities_to_cover и copywriter_notes как ориентир. Естественно вплетай сущности и ключи.
 
 ЖЁСТКИЕ ПРАВИЛА:
 - НЕ выдумывай лицензии, сертификаты, регалии, отзывы, цифры. Где они нужны — ставь плейсхолдер вида [ЗАПОЛНИТЬ ВРУЧНУЮ: ...].
@@ -155,6 +174,33 @@ ${args.custom ? args.custom + "\n" : ""}
 
 СТРУКТУРА (JSON):
 ${JSON.stringify(args.outlineJson)}`;
+}
+
+// ─── Per-section fact-check against real sources ─────────────────────────────────
+export function buildFactCheckSectionPrompt(args: { heading: string; text: string; keyword: string; sources: { title: string; snippet: string; url: string }[] }): string {
+  const src = args.sources.length
+    ? args.sources.map((s, i) => `[${i + 1}] ${s.title} — ${s.snippet} (${s.url})`).join("\n")
+    : "(источников нет — оцени уверенностью модели)";
+  return `Ты — фактчекер. Проверь конкретные ПРОВЕРЯЕМЫЕ утверждения (цифры, расстояния, цены, время, расписания, факты) из секции "${args.heading}" статьи по теме "${args.keyword}". Опирайся на пронумерованные источники ниже. Для каждого факта статус: confirmed (подтверждается источниками), partial (частично/данные расходятся), unconfirmed (нет подтверждения/противоречит). В поле "sources" укажи номера источников, которые подтверждают факт. НЕ выдумывай источники и номера, которых нет. Верни СТРОГИЙ JSON без обёрток:
+{ "status": "confirmed|partial|unconfirmed", "facts": [ { "claim": "конкретное утверждение", "status": "confirmed|partial|unconfirmed", "note": "кратко", "sources": [1,2] } ] }
+
+СЕКЦИЯ:
+${args.text.slice(0, 6000)}
+
+ИСТОЧНИКИ:
+${src}`;
+}
+
+// ─── Image-prompt generation (Hero + per-section) ────────────────────────────────
+export function buildImagePromptsPrompt(args: { outlineJson?: any; article?: string; keyword: string }): string {
+  const src = args.outlineJson ? `СТРУКТУРА (JSON):\n${JSON.stringify(args.outlineJson)}` : `СТАТЬЯ:\n${(args.article || "").slice(0, 12000)}`;
+  return `Ты — арт-директор. По теме "${args.keyword}" составь промпты для генерации изображений к статье: один Hero Image и по одному промпту к ключевым секциям (visual_elements/важные H2). Промпты — на английском, конкретные, фотореалистичные или чистый flat-design инфографики, без текста на картинке. Верни СТРОГИЙ JSON без обёрток:
+{
+  "hero": "english image prompt",
+  "sections": [ { "heading": "section heading", "prompt": "english image prompt" } ]
+}
+
+${src}`;
 }
 
 // ─── Strict-JSON extraction (spec §6) ───────────────────────────────────────────

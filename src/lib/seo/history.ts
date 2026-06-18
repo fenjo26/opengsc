@@ -3,14 +3,16 @@
 "use client";
 
 export type HistoryType = "outline" | "text" | "analysis";
+export type HistoryStatus = "processing" | "completed" | "error";
 
 export interface HistoryItem {
   id: string;
   type: HistoryType;
   keyword: string;
   createdAt: number;
-  status: "completed";
+  status: HistoryStatus;
   data: any; // outline object | article string | gap report object
+  meta?: { tone?: string; promptType?: string; version?: string; error?: string; outlineId?: string; factcheck?: any; images?: any };
 }
 
 const KEY = "seoHistory";
@@ -27,20 +29,28 @@ export function loadHistory(): HistoryItem[] {
   }
 }
 
-export function addHistory(item: { type: HistoryType; keyword: string; data: any }): HistoryItem {
+export function addHistory(item: { type: HistoryType; keyword: string; data: any; status?: HistoryStatus; meta?: HistoryItem["meta"] }): HistoryItem {
   const rec: HistoryItem = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     type: item.type,
     keyword: item.keyword || "—",
     createdAt: Date.now(),
-    status: "completed",
+    status: item.status ?? "completed",
     data: item.data,
+    meta: item.meta,
   };
   if (typeof window !== "undefined") {
     const next = [rec, ...loadHistory()].slice(0, MAX);
     localStorage.setItem(KEY, JSON.stringify(next));
   }
   return rec;
+}
+
+export function patchHistory(id: string, patch: Partial<Pick<HistoryItem, "status" | "data">> & { meta?: HistoryItem["meta"] }) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(KEY, JSON.stringify(loadHistory().map(h =>
+    h.id === id ? { ...h, ...patch, meta: { ...h.meta, ...patch.meta } } : h
+  )));
 }
 
 export function getHistoryItem(id: string): HistoryItem | undefined {

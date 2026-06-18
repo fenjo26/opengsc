@@ -91,3 +91,51 @@ export function outlineToHtml(o: any): string {
 export function htmlDocument(title: string, bodyHtml: string): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title></head><body>${bodyHtml}</body></html>`;
 }
+
+// Headings parsed from a generated article (markdown).
+export function articleHeadings(md: string): Heading[] {
+  return (md.match(/^#{1,6}\s.+$/gm) || []).map((line) => {
+    const lvl = (line.match(/^#+/)?.[0].length) || 1;
+    return { level: `H${lvl}`, text: line.replace(/^#+\s*/, "").trim() };
+  });
+}
+
+export function countWords(s: string): number {
+  const t = (s || "").replace(/[#*_`>\-]/g, " ").trim();
+  return t ? t.split(/\s+/).length : 0;
+}
+
+// Split a generated article (markdown) into H2/H3 sections for fact-checking.
+export function splitArticleSections(md: string): { heading: string; level: string; text: string }[] {
+  const lines = (md || "").split(/\r?\n/);
+  const out: { heading: string; level: string; text: string }[] = [];
+  let cur: { heading: string; level: string; text: string } | null = null;
+  for (const line of lines) {
+    const m = line.match(/^(#{2,3})\s+(.*)$/);
+    if (m) { if (cur) out.push(cur); cur = { heading: m[2].trim(), level: `H${m[1].length}`, text: "" }; continue; }
+    if (/^#\s+/.test(line)) continue; // skip H1 title
+    if (cur) cur.text += line + "\n";
+  }
+  if (cur) out.push(cur);
+  return out.filter(s => countWords(s.text) >= 25).slice(0, 24);
+}
+
+// Minimal, safe-ish Markdown → HTML for rendering the generated article.
+export function markdownToHtml(md: string): string {
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const inline = (s: string) => s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>");
+  const lines = (md || "").split(/\r?\n/);
+  let html = ""; let inUl = false; let inOl = false;
+  const closeLists = () => { if (inUl) { html += "</ul>"; inUl = false; } if (inOl) { html += "</ol>"; inOl = false; } };
+  for (const raw of lines) {
+    const h = raw.match(/^(#{1,6})\s+(.*)$/);
+    if (h) { closeLists(); html += `<h${h[1].length}>${inline(esc(h[2]))}</h${h[1].length}>`; continue; }
+    if (/^\s*[-*]\s+/.test(raw)) { if (!inUl) { closeLists(); html += "<ul>"; inUl = true; } html += `<li>${inline(esc(raw.replace(/^\s*[-*]\s+/, "")))}</li>`; continue; }
+    if (/^\s*\d+\.\s+/.test(raw)) { if (!inOl) { closeLists(); html += "<ol>"; inOl = true; } html += `<li>${inline(esc(raw.replace(/^\s*\d+\.\s+/, "")))}</li>`; continue; }
+    if (!raw.trim()) { closeLists(); continue; }
+    closeLists();
+    html += `<p>${inline(esc(raw))}</p>`;
+  }
+  closeLists();
+  return html;
+}

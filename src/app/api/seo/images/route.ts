@@ -1,0 +1,24 @@
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { fetchLLM } from "@/lib/llm";
+import { buildImagePromptsPrompt, extractJson } from "@/lib/seo/prompts";
+
+// POST /api/seo/images { outline?, article?, keyword, aiProvider, aiApiKey, model? }
+export async function POST(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!(session?.user as any)?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const b = await req.json();
+  const provider = String(b.aiProvider ?? "anthropic");
+  const apiKey = String(b.aiApiKey ?? "");
+  if (!apiKey) return NextResponse.json({ error: "no_ai_key" }, { status: 400 });
+
+  const prompt = buildImagePromptsPrompt({ outlineJson: b.outline, article: b.article, keyword: String(b.keyword ?? "") });
+  const model = b.model ? String(b.model) : undefined;
+  let raw = await fetchLLM(prompt, provider, apiKey, 3000, model);
+  let data = extractJson(raw);
+  if (!data) { raw = await fetchLLM(prompt + "\n\nВерни ТОЛЬКО валидный JSON.", provider, apiKey, 3000, model); data = extractJson(raw); }
+  if (!data) return NextResponse.json({ error: "parse_failed" }, { status: 502 });
+  return NextResponse.json({ images: data });
+}

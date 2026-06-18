@@ -25,14 +25,15 @@ export default function HistoryPage() {
 
   const counts = useMemo(() => ({
     all: items.length,
-    done: items.length,
-    progress: 0,
+    done: items.filter(i => i.status === "completed").length,
+    progress: items.filter(i => i.status === "processing").length,
   }), [items]);
 
   const filtered = useMemo(() => {
     let list = items;
     if (filter === "outline" || filter === "text" || filter === "analysis") list = list.filter(i => i.type === filter);
-    if (filter === "progress") list = [];
+    if (filter === "done") list = list.filter(i => i.status === "completed");
+    if (filter === "progress") list = list.filter(i => i.status === "processing");
     if (q.trim()) list = list.filter(i => i.keyword.toLowerCase().includes(q.toLowerCase()));
     return list;
   }, [items, filter, q]);
@@ -90,14 +91,14 @@ export default function HistoryPage() {
             const m = TYPE_META[item.type]; const Icon = m.icon;
             return (
               <div key={item.id} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "13px 4px", borderBottom: "1px solid var(--color-border)" }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--color-accent-green)", flexShrink: 0 }} />
+                <span style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: item.status === "processing" ? "var(--color-accent-blue)" : item.status === "error" ? "var(--color-accent-red)" : "var(--color-accent-green)" }} />
                 <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "11px", fontWeight: 700, padding: "3px 9px", borderRadius: "6px", color: m.color, background: `${m.color}1a`, flexShrink: 0 }}>
                   <Icon size={12} /> {t(m.labelKey as any)}
                 </span>
                 <span style={{ flex: 1, minWidth: 0, fontSize: "14px", color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.keyword}</span>
                 <span style={{ fontSize: "12px", color: "var(--color-text-tertiary)", flexShrink: 0 }}>{new Date(item.createdAt).toLocaleDateString()}</span>
-                <button onClick={() => view(item)} title="View" style={iconBtn}><Eye size={15} /></button>
-                <button onClick={() => remove(item.id)} title="Delete" style={{ ...iconBtn, color: "var(--color-accent-red)" }}><Trash2 size={14} /></button>
+                <button onClick={() => view(item)} title={t("seoEdit")} style={iconBtn}><Eye size={15} /></button>
+                <button onClick={() => remove(item.id)} title={t("seoDelete")} style={{ ...iconBtn, color: "var(--color-accent-red)" }}><Trash2 size={14} /></button>
               </div>
             );
           })}

@@ -46,6 +46,21 @@ export function getFirecrawlKey(): string {
   return localStorage.getItem("seoKey_firecrawl") || "";
 }
 
+// ─── Fact-check / enrichment preferences ────────────────────────────────────────
+export function getAutoFactcheck(): boolean {
+  if (typeof window === "undefined") return false;
+  return (localStorage.getItem("seoAutoFactcheck") ?? "1") !== "0";
+}
+export function getAutoImages(): boolean {
+  if (typeof window === "undefined") return false;
+  return (localStorage.getItem("seoAutoImages") ?? "1") !== "0";
+}
+export function getFactSourceCount(): number {
+  if (typeof window === "undefined") return 6;
+  const n = parseInt(localStorage.getItem("seoFactSources") ?? "6", 10);
+  return isNaN(n) ? 6 : Math.max(0, Math.min(10, n));
+}
+
 // Optional stronger model for outline/analysis (Anthropic only). Empty = provider default.
 export function getSeoModel(): string {
   if (typeof window === "undefined") return "";
