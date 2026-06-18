@@ -1,156 +1,500 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Save, Plus, Trash2, Check, ScrollText, Eye } from "lucide-react";
+import {
+  Save, Trash2, Check, ScrollText, Eye, FileJson, ArrowLeft, ArrowRight,
+  Sparkles, FileText, Type, Shield, Ban, Loader2, X, HelpCircle, Copy, Download,
+} from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
-import { EditorialPolicy, DEFAULT_POLICY, renderPolicy } from "@/lib/seo/policy";
-import { loadPolicies, savePolicies, getActivePolicyName, setActivePolicyName } from "@/lib/seo/keys";
+import { EditorialPolicy, DEFAULT_POLICY, renderPolicy, toExportJson, normalizePolicy } from "@/lib/seo/policy";
+import { loadPolicies, savePolicies, getActivePolicyName, setActivePolicyName, getSeoGenCreds } from "@/lib/seo/keys";
+import { TONES } from "@/lib/seo/tones";
 
-const card = "panel";
-const inputStyle = "tool-input";
+const MAX_POLICIES = 10;
 
-function Field({ l, children }: { l: string; children: React.ReactNode }) { return <div style={{ marginBottom: "12px" }}><span className="tool-field-label">{l}</span>{children}</div>; }
-function Toggle({ on, set, l }: { on: boolean; set: (v: boolean) => void; l: string }) {
+// ─── Option card (single choice) ───────────────────────────────────────────────
+function OptionCard({ active, title, sub, onClick }: { active: boolean; title: string; sub?: string; onClick: () => void }) {
   return (
-    <button onClick={() => set(!on)} style={{ display: "flex", alignItems: "center", gap: "7px", padding: "6px 11px", borderRadius: "7px", border: `1px solid ${on ? "var(--color-accent-green)" : "var(--color-border)"}`, background: on ? "rgba(52,199,89,0.1)" : "var(--color-bg)", color: on ? "var(--color-accent-green)" : "var(--color-text-secondary)", fontSize: "12px", cursor: "pointer" }}>
-      <span style={{ width: 14, height: 14, borderRadius: "4px", border: `1.5px solid ${on ? "var(--color-accent-green)" : "var(--color-border)"}`, background: on ? "var(--color-accent-green)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>{on && <Check size={10} color="#fff" />}</span>
-      {l}
+    <button onClick={onClick} style={{
+      textAlign: "left", padding: "13px 15px", borderRadius: "10px", cursor: "pointer",
+      border: `1.5px solid ${active ? "var(--color-accent-blue)" : "var(--color-border)"}`,
+      background: active ? "rgba(41,151,255,0.08)" : "var(--color-bg)",
+      transition: "all 0.12s", width: "100%",
+    }}>
+      <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)", marginBottom: sub ? "2px" : 0 }}>{title}</div>
+      {sub && <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{sub}</div>}
     </button>
   );
 }
 
-const SECTION_TITLE: React.CSSProperties = { fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)", margin: "0 0 12px" };
+function CardGrid({ children }: { children: React.ReactNode }) {
+  return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>{children}</div>;
+}
+
+// ─── Toggle row ─────────────────────────────────────────────────────────────────
+function ToggleRow({ on, onToggle, title, desc, disabled }: { on: boolean; onToggle: () => void; title: string; desc?: string; disabled?: boolean }) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px",
+      padding: "12px 15px", borderRadius: "10px", border: "1px solid var(--color-border)",
+      background: "var(--color-bg)", opacity: disabled ? 0.5 : 1,
+    }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{title}</div>
+        {desc && <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px" }}>{desc}</div>}
+      </div>
+      <button onClick={disabled ? undefined : onToggle} disabled={disabled} style={{
+        width: "42px", height: "24px", borderRadius: "999px", flexShrink: 0, border: "none",
+        background: on ? "var(--color-accent-green)" : "var(--color-border)",
+        position: "relative", cursor: disabled ? "default" : "pointer", transition: "background 0.15s",
+      }}>
+        <span style={{
+          position: "absolute", top: "2px", left: on ? "20px" : "2px", width: "20px", height: "20px",
+          borderRadius: "50%", background: "#fff", transition: "left 0.15s", boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+        }} />
+      </button>
+    </div>
+  );
+}
+
+const FieldLabel = ({ children }: { children: React.ReactNode }) => (
+  <div className="tool-section-label" style={{ marginBottom: "10px", marginTop: "4px" }}>{children}</div>
+);
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
+const STEPS = [
+  { key: "basics", icon: Sparkles, label: "seoStepBasics", sub: "seoStepBasicsSub" },
+  { key: "formatting", icon: Type, label: "seoFormatting", sub: "seoFormattingContentSub" },
+  { key: "quality", icon: Shield, label: "seoQualityStandards", sub: "seoQualityStandardsSub" },
+  { key: "restrictions", icon: Ban, label: "seoRestrictions", sub: "seoRestrictionsTabSub" },
+] as const;
 
 export default function PolicyPage() {
   const { t } = useLanguage();
   const [policies, setPolicies] = useState<EditorialPolicy[]>([DEFAULT_POLICY]);
   const [activeName, setActiveName] = useState("Default");
+  const [view, setView] = useState<"hub" | "editor">("hub");
   const [draft, setDraft] = useState<EditorialPolicy>(DEFAULT_POLICY);
+  const [step, setStep] = useState(0);
   const [saved, setSaved] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [showJson, setShowJson] = useState(false);
+  const [genOpen, setGenOpen] = useState(false);
+  const [genNiche, setGenNiche] = useState("");
+  const [genLoading, setGenLoading] = useState(false);
+  const [genErr, setGenErr] = useState("");
 
   useEffect(() => {
-    const p = loadPolicies();
-    setPolicies(p);
-    const an = getActivePolicyName();
-    setActiveName(an);
-    setDraft(p.find(x => x.name === an) || p[0]);
+    setPolicies(loadPolicies());
+    setActiveName(getActivePolicyName());
   }, []);
 
-  function selectPolicy(name: string) {
-    const p = policies.find(x => x.name === name);
-    if (p) { setDraft(structuredClone(p)); setActiveName(name); setActivePolicyName(name); }
+  function openEditor(p: EditorialPolicy) {
+    setDraft(structuredClone(p));
+    setStep(0);
+    setShowPreview(false);
+    setView("editor");
+  }
+
+  function newPolicy() {
+    const n = policies.length + 1;
+    openEditor({ ...structuredClone(DEFAULT_POLICY), name: `Policy ${n}`, createdAt: Date.now() });
   }
 
   function save() {
     const others = policies.filter(p => p.name !== draft.name);
-    const next = [...others, draft].sort((a, b) => a.name.localeCompare(b.name));
+    const withDate = draft.createdAt ? draft : { ...draft, createdAt: Date.now() };
+    const next = [...others, withDate].sort((a, b) => a.name.localeCompare(b.name));
     setPolicies(next); savePolicies(next); setActivePolicyName(draft.name); setActiveName(draft.name);
-    setSaved(true); setTimeout(() => setSaved(false), 1800);
+    setSaved(true); setTimeout(() => setSaved(false), 1500);
+    setView("hub");
   }
 
-  function addNew() {
-    const name = `Policy ${policies.length + 1}`;
-    const np = { ...structuredClone(DEFAULT_POLICY), name };
-    const next = [...policies, np];
-    setPolicies(next); savePolicies(next); setDraft(np); setActiveName(name); setActivePolicyName(name);
+  function removePolicy(name: string) {
+    const next = policies.filter(p => p.name !== name);
+    const safe = next.length ? next : [DEFAULT_POLICY];
+    setPolicies(safe); savePolicies(safe);
+    if (activeName === name) { setActivePolicyName(safe[0].name); setActiveName(safe[0].name); }
   }
 
-  function removePolicy() {
-    if (policies.length <= 1) return;
-    const next = policies.filter(p => p.name !== draft.name);
-    setPolicies(next); savePolicies(next); setDraft(next[0]); setActiveName(next[0].name); setActivePolicyName(next[0].name);
+  async function generateWithAI() {
+    setGenErr("");
+    const { provider, apiKey, model } = getSeoGenCreds();
+    if (!apiKey) { setGenErr(t("seoErrNoAiKey")); return; }
+    if (!genNiche.trim()) return;
+    setGenLoading(true);
+    try {
+      const res = await fetch("/api/seo/policy-draft", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ niche: genNiche, aiProvider: provider, aiApiKey: apiKey, model: model || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setGenErr(data.error === "parse_failed" ? t("seoErrParseJsonShort") : (data.error || t("seoErrGen"))); setGenLoading(false); return; }
+      const p = normalizePolicy({ ...data.policy, name: data.policy?.name || genNiche.slice(0, 40), createdAt: Date.now() });
+      setGenLoading(false); setGenOpen(false); setGenNiche("");
+      openEditor(p);
+    } catch (e: any) { setGenErr(String(e?.message ?? e)); setGenLoading(false); }
   }
 
-  // helpers to update nested draft
   const up = (fn: (d: EditorialPolicy) => void) => setDraft(d => { const n = structuredClone(d); fn(n); return n; });
-  const csv = (arr?: string[]) => (arr || []).join(", ");
-  const toArr = (s: string) => s.split(",").map(x => x.trim()).filter(Boolean);
 
-  return (
-    <div style={{ display: "flex", gap: "18px", alignItems: "flex-start" }}>
-      {/* Left: list */}
-      <div className={card} style={{ width: "220px", flexShrink: 0 }}>
-        <div className="tool-section-label" style={{ marginBottom: "10px" }}>{t("seoPolicies")}</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-          {policies.map(p => (
-            <button key={p.name} onClick={() => selectPolicy(p.name)} style={{ textAlign: "left", padding: "8px 10px", borderRadius: "7px", border: "none", cursor: "pointer", fontSize: "13px", display: "flex", alignItems: "center", gap: "7px", background: p.name === draft.name ? "rgba(191,90,242,0.12)" : "transparent", color: p.name === draft.name ? "var(--color-accent-purple)" : "var(--color-text-secondary)", fontWeight: p.name === draft.name ? 700 : 500 }}>
-              <ScrollText size={14} /> {p.name}{p.name === activeName && <span style={{ marginLeft: "auto", fontSize: "9px", background: "var(--color-accent-green)", color: "#fff", padding: "1px 5px", borderRadius: "10px" }}>ACTIVE</span>}
-            </button>
-          ))}
+  // progress over key fields
+  const filledCount = [
+    draft.brand?.name, draft.brand?.competitors?.length, draft.audience?.customerProfile,
+    draft.audience?.industryNiche, draft.voice?.authorPersona,
+    draft.quality?.eeatRequirements, draft.restrictions?.complianceRequirements,
+  ].filter(Boolean).length;
+  const progress = Math.round((filledCount / 7) * 100);
+
+  // ─── HUB ──────────────────────────────────────────────────────────────────────
+  if (view === "hub") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px" }}>
+          <div>
+            <h2 style={{ fontSize: "20px", fontWeight: 700, color: "var(--color-text-primary)", margin: "0 0 6px" }}>{t("seoPolHubTitle")}</h2>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <span className="pill" style={{ fontSize: "11px" }}>{policies.length}/{MAX_POLICIES} {t("seoPolUsed")}</span>
+              <span style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>{t("seoPolHubSub")}</span>
+            </div>
+          </div>
+          <a href="https://docs.claude.com" target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 14px", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "13px", color: "var(--color-text-secondary)", textDecoration: "none", flexShrink: 0 }}>
+            <HelpCircle size={14} /> {t("seoPolDocs")}
+          </a>
         </div>
-        <button onClick={addNew} style={{ marginTop: "10px", width: "100%", padding: "8px", borderRadius: "7px", border: "1px dashed var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}><Plus size={14} /> {t("seoNew")}</button>
+
+        {/* Create */}
+        <div className="panel">
+          <div style={{ textAlign: "center", marginBottom: "16px" }}>
+            <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--color-text-primary)" }}>{t("seoPolCreateNew")}</div>
+            <div style={{ fontSize: "13px", color: "var(--color-text-secondary)", marginTop: "2px" }}>{t("seoPolHubSub")}</div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", maxWidth: "640px", margin: "0 auto" }}>
+            <CreateCard icon={<FileText size={22} />} title={t("seoPolCreateFirst")} sub={t("seoPolManualSetup")} disabled={policies.length >= MAX_POLICIES} onClick={newPolicy} />
+            <CreateCard icon={<Sparkles size={22} />} title={t("seoPolGenAI")} sub={t("seoPolAutoGen")} disabled={policies.length >= MAX_POLICIES} onClick={() => { setGenErr(""); setGenOpen(true); }} />
+          </div>
+          {policies.length >= MAX_POLICIES && <div style={{ textAlign: "center", marginTop: "12px", fontSize: "12px", color: "var(--color-accent-orange)" }}>{t("seoPolLimitReached")}</div>}
+        </div>
+
+        {/* List */}
+        {policies.map(p => (
+          <div key={p.name} className="panel">
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", marginBottom: "10px" }}>
+              <div>
+                <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <ScrollText size={15} color="var(--color-accent-purple)" /> {p.name}
+                  {p.name === activeName && <span style={{ fontSize: "9px", fontWeight: 700, background: "var(--color-accent-green)", color: "#fff", padding: "2px 7px", borderRadius: "10px" }}>ACTIVE</span>}
+                </div>
+                {p.createdAt && <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "3px" }}>{t("seoPolCreatedAt")}: {new Date(p.createdAt).toLocaleDateString()}</div>}
+              </div>
+              <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+                <button onClick={() => { setActivePolicyName(p.name); setActiveName(p.name); openEditor(p); }} style={btnGhost}><Eye size={13} /> {t("seoEdit")}</button>
+                {policies.length > 1 && <button onClick={() => removePolicy(p.name)} style={{ ...btnGhost, color: "var(--color-accent-red)", borderColor: "rgba(255,69,58,0.25)" }}><Trash2 size={13} /> {t("seoDelete")}</button>}
+              </div>
+            </div>
+            <pre style={{ whiteSpace: "pre-wrap", fontSize: "12px", lineHeight: 1.5, color: "var(--color-text-secondary)", margin: 0, fontFamily: "monospace", maxHeight: "72px", overflow: "hidden", maskImage: "linear-gradient(to bottom, #000 60%, transparent)" }}>{renderPolicy(p)}</pre>
+          </div>
+        ))}
+
+        {genOpen && (
+          <GenModal niche={genNiche} setNiche={setGenNiche} loading={genLoading} err={genErr} t={t}
+            onClose={() => { setGenOpen(false); setGenNiche(""); }} onGenerate={generateWithAI} />
+        )}
+      </div>
+    );
+  }
+
+  // ─── EDITOR (wizard) ────────────────────────────────────────────────────────────
+  const StepIcon = STEPS[step].icon;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      {/* header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <button onClick={() => setView("hub")} style={{ ...btnGhost, padding: "8px" }}><ArrowLeft size={16} /></button>
+          <div>
+            <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>{t("seoPolEditorTitle")}</h2>
+            <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>{t("seoPolEditorSub")}</div>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button onClick={() => { setShowJson(s => !s); setShowPreview(false); }} style={{ ...btnGhost, background: showJson ? "var(--color-accent-purple)" : undefined, color: showJson ? "#fff" : undefined, border: showJson ? "none" : undefined }}><FileJson size={14} /> JSON</button>
+          <button onClick={() => { setShowPreview(s => !s); setShowJson(false); }} style={{ ...btnGhost, background: showPreview ? "var(--color-accent-purple)" : undefined, color: showPreview ? "#fff" : undefined, border: showPreview ? "none" : undefined }}><Eye size={14} /> {t("seoPolPreviewPrompt")}</button>
+        </div>
       </div>
 
-      {/* Right: editor */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "14px", minWidth: 0 }}>
-        <div className={card}>
-          <div style={{ display: "flex", gap: "10px", alignItems: "end", marginBottom: "4px" }}>
-            <div style={{ flex: 1 }}>
-              <Field l={t("seoPolicyName")}><input className={inputStyle} value={draft.name} onChange={e => up(d => { d.name = e.target.value; })} /></Field>
+      {/* progress */}
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "6px" }}>
+          <span>{t("seoPolRequiredFilled")}</span><span>{progress}%</span>
+        </div>
+        <div style={{ height: "4px", borderRadius: "2px", background: "var(--color-border)", overflow: "hidden" }}>
+          <div style={{ width: `${progress}%`, height: "100%", background: "var(--color-accent-purple)", transition: "width 0.2s" }} />
+        </div>
+      </div>
+
+      {showPreview && (
+        <div className="panel" style={{ background: "var(--color-bg)" }}>
+          <div className="tool-section-label" style={{ marginBottom: "8px" }}>{t("seoPromptRender")}</div>
+          <pre style={{ whiteSpace: "pre-wrap", fontSize: "12px", lineHeight: 1.55, color: "var(--color-text-primary)", margin: 0, fontFamily: "monospace" }}>{renderPolicy(draft)}</pre>
+        </div>
+      )}
+
+      {showJson && <JsonExportPanel draft={draft} t={t} />}
+
+      <div style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}>
+        {/* left steps */}
+        <div className="panel" style={{ width: "210px", flexShrink: 0, padding: "12px" }}>
+          {STEPS.map((s, i) => {
+            const Icon = s.icon; const on = i === step;
+            return (
+              <button key={s.key} onClick={() => setStep(i)} style={{
+                display: "flex", alignItems: "center", gap: "10px", width: "100%", textAlign: "left",
+                padding: "10px 11px", borderRadius: "9px", marginBottom: "4px", cursor: "pointer", border: "none",
+                background: on ? "rgba(191,90,242,0.12)" : "transparent",
+              }}>
+                <Icon size={16} color={on ? "var(--color-accent-purple)" : "var(--color-text-secondary)"} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: "13px", fontWeight: on ? 700 : 500, color: on ? "var(--color-text-primary)" : "var(--color-text-secondary)" }}>{t(s.label as any)}</div>
+                  <div style={{ fontSize: "10px", color: "var(--color-text-tertiary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t(s.sub as any)}</div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* step content */}
+        <div className="panel" style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "18px" }}>
+            <StepIcon size={19} color="var(--color-accent-purple)" />
+            <div>
+              <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>{t(STEPS[step].label as any)}</div>
+              <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>{t(STEPS[step].sub as any)}</div>
             </div>
-            <button onClick={() => setShowPreview(p => !p)} style={{ height: "38px", padding: "0 14px", marginBottom: "12px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-secondary)", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}><Eye size={14} /> {t("seoPromptBtn")}</button>
-            <button onClick={save} style={{ height: "38px", padding: "0 16px", marginBottom: "12px", borderRadius: "8px", border: "none", background: saved ? "rgba(52,199,89,0.2)" : "var(--color-accent-purple)", color: saved ? "var(--color-accent-green)" : "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>{saved ? <><Check size={14} /> {t("seoSaved")}</> : <><Save size={14} /> {t("seoSave")}</>}</button>
-            {policies.length > 1 && <button onClick={removePolicy} style={{ height: "38px", padding: "0 12px", marginBottom: "12px", borderRadius: "8px", border: "1px solid rgba(255,69,58,0.25)", background: "rgba(255,69,58,0.08)", color: "var(--color-accent-red)", cursor: "pointer", display: "flex", alignItems: "center" }}><Trash2 size={14} /></button>}
+          </div>
+
+          {step === 0 && <BasicsStep draft={draft} up={up} t={t} />}
+          {step === 1 && <FormattingStep draft={draft} up={up} t={t} />}
+          {step === 2 && <QualityStep draft={draft} up={up} t={t} />}
+          {step === 3 && <RestrictionsStep draft={draft} up={up} t={t} />}
+
+          {/* nav */}
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: "22px", paddingTop: "16px", borderTop: "1px solid var(--color-border)" }}>
+            <button onClick={() => setStep(s => Math.max(0, s - 1))} disabled={step === 0} style={{ ...btnGhost, opacity: step === 0 ? 0.4 : 1 }}><ArrowLeft size={14} /> {t("seoBack")}</button>
+            <button onClick={() => setStep(s => Math.min(STEPS.length - 1, s + 1))} disabled={step === STEPS.length - 1} style={{ ...btnDark, opacity: step === STEPS.length - 1 ? 0.4 : 1 }}>{t("seoNext")} <ArrowRight size={14} /></button>
           </div>
         </div>
+      </div>
 
-        {showPreview && (
-          <div className={card} style={{ background: "var(--color-bg)" }}>
-            <div className="tool-section-label" style={{ marginBottom: "8px" }}>{t("seoPromptRender")}</div>
-            <pre style={{ whiteSpace: "pre-wrap", fontSize: "12px", lineHeight: 1.55, color: "var(--color-text-primary)", margin: 0, fontFamily: "monospace" }}>{renderPolicy(draft)}</pre>
-          </div>
-        )}
-
-        {/* Restrictions — самое ценное, ставим первым */}
-        <div className={card}>
-          <h3 style={SECTION_TITLE}>🛡 {t("seoRestrictions")} <span style={{ fontWeight: 400, color: "var(--color-text-tertiary)", fontSize: "11px" }}>{t("seoRestrictionsSub")}</span></h3>
-          <Field l={t("seoBannedWords")}><input className={inputStyle} value={csv(draft.restrictions?.banned_words)} onChange={e => up(d => { (d.restrictions ||= {}).banned_words = toArr(e.target.value); })} /></Field>
-          <Field l={t("seoBannedTopics")}><input className={inputStyle} value={csv(draft.restrictions?.banned_topics)} onChange={e => up(d => { (d.restrictions ||= {}).banned_topics = toArr(e.target.value); })} /></Field>
-          <Field l={t("seoComplianceField")}><textarea className={inputStyle} style={{ minHeight: "60px", resize: "vertical" }} value={draft.restrictions?.compliance_requirements || ""} onChange={e => up(d => { (d.restrictions ||= {}).compliance_requirements = e.target.value; })} /></Field>
+      {/* save bar */}
+      <div className="panel" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+        <div style={{ flex: 1 }}>
+          <label className="tool-field-label">{t("seoPolProjectName")} *</label>
+          <input className="tool-input" value={draft.name} onChange={e => up(d => { d.name = e.target.value; })} />
         </div>
+        <button onClick={save} disabled={!draft.name.trim()} style={{ ...btnPurple, alignSelf: "flex-end", opacity: draft.name.trim() ? 1 : 0.5 }}>
+          {saved ? <><Check size={15} /> {t("seoSaved")}</> : <><Save size={15} /> {t("seoPolSavePolicy")}</>}
+        </button>
+      </div>
+    </div>
+  );
+}
 
-        {/* Quality */}
-        <div className={card}>
-          <h3 style={SECTION_TITLE}>✅ {t("seoQualityStandards")}</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-            <Field l={t("seoCitationStyle")}>
-              <select className={inputStyle} value={draft.quality?.citation_style || ""} onChange={e => up(d => { (d.quality ||= {}).citation_style = e.target.value; })}>
-                <option value="">—</option><option value="inline">inline</option><option value="footnotes">footnotes</option><option value="none">none</option>
-              </select>
-            </Field>
-            <div style={{ display: "flex", alignItems: "end", paddingBottom: "12px" }}>
-              <Toggle on={!!draft.quality?.require_sources} set={v => up(d => { (d.quality ||= {}).require_sources = v; })} l={t("seoRequireSources")} />
-            </div>
-          </div>
-          <Field l={t("seoEeatReq")}><textarea className={inputStyle} style={{ minHeight: "54px", resize: "vertical" }} value={draft.quality?.eeat_requirements || ""} onChange={e => up(d => { (d.quality ||= {}).eeat_requirements = e.target.value; })} /></Field>
-          <Field l={t("seoFactChecking")}><textarea className={inputStyle} style={{ minHeight: "54px", resize: "vertical" }} value={draft.quality?.fact_checking || ""} onChange={e => up(d => { (d.quality ||= {}).fact_checking = e.target.value; })} /></Field>
+// ─── Steps ──────────────────────────────────────────────────────────────────────
+function BasicsStep({ draft, up, t }: any) {
+  const EXP = [
+    ["beginner", "seoExpBeginner", "seoExpBeginnerSub"],
+    ["intermediate", "seoExpIntermediate", "seoExpIntermediateSub"],
+    ["expert", "seoExpExpert", "seoExpExpertSub"],
+  ];
+  const setB = (k: string, v: any) => up((d: any) => { (d.brand ||= {})[k] = v; });
+  const setA = (k: string, v: any) => up((d: any) => { (d.audience ||= {})[k] = v; });
+  const setV = (k: string, v: any) => up((d: any) => { (d.voice ||= {})[k] = v; });
+  return (
+    <div>
+      <FieldLabel>{t("seoBrand")}</FieldLabel>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+        <div><label className="tool-field-label">{t("seoBrandName")}</label><input className="tool-input" value={draft.brand?.name || ""} onChange={e => setB("name", e.target.value)} /></div>
+        <div><label className="tool-field-label">{t("seoBrandUrl")}</label><input className="tool-input" value={draft.brand?.url || ""} onChange={e => setB("url", e.target.value)} placeholder="https://" /></div>
+      </div>
+      <div style={{ marginTop: "12px" }}><label className="tool-field-label">{t("seoBrandDesc")}</label>
+        <textarea className="tool-input" style={{ minHeight: "54px", resize: "vertical" }} placeholder={t("seoBrandDescPh")} value={draft.brand?.description || ""} onChange={e => setB("description", e.target.value)} /></div>
+      <div style={{ marginTop: "12px" }}><label className="tool-field-label">{t("seoBrandValues")}</label>
+        <input className="tool-input" placeholder={t("seoBrandValuesPh")} value={draft.brand?.values || ""} onChange={e => setB("values", e.target.value)} /></div>
+      <div style={{ marginTop: "12px" }}><label className="tool-field-label">{t("seoCompetitors")}</label>
+        <input className="tool-input" value={(draft.brand?.competitors || []).join(", ")} placeholder={t("seoCompetitorsPh")}
+          onChange={e => setB("competitors", e.target.value.split(",").map((x: string) => x.trim()).filter(Boolean))} /></div>
+
+      <FieldLabel>{t("seoAudienceSection")}</FieldLabel>
+      <div style={{ marginBottom: "12px" }}><label className="tool-field-label">{t("seoCustomerProfile")}</label>
+        <textarea className="tool-input" style={{ minHeight: "54px", resize: "vertical" }} placeholder={t("seoCustomerProfilePh")} value={draft.audience?.customerProfile || ""} onChange={e => setA("customerProfile", e.target.value)} /></div>
+      <div style={{ marginBottom: "12px" }}><label className="tool-field-label">{t("seoIndustryNiche")}</label>
+        <input className="tool-input" placeholder={t("seoIndustryNichePh")} value={draft.audience?.industryNiche || ""} onChange={e => setA("industryNiche", e.target.value)} /></div>
+      <CardGrid>
+        {EXP.map(([v, l, s]) => (
+          <OptionCard key={v} active={draft.audience?.expertiseLevel === v} title={t(l)} sub={t(s)} onClick={() => setA("expertiseLevel", v)} />
+        ))}
+      </CardGrid>
+
+      <FieldLabel>{t("seoVoiceTone")}</FieldLabel>
+      <div style={{ marginBottom: "12px" }}><label className="tool-field-label">{t("seoAuthorPersona")}</label>
+        <input className="tool-input" placeholder={t("seoAuthorPersonaPh")} value={draft.voice?.authorPersona || ""} onChange={e => setV("authorPersona", e.target.value)} /></div>
+      <CardGrid>
+        {TONES.map((tn) => (
+          <OptionCard key={tn.value} active={(draft.voice?.toneOfVoice || "expert") === tn.value} title={t(tn.labelKey as any)}
+            onClick={() => up((d: any) => { (d.voice ||= {}).toneOfVoice = tn.value; d.voice.formalityLevel = tn.formality; })} />
+        ))}
+      </CardGrid>
+    </div>
+  );
+}
+
+function FormattingStep({ draft, up, t }: any) {
+  const s = draft.structure || {};
+  const setS = (k: string, v: any) => up((d: any) => { (d.structure ||= {})[k] = v; });
+  const setEl = (k: string, v: boolean) => up((d: any) => { ((d.structure ||= {}).elements ||= {})[k] = v; });
+  const el = s.elements || {};
+  const HS = [["questions", "seoHsQuestions", "seoHsQuestionsEx"], ["statements", "seoHsStatements", "seoHsStatementsEx"], ["how-to", "seoHsHowto", "seoHsHowtoEx"], ["mixed", "seoHsMixed", "seoHsMixedEx"]];
+  const HC = [["sentence", "seoHcSentence", "seoHcSentenceEx"], ["title", "seoHcTitle", "seoHcTitleEx"], ["upper", "seoHcUpper", "seoHcUpperEx"]];
+  const PL = [["short", "seoPlShort", "seoPlShortEx"], ["medium", "seoPlMedium", "seoPlMediumEx"], ["long", "seoPlLong", "seoPlLongEx"]];
+  return (
+    <div>
+      <FieldLabel>{t("seoHeadingStyle")}</FieldLabel>
+      <CardGrid>{HS.map(([v, l, ex]) => <OptionCard key={v} active={s.headingStyle === v} title={t(l)} sub={t(ex)} onClick={() => setS("headingStyle", v)} />)}</CardGrid>
+
+      <FieldLabel>{t("seoHeadingCase")}</FieldLabel>
+      <CardGrid>{HC.map(([v, l, ex]) => <OptionCard key={v} active={s.headingCapitalization === v} title={t(l)} sub={t(ex)} onClick={() => setS("headingCapitalization", v)} />)}</CardGrid>
+
+      <FieldLabel>{t("seoParaLength")}</FieldLabel>
+      <CardGrid>{PL.map(([v, l, ex]) => <OptionCard key={v} active={s.paragraphLength === v} title={t(l)} sub={t(ex)} onClick={() => setS("paragraphLength", v)} />)}</CardGrid>
+
+      <FieldLabel>{t("seoTextFormatting")}</FieldLabel>
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        <ToggleRow on={!!el.bold} onToggle={() => setEl("bold", !el.bold)} title={t("seoUseBold")} desc={t("seoUseBoldDesc")} />
+        <ToggleRow on={!!el.italics} onToggle={() => setEl("italics", !el.italics)} title={t("seoUseItalic")} desc={t("seoUseItalicDesc")} />
+      </div>
+
+      <FieldLabel>{t("seoContentElements")}</FieldLabel>
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        <ToggleRow on={!!el.tables} onToggle={() => setEl("tables", !el.tables)} title={t("seoUseTables")} desc={t("seoUseTablesDesc")} />
+        <ToggleRow on={!!el.quotes} onToggle={() => setEl("quotes", !el.quotes)} title={t("seoUseQuotes")} desc={t("seoUseQuotesDesc")} />
+        <ToggleRow on={!!el.lists} onToggle={() => setEl("lists", !el.lists)} title={t("seoUseLists")} desc={t("seoUseListsDesc")} />
+        <ToggleRow on={!!el.examples} onToggle={() => setEl("examples", !el.examples)} title={t("seoUseExamples")} desc={t("seoUseExamplesDesc")} />
+        <ToggleRow on={!!el.images} onToggle={() => setEl("images", !el.images)} title={t("seoUseImages")} desc={t("seoUseImagesDesc")} />
+      </div>
+    </div>
+  );
+}
+
+function QualityStep({ draft, up, t }: any) {
+  const q = draft.quality || {};
+  const setQ = (k: string, v: any) => up((d: any) => { (d.quality ||= {})[k] = v; });
+  const CS = [["inline", "seoCsInline", "seoCsInlineEx"], ["footnotes", "seoCsFootnotes", "seoCsFootnotesEx"], ["none", "seoCsNone", "seoCsNoneEx"]];
+  return (
+    <div>
+      <div style={{ padding: "12px 14px", borderRadius: "10px", background: "rgba(255,159,10,0.06)", border: "1px solid rgba(255,159,10,0.2)", marginBottom: "18px" }}>
+        <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-accent-orange)", marginBottom: "3px" }}>💡 {t("seoEeatCallout")}</div>
+        <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.5 }}>{t("seoEeatCalloutDesc")}</div>
+      </div>
+
+      <FieldLabel>{t("seoCitationStyle")}</FieldLabel>
+      <CardGrid>{CS.map(([v, l, ex]) => <OptionCard key={v} active={q.citationStyle === v} title={t(l)} sub={t(ex)} onClick={() => setQ("citationStyle", v)} />)}</CardGrid>
+
+      <div style={{ marginTop: "12px" }}>
+        <ToggleRow on={!!q.requireSourceLinks} onToggle={() => setQ("requireSourceLinks", !q.requireSourceLinks)} title={t("seoRequireSources")} desc={t("seoRequireSourcesDesc")} />
+      </div>
+
+      <FieldLabel>{t("seoEeatReq")}</FieldLabel>
+      <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginBottom: "6px", marginTop: "-4px" }}>{t("seoEeatReqSub")}</div>
+      <textarea className="tool-input" style={{ minHeight: "64px", resize: "vertical" }} placeholder={t("seoEeatReqPh")} value={q.eeatRequirements || ""} onChange={e => setQ("eeatRequirements", e.target.value)} />
+
+      <FieldLabel>{t("seoFactChecking")}</FieldLabel>
+      <textarea className="tool-input" style={{ minHeight: "58px", resize: "vertical" }} placeholder={t("seoFactCheckingPh")} value={q.factCheckingNotes || ""} onChange={e => setQ("factCheckingNotes", e.target.value)} />
+    </div>
+  );
+}
+
+function RestrictionsStep({ draft, up, t }: any) {
+  const r = draft.restrictions || {};
+  const setR = (k: string, v: any) => up((d: any) => { (d.restrictions ||= {})[k] = v; });
+  return (
+    <div>
+      <label className="tool-field-label">{t("seoBannedWords")}</label>
+      <input className="tool-input" value={r.wordsToAvoid || ""} placeholder={t("seoBannedWordsPh")} onChange={e => setR("wordsToAvoid", e.target.value)} />
+      <div style={{ height: "14px" }} />
+      <label className="tool-field-label">{t("seoBannedTopics")}</label>
+      <input className="tool-input" value={r.topicsToAvoid || ""} placeholder={t("seoBannedTopicsPh")} onChange={e => setR("topicsToAvoid", e.target.value)} />
+      <div style={{ height: "14px" }} />
+      <label className="tool-field-label">{t("seoComplianceField")}</label>
+      <textarea className="tool-input" style={{ minHeight: "80px", resize: "vertical" }} placeholder={t("seoCompliancePh")} value={r.complianceRequirements || ""} onChange={e => setR("complianceRequirements", e.target.value)} />
+    </div>
+  );
+}
+
+// ─── Bits ───────────────────────────────────────────────────────────────────────
+function CreateCard({ icon, title, sub, onClick, disabled }: { icon: React.ReactNode; title: string; sub: string; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button onClick={disabled ? undefined : onClick} disabled={disabled} style={{
+      display: "flex", flexDirection: "column", alignItems: "center", gap: "10px", padding: "30px 20px",
+      borderRadius: "12px", border: "1px solid var(--color-border)", background: "var(--color-bg)",
+      cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.5 : 1, transition: "border-color 0.15s",
+    }}
+      onMouseOver={e => { if (!disabled) e.currentTarget.style.borderColor = "var(--color-accent-purple)"; }}
+      onMouseOut={e => e.currentTarget.style.borderColor = "var(--color-border)"}>
+      <div style={{ width: "48px", height: "48px", borderRadius: "12px", background: "var(--color-card-hover)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-secondary)" }}>{icon}</div>
+      <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)", textAlign: "center" }}>{title}</div>
+      <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>{sub}</div>
+    </button>
+  );
+}
+
+function GenModal({ niche, setNiche, loading, err, t, onClose, onGenerate }: any) {
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
+      <div className="panel" style={{ width: "440px", maxWidth: "92vw" }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
+          <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", display: "flex", alignItems: "center", gap: "8px" }}><Sparkles size={16} color="var(--color-accent-purple)" /> {t("seoGenAiTitle")}</div>
+          <button onClick={onClose} style={{ ...btnGhost, padding: "6px" }}><X size={14} /></button>
         </div>
-
-        {/* Formatting */}
-        <div className={card}>
-          <h3 style={SECTION_TITLE}>✍️ {t("seoFormatting")} <span style={{ fontWeight: 400, color: "var(--color-text-tertiary)", fontSize: "11px" }}>{t("seoFormattingSub")}</span></h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
-            <Field l={t("seoHeadingStyle")}><select className={inputStyle} value={draft.formatting?.heading_style || ""} onChange={e => up(d => { (d.formatting ||= {}).heading_style = e.target.value; })}><option value="">—</option><option value="questions">questions</option><option value="statements">statements</option><option value="how-to">how-to</option><option value="mixed">mixed</option></select></Field>
-            <Field l={t("seoHeadingCase")}><select className={inputStyle} value={draft.formatting?.heading_case || ""} onChange={e => up(d => { (d.formatting ||= {}).heading_case = e.target.value; })}><option value="">—</option><option value="sentence">sentence</option><option value="title">title</option><option value="upper">upper</option></select></Field>
-            <Field l={t("seoParaLength")}><select className={inputStyle} value={draft.formatting?.paragraph_length || ""} onChange={e => up(d => { (d.formatting ||= {}).paragraph_length = e.target.value; })}><option value="">—</option><option value="short">short</option><option value="medium">medium</option><option value="long">long</option></select></Field>
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "7px", marginTop: "6px" }}>
-            {(["bold", "italic", "tables", "quotes", "lists", "examples"] as const).map(k => (
-              <Toggle key={k} l={k} on={!!draft.formatting?.use?.[k]} set={v => up(d => { ((d.formatting ||= {}).use ||= {})[k] = v; })} />
-            ))}
-          </div>
-        </div>
-
-        {/* Audience / voice */}
-        <div className={card}>
-          <h3 style={SECTION_TITLE}>🎯 {t("seoAudienceVoice")}</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-            <Field l={t("seoExpertise")}><select className={inputStyle} value={draft.audience?.expertise || ""} onChange={e => up(d => { (d.audience ||= {}).expertise = e.target.value; })}><option value="">—</option><option value="beginner">beginner</option><option value="intermediate">intermediate</option><option value="expert">expert</option></select></Field>
-            <Field l={`${t("seoFormality")}: ${draft.voice?.formality ?? 50}/100`}><input type="range" min={0} max={100} value={draft.voice?.formality ?? 50} onChange={e => up(d => { (d.voice ||= {}).formality = Number(e.target.value); })} style={{ width: "100%", marginTop: "8px" }} /></Field>
-          </div>
+        <textarea className="tool-input" style={{ minHeight: "80px", resize: "vertical", marginBottom: "10px" }} placeholder={t("seoGenAiNichePh")} value={niche} onChange={e => setNiche(e.target.value)} />
+        {err && <div style={{ fontSize: "12px", color: "var(--color-accent-red)", marginBottom: "10px" }}>{err}</div>}
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+          <button onClick={onClose} style={btnGhost}>{t("seoCancel")}</button>
+          <button onClick={onGenerate} disabled={loading || !niche.trim()} style={{ ...btnPurple, opacity: loading || !niche.trim() ? 0.6 : 1 }}>
+            {loading ? <><Loader2 size={14} className="spin" /> {t("seoGenAiLoading")}</> : <><Sparkles size={14} /> {t("seoGenAiBtn")}</>}
+          </button>
         </div>
       </div>
     </div>
   );
 }
+
+function JsonExportPanel({ draft, t }: { draft: EditorialPolicy; t: any }) {
+  const [copied, setCopied] = useState(false);
+  const json = JSON.stringify(toExportJson(draft), null, 2);
+  const copy = () => navigator.clipboard.writeText(json).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1800); });
+  const download = () => {
+    const blob = new Blob([json], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = `policy-${draft.name.replace(/\s+/g, "-")}.json`; a.click();
+  };
+  return (
+    <div className="panel" style={{ background: "var(--color-bg)" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", marginBottom: "10px" }}>
+        <div>
+          <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)" }}>{t("seoJsonExportTitle")}</div>
+          <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>{t("seoJsonExportSub")}</div>
+        </div>
+        <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+          <button onClick={copy} style={btnGhost}>{copied ? <><Check size={13} /> {t("seoCopied")}</> : <><Copy size={13} /> {t("seoCopyToClipboard")}</>}</button>
+          <button onClick={download} style={btnGhost}><Download size={13} /> {t("seoDownloadJson")}</button>
+        </div>
+      </div>
+      <pre style={{ whiteSpace: "pre-wrap", fontSize: "12px", lineHeight: 1.5, color: "var(--color-text-primary)", margin: 0, fontFamily: "monospace", maxHeight: "360px", overflow: "auto" }}>{json}</pre>
+    </div>
+  );
+}
+
+const btnGhost: React.CSSProperties = { display: "flex", alignItems: "center", gap: "6px", padding: "8px 13px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-secondary)", fontSize: "12px", fontWeight: 600, cursor: "pointer" };
+const btnDark: React.CSSProperties = { display: "flex", alignItems: "center", gap: "6px", padding: "8px 16px", borderRadius: "8px", border: "none", background: "var(--color-text-primary)", color: "var(--color-bg)", fontSize: "13px", fontWeight: 600, cursor: "pointer" };
+const btnPurple: React.CSSProperties = { display: "flex", alignItems: "center", gap: "7px", padding: "9px 18px", borderRadius: "8px", border: "none", background: "var(--color-accent-purple)", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer" };

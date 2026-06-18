@@ -5,10 +5,11 @@ import { signIn, useSession } from "next-auth/react";
 import {
   ArrowLeft, Plus, X, CheckCircle, AlertCircle,
   Users, Settings, Globe, Key, Edit2, Copy,
-  ChevronDown, Crown, Zap, Star, Eye,
+  ChevronDown, Crown, Zap, Star, Eye, RefreshCw,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
+import { getConfiguredProviders, AI_PROVIDER_NAMES } from "@/lib/seo/keys";
 
 type NavItem = "accounts" | "teams" | "api" | "indexing-api" | "members" | "preferences" | "supersites";
 
@@ -809,6 +810,91 @@ function SeoKeyCard({ provider }: { provider: typeof SEO_PROVIDERS[number] }) {
   );
 }
 
+function ModelSelector() {
+  const { t } = useLanguage();
+  const [groups, setGroups] = useState<{ provider: string; name: string; models: { id: string; label: string }[] }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [fetchErr, setFetchErr] = useState(false);
+  const [sel, setSel] = useState("");          // "" default | "__custom__" | "provider::id"
+  const [custom, setCustom] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  async function loadModels() {
+    const providers = getConfiguredProviders();
+    if (!providers.length) { setGroups([]); return; }
+    setLoading(true); setFetchErr(false);
+    const results = await Promise.all(providers.map(async (p) => {
+      try {
+        const res = await fetch("/api/seo/models", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider: p.id, apiKey: p.key }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.models?.length) { if (!res.ok) setFetchErr(true); return null; }
+        return { provider: p.id, name: AI_PROVIDER_NAMES[p.id] || p.id, models: data.models as { id: string; label: string }[] };
+      } catch { setFetchErr(true); return null; }
+    }));
+    setGroups(results.filter(Boolean) as any);
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    const provider = localStorage.getItem("seoProvider") || "";
+    const model = localStorage.getItem("seoModel") || "";
+    if (model) setSel(provider ? `${provider}::${model}` : "__custom__");
+    if (model && !provider) setCustom(model);
+    loadModels();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function flash() { setSaved(true); setTimeout(() => setSaved(false), 1500); }
+  function choose(v: string) {
+    setSel(v);
+    if (v === "") { localStorage.removeItem("seoProvider"); localStorage.removeItem("seoModel"); flash(); return; }
+    if (v === "__custom__") { return; }
+    const [provider, ...rest] = v.split("::"); const id = rest.join("::");
+    localStorage.setItem("seoProvider", provider); localStorage.setItem("seoModel", id); flash();
+  }
+  function saveCustom(v: string) {
+    localStorage.removeItem("seoProvider"); localStorage.setItem("seoModel", v.trim()); flash();
+  }
+
+  const inputBase: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-primary)", fontSize: "13px", outline: "none", boxSizing: "border-box" };
+
+  return (
+    <div style={{ marginBottom: "18px", paddingBottom: "16px", borderBottom: "1px solid var(--color-border)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+        <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)" }}>
+          {t("seoModelLabel")}{saved && <span style={{ marginLeft: "8px", fontSize: "11px", color: "var(--color-accent-green)" }}>✓ {t("seoModelSaved")}</span>}
+        </div>
+        <button onClick={loadModels} disabled={loading} style={{ display: "flex", alignItems: "center", gap: "5px", padding: "5px 10px", borderRadius: "7px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", fontSize: "11px", cursor: "pointer" }}>
+          <RefreshCw size={12} className={loading ? "spin" : undefined} /> {t("seoModelRefresh")}
+        </button>
+      </div>
+      <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", margin: "2px 0 8px" }}>{t("seoModelSub")}</div>
+
+      <select value={sel} onChange={e => choose(e.target.value)} style={inputBase}>
+        <option value="">{t("seoModelDefault")}</option>
+        {groups.map(g => (
+          <optgroup key={g.provider} label={g.name}>
+            {g.models.map(m => <option key={g.provider + m.id} value={`${g.provider}::${m.id}`}>{m.label}</option>)}
+          </optgroup>
+        ))}
+        <option value="__custom__">{t("seoModelCustom")}</option>
+      </select>
+
+      {sel === "__custom__" && (
+        <input value={custom} onChange={e => setCustom(e.target.value)} onBlur={() => saveCustom(custom)} onKeyDown={e => e.key === "Enter" && saveCustom(custom)}
+          placeholder={t("seoModelCustomPh")} style={{ ...inputBase, marginTop: "8px", fontFamily: "monospace" }} />
+      )}
+
+      <div style={{ fontSize: "11px", color: "var(--color-text-tertiary)", marginTop: "6px" }}>
+        {loading ? t("seoModelLoading") : !getConfiguredProviders().length ? t("seoModelNoProviders") : fetchErr ? t("seoModelErrFetch") : t("seoModelLive")}
+      </div>
+    </div>
+  );
+}
+
 function SerpScrapeSection() {
   const { t } = useLanguage();
   const [active, setActive] = useState("serper");
@@ -822,6 +908,8 @@ function SerpScrapeSection() {
         title={t("seoSetTitle")}
         sub={t("seoSetSub")}
       />
+
+      <ModelSelector />
 
       <div style={{ marginBottom: "14px" }}>
         <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "7px" }}>{t("seoSetActiveProvider")}</div>

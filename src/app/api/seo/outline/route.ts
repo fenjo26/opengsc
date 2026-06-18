@@ -30,18 +30,23 @@ export async function POST(req: Request) {
     policy: b.policy,
     paa: b.paa,
     related: b.related,
+    tone: b.tone ? String(b.tone) : undefined,
+    persona: b.persona ? String(b.persona) : undefined,
+    additionalKeywords: b.additionalKeywords ? String(b.additionalKeywords) : undefined,
+    targetWordCount: b.targetWordCount ? Number(b.targetWordCount) : undefined,
+    manualTexts: Array.isArray(b.manualTexts) ? b.manualTexts : undefined,
   });
 
   const model = b.model ? String(b.model) : undefined;
 
-  let raw = await fetchLLM(prompt, provider, apiKey, 4000, model);
+  let raw = await fetchLLM(prompt, provider, apiKey, 8000, model);
   let outline = extractJson(raw);
 
   // One retry on parse failure (spec §6)
   if (!outline) {
     raw = await fetchLLM(
       prompt + "\n\nПредыдущий ответ не распарсился. Верни ТОЛЬКО валидный JSON, без текста и без markdown-обёрток.",
-      provider, apiKey, 4000, model,
+      provider, apiKey, 8000, model,
     );
     outline = extractJson(raw);
   }

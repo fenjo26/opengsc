@@ -2,13 +2,36 @@
 // Mirrors the app convention: keys live in the browser and are sent per-request.
 "use client";
 
-import { EditorialPolicy, DEFAULT_POLICY } from "./policy";
+import { EditorialPolicy, DEFAULT_POLICY, normalizePolicy } from "./policy";
 
 export function getAiCreds(): { provider: string; apiKey: string } {
   if (typeof window === "undefined") return { provider: "anthropic", apiKey: "" };
   const provider = localStorage.getItem("aiProvider") || "anthropic";
   const apiKey = localStorage.getItem(`aiKey_${provider}`) || localStorage.getItem("aiApiKey") || "";
   return { provider, apiKey };
+}
+
+export const AI_PROVIDER_IDS = ["anthropic", "openai", "gemini", "openrouter", "zai"] as const;
+export const AI_PROVIDER_NAMES: Record<string, string> = {
+  anthropic: "Anthropic", openai: "OpenAI", gemini: "Google Gemini", openrouter: "OpenRouter", zai: "Z.AI",
+};
+
+// Providers the user has configured a key for (for the live model selector).
+export function getConfiguredProviders(): { id: string; key: string }[] {
+  if (typeof window === "undefined") return [];
+  return AI_PROVIDER_IDS
+    .map(id => ({ id, key: localStorage.getItem(`aiKey_${id}`) || "" }))
+    .filter(p => p.key.trim().length > 4);
+}
+
+// Resolved creds for SEO generation: a SEO-specific provider override (seoProvider)
+// can differ from the global aiProvider; falls back to it when unset.
+export function getSeoGenCreds(): { provider: string; apiKey: string; model: string } {
+  if (typeof window === "undefined") return { provider: "anthropic", apiKey: "", model: "" };
+  const provider = localStorage.getItem("seoProvider") || localStorage.getItem("aiProvider") || "anthropic";
+  const apiKey = localStorage.getItem(`aiKey_${provider}`) || localStorage.getItem("aiApiKey") || "";
+  const model = localStorage.getItem("seoModel") || "";
+  return { provider, apiKey, model };
 }
 
 export function getSerpCreds(): { provider: string; apiKey: string } {
@@ -38,7 +61,7 @@ export function loadPolicies(): EditorialPolicy[] {
     const raw = localStorage.getItem(POLICY_KEY);
     if (!raw) return [DEFAULT_POLICY];
     const arr = JSON.parse(raw);
-    return Array.isArray(arr) && arr.length ? arr : [DEFAULT_POLICY];
+    return Array.isArray(arr) && arr.length ? arr.map(normalizePolicy) : [DEFAULT_POLICY];
   } catch {
     return [DEFAULT_POLICY];
   }

@@ -1,17 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Search, Loader2, AlertTriangle, BarChart3 } from "lucide-react";
+import { Search, Loader2, AlertTriangle } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
-import { getAiCreds, getSerpCreds, getFirecrawlKey, getSeoModel } from "@/lib/seo/keys";
+import { GapReport } from "@/components/SeoRenderers";
+import { getSeoGenCreds, getSerpCreds, getFirecrawlKey } from "@/lib/seo/keys";
+import { COUNTRIES, LANGUAGES } from "@/lib/seo/regions";
+import { addHistory, takeView } from "@/lib/seo/history";
 
 const card = "panel";
 const inputStyle = "tool-input";
-const PRI: Record<string, string> = { high: "#ff453a", medium: "#ff9f0a", low: "#34c759" };
 
 function Field({ l, children }: { l: string; children: React.ReactNode }) { return <div><span className="tool-field-label">{l}</span>{children}</div>; }
-function Pri({ p }: { p: string }) { return <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: "20px", color: PRI[p] || "#888", background: `${PRI[p] || "#888"}1a`, textTransform: "uppercase" }}>{p}</span>; }
 
 export default function AnalysisPage() {
   const { t } = useLanguage();
@@ -25,14 +26,19 @@ export default function AnalysisPage() {
   const [err, setErr] = useState("");
   const [report, setReport] = useState<any>(null);
 
-  const ai = typeof window !== "undefined" ? getAiCreds() : { provider: "", apiKey: "" };
+  const ai = typeof window !== "undefined" ? getSeoGenCreds() : { provider: "", apiKey: "", model: "" };
   const serpCreds = typeof window !== "undefined" ? getSerpCreds() : { provider: "", apiKey: "" };
+
+  useEffect(() => {
+    const v = takeView();
+    if (v?.type === "analysis") { setReport(v.data); if (v.data?.keyword) setKeyword(v.data.keyword); if (v.data?.target_url) setTargetUrl(v.data.target_url); }
+  }, []);
 
   async function run() {
     setErr(""); setReport(null);
     if (!keyword.trim() || !targetUrl.trim()) { setErr(t("seoErrFillKwUrl")); return; }
     const { provider: sp, apiKey: sk } = getSerpCreds();
-    const { provider: ap, apiKey: ak } = getAiCreds();
+    const { provider: ap, apiKey: ak, model: am } = getSeoGenCreds();
     if (!sk) { setErr(t("seoErrNoSerpKey")); return; }
     if (!ak) { setErr(t("seoErrNoAiKey")); return; }
     setLoading(true);
@@ -64,11 +70,12 @@ export default function AnalysisPage() {
       setStage(t("seoStageGap"));
       const res = await fetch("/api/seo/analysis", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ keyword, targetPage, competitors, aiProvider: ap, aiApiKey: ak, model: getSeoModel() || undefined }),
+        body: JSON.stringify({ keyword, targetPage, competitors, aiProvider: ap, aiApiKey: ak, model: am || undefined }),
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error === "parse_failed" ? t("seoErrParseJsonShort") : (data.error || t("seoErrAnalysis"))); setLoading(false); return; }
       setReport(data.report);
+      addHistory({ type: "analysis", keyword: keyword || targetUrl, data: data.report });
     } catch (e: any) { setErr(String(e?.message ?? e)); }
     setLoading(false); setStage("");
   }
@@ -89,8 +96,16 @@ export default function AnalysisPage() {
           <Field l={t("seoKeywordRanks")}><input className={inputStyle} value={keyword} onChange={e => setKeyword(e.target.value)} placeholder={t("seoKeywordRanksPh")} /></Field>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: "12px", alignItems: "end" }}>
-          <Field l={t("seoCountry")}><input className={inputStyle} value={country} onChange={e => setCountry(e.target.value)} /></Field>
-          <Field l={t("seoLanguage")}><input className={inputStyle} value={language} onChange={e => setLanguage(e.target.value)} /></Field>
+          <Field l={t("seoCountry")}>
+            <select className={inputStyle} value={country} onChange={e => setCountry(e.target.value)}>
+              {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
+            </select>
+          </Field>
+          <Field l={t("seoLanguage")}>
+            <select className={inputStyle} value={language} onChange={e => setLanguage(e.target.value)}>
+              {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
+            </select>
+          </Field>
           <Field l="Top N"><select className={inputStyle} value={topN} onChange={e => setTopN(Number(e.target.value))}>{[5, 10, 15].map(n => <option key={n} value={n}>{n}</option>)}</select></Field>
           <button onClick={run} disabled={loading} style={{ padding: "9px 18px", borderRadius: "8px", border: "none", cursor: "pointer", background: "var(--color-accent-purple)", color: "#fff", fontSize: "13px", fontWeight: 600, display: "flex", alignItems: "center", gap: "7px", height: "38px" }}>
             {loading ? <Loader2 size={15} className="spin" /> : <Search size={15} />} {t("seoAnalyze")}
@@ -101,79 +116,7 @@ export default function AnalysisPage() {
 
       {err && <div className={card} style={{ borderColor: "rgba(255,69,58,0.35)", background: "rgba(255,69,58,0.06)", color: "var(--color-accent-red)", fontSize: "13px", display: "flex", gap: "8px", alignItems: "center" }}><AlertTriangle size={16} /> {err}</div>}
 
-      {report && (
-        <div className={card}>
-          <h3 style={{ fontSize: "16px", fontWeight: 700, margin: "0 0 6px", color: "var(--color-text-primary)", display: "flex", alignItems: "center", gap: "8px" }}>
-            <BarChart3 size={18} color="var(--color-accent-purple)" /> {t("seoGapReport")}
-          </h3>
-          {report.summary && <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: 1.6, marginBottom: "16px" }}>{report.summary}</p>}
-
-          {report.prioritized_actions?.length > 0 && (
-            <Section title={t("seoPriorityActions")}>
-              <ol style={{ margin: 0, paddingLeft: "18px", fontSize: "13px", color: "var(--color-text-primary)", lineHeight: 1.8 }}>
-                {report.prioritized_actions.map((a: string, i: number) => <li key={i}>{a.replace(/^\d+\.\s*/, "")}</li>)}
-              </ol>
-            </Section>
-          )}
-
-          {report.ai_visibility && (
-            <Section title={t("seoAiVisibility")}>
-              <div style={{ fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: 1.7 }}>
-                {report.ai_visibility.cited_source_types_in_serp?.length > 0 && <div><b style={{ color: "var(--color-text-primary)" }}>{t("seoWhoAiCites")}</b> {report.ai_visibility.cited_source_types_in_serp.join(", ")}</div>}
-                {report.ai_visibility.brand_external_presence && <div><b style={{ color: "var(--color-text-primary)" }}>{t("seoBrandPresence")}</b> {report.ai_visibility.brand_external_presence}</div>}
-                {report.ai_visibility.main_gap && <div style={{ marginTop: "4px" }}>🎯 <b style={{ color: "var(--color-text-primary)" }}>{t("seoMainGap")}</b> {report.ai_visibility.main_gap} {report.ai_visibility.priority && <Pri p={report.ai_visibility.priority} />}</div>}
-              </div>
-            </Section>
-          )}
-
-          {report.content_gaps?.length > 0 && (
-            <Section title={t("seoContentGaps")}>
-              {report.content_gaps.map((g: any, i: number) => (
-                <Row key={i} pri={g.priority}><b>{g.type}:</b> {g.item}</Row>
-              ))}
-            </Section>
-          )}
-
-          {report.extractable_fact_gaps?.length > 0 && (
-            <Section title={t("seoFactGaps")}>
-              {report.extractable_fact_gaps.map((g: any, i: number) => (
-                <Row key={i} pri={g.priority}>
-                  <b>{g.fact}</b> — {t("seoCompetitorHas")} {g.competitor_has || "—"}; {t("seoYouHave")} {g.target_has || "—"}. {g.fix && <span style={{ color: "var(--color-accent-green)" }}>→ {g.fix}</span>}
-                </Row>
-              ))}
-            </Section>
-          )}
-
-          {report.front_loading?.issue && (
-            <Section title={t("seoFrontLoading")}>
-              <Row pri={report.front_loading.priority}>{report.front_loading.issue}</Row>
-            </Section>
-          )}
-
-          {report.quality_issues?.length > 0 && (
-            <Section title={t("seoQuality")}>
-              {report.quality_issues.map((q: any, i: number) => <Row key={i} pri={q.priority}>{q.issue}</Row>)}
-            </Section>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginTop: "16px", paddingTop: "14px", borderTop: "1px solid var(--color-border)" }}>
-      <div className="tool-section-label" style={{ marginBottom: "10px" }}>{title}</div>
-      {children}
-    </div>
-  );
-}
-function Row({ pri, children }: { pri?: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: "flex", alignItems: "flex-start", gap: "9px", padding: "8px 0", fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
-      {pri && <span style={{ marginTop: "2px" }}><Pri p={pri} /></span>}
-      <div style={{ flex: 1 }}>{children}</div>
+      {report && <GapReport report={report} />}
     </div>
   );
 }

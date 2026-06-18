@@ -1,13 +1,14 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { FileText, Search, ScrollText, Sparkles } from "lucide-react";
+import { FileText, Search, ScrollText, Sparkles, History } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 const TABS = [
   { href: "/seo-tools/outline", key: "seoTabOutline" as const, icon: FileText },
   { href: "/seo-tools/analysis", key: "seoTabAnalysis" as const, icon: Search },
   { href: "/seo-tools/policy", key: "seoTabPolicy" as const, icon: ScrollText },
+  { href: "/seo-tools/history", key: "seoTabHistory" as const, icon: History },
 ];
 
 export default function SeoToolsLayout({ children }: { children: React.ReactNode }) {
@@ -16,7 +17,7 @@ export default function SeoToolsLayout({ children }: { children: React.ReactNode
   const { t } = useLanguage();
 
   return (
-    <div style={{ padding: "28px 0 60px" }}>
+    <div style={{ padding: "28px 32px 60px", maxWidth: "1280px", margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "6px" }}>
         <div style={{

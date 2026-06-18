@@ -15,7 +15,7 @@ export interface CompetitorInput {
   has_faq: boolean;
 }
 
-// ─── Outline generation prompt (spec §4.1) ──────────────────────────────────────
+// ─── Outline generation prompt (rich, EAV-style — spec §4 + reference parity) ─────
 export function buildOutlinePrompt(args: {
   keyword: string;
   language: string;
@@ -24,34 +24,73 @@ export function buildOutlinePrompt(args: {
   policy?: EditorialPolicy;
   paa?: string[];
   related?: string[];
+  tone?: string;
+  persona?: string;
+  additionalKeywords?: string;
+  targetWordCount?: number;
+  manualTexts?: { name: string; text: string }[];
 }): string {
   const policyBlock = args.policy ? renderPolicy(args.policy) + "\n\n" : "";
   const paaBlock = args.paa?.length ? `\nPeople-Also-Ask из выдачи: ${JSON.stringify(args.paa)}` : "";
   const relBlock = args.related?.length ? `\nСвязанные запросы: ${JSON.stringify(args.related)}` : "";
+  const toneBlock = args.tone ? `\n- тон повествования: ${args.tone}` : "";
+  const personaBlock = args.persona ? `\n- от лица: ${args.persona}` : "";
+  const addKw = args.additionalKeywords?.trim() ? `\n- доп. ключевые слова (обязательно учесть): ${args.additionalKeywords}` : "";
+  const twc = args.targetWordCount ? `\n- целевой объём статьи: ~${args.targetWordCount} слов (распредели по секциям, не раздувай)` : "";
+  const manual = args.manualTexts?.length
+    ? `\n- ручные тексты конкурентов (скрейп не справился): ${JSON.stringify(args.manualTexts.map(m => ({ name: m.name, text: m.text.slice(0, 6000) })))}`
+    : "";
 
-  return `${policyBlock}Ты — SEO-стратег, строящий структуру (outline) статьи на основе анализа топ-конкурентов из поисковой выдачи. Твоя задача — вернуть оптимальную структуру будущей статьи, которая полнее и полезнее конкурентов, в формате СТРОГОГО JSON без преамбулы и без markdown-обёрток.
+  return `${policyBlock}Ты — SEO-стратег и entity-аналитик. На основе анализа топ-конкурентов из выдачи построй ИСЧЕРПЫВАЮЩУЮ структуру статьи (outline) в EAV-модели (Entity-Attribute-Value), которая полнее и авторитетнее конкурентов и максимально цитируема в ИИ-поиске. Верни СТРОГИЙ JSON без преамбулы и без markdown-обёрток.
 
 ПРИНЦИПЫ:
-- Структура должна ОТВЕЧАТЬ на реальные вопросы пользователей (sub-intents), а не лить воду.
-- Каждой секции назначь реалистичный объём в словах — суммарно НЕ раздувай. Лучше плотно.
-- Front-load: ключевой ответ (цена, время, расстояние) — в первых секциях, не в конце.
-- Для коммерческих тем включи таблицу/сравнение всех вариантов — нейтрально, включая те, что автор не продаёт. Это повышает цитируемость в AI-поиске.
-- НЕ выдумывай лицензии, сертификаты, регалии и отзывы. Поля authority оставляй пустыми.
-- НЕ навязывай фейковый «личный опыт». Помечай секции флагом needs_real_experience=true, где личный опыт уместен.
+- Структура отвечает на реальные sub-intents пользователей; front-load ключевые факты (цена/время/расстояние) в первые секции.
+- Для каждой секции укажи сущности с весом важности 1-10, ключи, краткое summary, визуальные элементы, заметки копирайтеру и связи сущностей (триплеты subject→predicate→object со strength 1-10).
+- Веса [10] — самые важные сущности темы, [5-7] — поддерживающие/географические.
+- Для коммерческих тем — нейтральное сравнение ВСЕХ вариантов (включая те, что автор не продаёт).
+- НЕ выдумывай лицензии/регалии/отзывы. Помечай секции needs_real_experience=true, где уместен реальный личный опыт (не выдуманный).
 
 ДАНО:
 - keyword: ${args.keyword}
-- язык/страна: ${args.language}/${args.country}${paaBlock}${relBlock}
-- топ-конкуренты (с типами и структурой): ${JSON.stringify(args.competitors)}
+- язык/страна: ${args.language}/${args.country}${toneBlock}${personaBlock}${addKw}${twc}${paaBlock}${relBlock}
+- топ-конкуренты (типы + структура): ${JSON.stringify(args.competitors)}${manual}
 
-ВЕРНИ JSON строго по схеме (только JSON, без обёрток):
+ВЕРНИ JSON строго по схеме (только JSON):
 {
-  "meta": { "keyword": "", "title_options": ["", "", ""], "description_options": ["", ""], "target_word_count": 0 },
-  "entities": [ { "name": "", "type": "" } ],
-  "sub_intents": [ "" ],
-  "sections": [ { "h_level": "H2", "heading": "", "word_count": [80,110], "key_point": "", "entities_to_cover": [""], "keywords": [""], "visual_elements": [""], "needs_real_experience": false, "notes": "" } ],
-  "price_table_template": { "columns": [""], "rows": [ { } ] },
-  "faq": [ { "question": "", "answer_guideline": "" } ],
+  "meta": { "keyword": "", "title_options": ["","",""], "description_options": ["",""], "target_word_count": 0, "dominant_intent": "", "tone": "", "persona": "" },
+  "entities": [ { "name": "", "type": "Place|Service|Vehicle Type|Company|Transport Mode|Concept", "weight": 10, "attributes": { "Attr_Name": "Value" }, "relationship_triplets": ["Subject → predicate → Object [9]"] } ],
+  "sub_intents": [ { "intent": "", "section": "H3 ...", "coverage": "как раскрыть", "word_count": "100+", "entities": [""] } ],
+  "sections": [ {
+    "h_level": "H2",
+    "heading": "",
+    "word_count_total": [130,160],
+    "word_count_self": [60,80],
+    "entities_to_cover": [ { "name": "", "weight": 10 } ],
+    "keywords": [""],
+    "summary": "",
+    "visual_elements": [ { "type": "table|infographic|list|checklist|flowchart", "title": "", "description": "" } ],
+    "copywriter_notes": "",
+    "entity_connections": [ { "subject": "", "predicate": "", "object": "", "strength": 10 } ],
+    "needs_real_experience": false
+  } ],
+  "faq": [ { "question": "", "answer_guideline": "40-60 слов, конкретно" } ],
+  "entity_analysis": {
+    "content_strategy": {
+      "structure_advantages": ["оптимальный поток секций","визуальная стратегия","стратегия цитирования авторитетов"],
+      "entity_advantages": ["уникальные комбинации сущностей","глубокое покрытие атрибутов","сильные сигналы авторитетности","маппинг связей"],
+      "structure_superiority": ["прямой ответ на интент","системное покрытие","логичный поток","интеграция авторитета"],
+      "authority_signals": ["верификационные бейджи","официальная инфо о маршруте","выдержки из отзывов"]
+    },
+    "primary_entity": { "name": "", "attributes": { "Attr_Name": "Value" }, "relationship_triplets": ["Subject → predicate → Object [10]"], "authority_validation": "лицензии/инспекции/сертификаты — реальные или плейсхолдер" },
+    "supporting_entities": [ { "name": "", "attributes": { "Attr": "Value" }, "relationship_to_primary": "Entity → predicate → Primary", "content_integration": "в каких секциях раскрывается" } ],
+    "keyword_strategy": {
+      "primary": [ { "keyword": "", "usage": "как и сколько раз вплести через атрибуты сущности" } ],
+      "lsi": [ { "keyword": "", "usage": "через значения атрибутов" } ],
+      "long_tail": [ { "keyword": "", "usage": "через предикаты связей" } ]
+    },
+    "visual_elements": [ { "name": "", "purpose": "", "eav_data": "какие атрибуты визуализируются", "prompt": "промпт для генерации этого визуала" } ]
+  },
+  "price_table_template": { "columns": [""], "rows": [ {} ] },
   "authority_fields_to_fill_by_user": [ "" ]
 }`;
 }
