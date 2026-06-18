@@ -11,7 +11,7 @@ import { OutlineStructure, OutlineEntities, GapReport } from "@/components/SeoRe
 import SeoTextDetail from "@/components/SeoTextDetail";
 import { getHistoryItem, updateHistory, addHistory, HistoryItem } from "@/lib/seo/history";
 import { outlineToMarkdown, outlineToHtml, htmlDocument, outlineHeadings, outlineSummary } from "@/lib/seo/outlineFormat";
-import { getSeoGenCreds, loadPolicies, getActivePolicyName } from "@/lib/seo/keys";
+import { getSeoGenCreds, getSerpCreds, getFirecrawlKey, getFactSourceCount, loadPolicies, getActivePolicyName } from "@/lib/seo/keys";
 import { TONES, toneToPrompt } from "@/lib/seo/tones";
 import { LANGUAGES } from "@/lib/seo/regions";
 
@@ -239,6 +239,7 @@ function GenTextModal({ item, t, onClose, onDone }: { item: HistoryItem; t: any;
   const [policyName, setPolicyName] = useState(getActivePolicyName());
   const [tone, setTone] = useState("");
   const [language, setLanguage] = useState("en");
+  const [sourceMode, setSourceMode] = useState<"off" | "facts" | "cited">("off");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
@@ -250,9 +251,10 @@ function GenTextModal({ item, t, onClose, onDone }: { item: HistoryItem; t: any;
     try {
       const policy = policies.find(p => p.name === policyName) || policies[0];
       const resolvedTone = tone ? toneToPrompt(tone) : toneToPrompt(policy?.voice?.toneOfVoice || "");
+      const serp = getSerpCreds();
       const res = await fetch("/api/seo/text", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ outline: item.data, policy, language, tone: resolvedTone || undefined, aiProvider: provider, aiApiKey: apiKey, model: model || undefined }),
+        body: JSON.stringify({ outline: item.data, keyword: item.keyword, policy, language, tone: resolvedTone || undefined, sourceMode, serpProvider: serp.provider, serpKey: serp.apiKey || undefined, firecrawlKey: getFirecrawlKey() || undefined, scrapeCount: getFactSourceCount(), aiProvider: provider, aiApiKey: apiKey, model: model || undefined }),
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || t("seoErrText")); setLoading(false); return; }
@@ -291,6 +293,14 @@ function GenTextModal({ item, t, onClose, onDone }: { item: HistoryItem; t: any;
         <select className="tool-input" value={language} onChange={e => setLanguage(e.target.value)}>
           {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
         </select>
+
+        <label style={label}>{t("seoSourcesMode")}</label>
+        <select className="tool-input" value={sourceMode} onChange={e => setSourceMode(e.target.value as any)}>
+          <option value="off">{t("seoSourcesOff")}</option>
+          <option value="facts">{t("seoSourcesFacts")}</option>
+          <option value="cited">{t("seoSourcesCited")}</option>
+        </select>
+        <div style={{ fontSize: "11px", color: "var(--color-text-tertiary)", marginTop: "6px" }}>{t("seoSourcesModeHint")}</div>
 
         {err && <div style={{ fontSize: "12px", color: "var(--color-accent-red)", marginTop: "10px" }}>{err}</div>}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "16px" }}>

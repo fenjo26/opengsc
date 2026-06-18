@@ -140,9 +140,25 @@ export function buildTextPrompt(args: {
   language: string;
   custom?: string;
   promptType?: "service" | "custom";
+  sources?: { title: string; snippet: string; url: string; domain: string }[];
+  sourceMode?: "off" | "facts" | "cited";
 }): string {
   const policyBlock = args.policy ? renderPolicy(args.policy) + "\n\n" : "";
   const customLine = args.custom ? `Дополнительная инструкция автора (учесть обязательно): ${args.custom}\n` : "";
+
+  // Real-source grounding (retrieval-augmented). Two modes:
+  //  - facts: use real numbers but NEVER name/link competitors (for commercial/own-brand pages)
+  //  - cited: use real numbers and add [text](url) links to sources (for informational/affiliate)
+  const srcs = args.sources || [];
+  let sourcesBlock = "";
+  if (srcs.length && (args.sourceMode === "facts" || args.sourceMode === "cited")) {
+    const list = srcs.map((s, i) => `[${i + 1}] ${s.title} — ${s.snippet} (${s.url})`).join("\n");
+    if (args.sourceMode === "facts") {
+      sourcesBlock = `\nДАННЫЕ ИЗ ИСТОЧНИКОВ (используй для КОНКРЕТНЫХ цифр: цены, время, расстояния, расписания):\n${list}\nПРАВИЛО ПО ИСТОЧНИКАМ: бери реальные цифры из данных выше, НО НЕ упоминай названия компаний/конкурентов и НЕ ставь на них ссылки. Подавай цифры как собственную проверенную информацию. Если данные расходятся — давай диапазон.\n`;
+    } else {
+      sourcesBlock = `\nИСТОЧНИКИ (используй реальные цифры; где уместно — ставь ссылку в формате [текст](url) на источник):\n${list}\nПРАВИЛО: используй конкретные цифры из источников; не выдумывай URL — бери только из списка выше.\n`;
+    }
+  }
 
   // Custom prompt type: the author's instruction drives the writing; service template is minimal.
   if (args.promptType === "custom" && args.custom) {
@@ -151,9 +167,9 @@ export function buildTextPrompt(args: {
 
 ГЛАВНАЯ ИНСТРУКЦИЯ АВТОРА:
 ${args.custom}
-
+${sourcesBlock}
 Напиши статью по структуре ниже, следуя инструкции автора выше. Соблюдай word_count секций.
-ЖЁСТКИЕ ПРАВИЛА: не выдумывай лицензии/регалии/отзывы/цифры — ставь плейсхолдер [ЗАПОЛНИТЬ ВРУЧНУЮ: ...]; секции needs_real_experience=true — оставь [ВСТАВЬ РЕАЛЬНЫЙ ОПЫТ]; соблюдай ограничения политики.
+ЖЁСТКИЕ ПРАВИЛА: где нет реальных данных — не выдумывай лицензии/регалии/отзывы, ставь плейсхолдер [ЗАПОЛНИТЬ ВРУЧНУЮ: ...]; секции needs_real_experience=true — оставь [ВСТАВЬ РЕАЛЬНЫЙ ОПЫТ]; соблюдай ограничения политики.
 Верни готовый текст в Markdown.
 
 СТРУКТУРА (JSON):
@@ -162,11 +178,11 @@ ${JSON.stringify(args.outlineJson)}`;
 
   return `${policyBlock}Тон повествования: ${args.tone}
 Язык вывода: ${args.language}
-${customLine}
+${customLine}${sourcesBlock}
 Напиши статью строго по структуре ниже. Для каждой секции — текст в рамках указанного word_count, не раздувай. Используй summary, keywords, entities_to_cover и copywriter_notes как ориентир. Естественно вплетай сущности и ключи.
 
 ЖЁСТКИЕ ПРАВИЛА:
-- НЕ выдумывай лицензии, сертификаты, регалии, отзывы, цифры. Где они нужны — ставь плейсхолдер вида [ЗАПОЛНИТЬ ВРУЧНУЮ: ...].
+- Где НЕТ реальных данных из источников — НЕ выдумывай лицензии, сертификаты, регалии, отзывы, цифры. Ставь плейсхолдер вида [ЗАПОЛНИТЬ ВРУЧНУЮ: ...].
 - Секции с needs_real_experience=true: НЕ сочиняй личный опыт. Оставь [ВСТАВЬ РЕАЛЬНЫЙ ОПЫТ].
 - Соблюдай ограничения из политики (banned_words, banned_topics, compliance).
 

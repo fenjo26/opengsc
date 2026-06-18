@@ -1109,5 +1109,10 @@
   "seoAutoImagesLabel": "Auto image prompts on open",
   "seoAutoImagesDesc": "Generate image prompts automatically (cheap, one model call).",
   "seoFactSourcesLabel": "Sources scraped per section",
-  "seoFactSourcesDesc": "More = more accurate but slower and costlier. 0 = SERP snippets only."
+  "seoFactSourcesDesc": "More = more accurate but slower and costlier. 0 = SERP snippets only.",
+  "seoSourcesMode": "Real sources in text",
+  "seoSourcesOff": "Don't use",
+  "seoSourcesFacts": "Real facts, no competitors named",
+  "seoSourcesCited": "Real data with source links",
+  "seoSourcesModeHint": "For commercial / own-brand pages choose «no competitors» or «don't use». Slower when on (SERP + scrape)."
 }

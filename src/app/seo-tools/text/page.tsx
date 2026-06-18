@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PenLine, Loader2, AlertTriangle, Wand2, Eye } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
-import { getSeoGenCreds, loadPolicies, getActivePolicyName } from "@/lib/seo/keys";
+import { getSeoGenCreds, getSerpCreds, getFirecrawlKey, getFactSourceCount, loadPolicies, getActivePolicyName } from "@/lib/seo/keys";
 import { TONES, toneToPrompt } from "@/lib/seo/tones";
 import { LANGUAGES } from "@/lib/seo/regions";
 import { loadHistory, addHistory, patchHistory, HistoryItem } from "@/lib/seo/history";
@@ -20,6 +20,7 @@ export default function TextGenPage() {
   const [tone, setTone] = useState("");
   const [language, setLanguage] = useState("en");
   const [promptType, setPromptType] = useState<"service" | "custom">("service");
+  const [sourceMode, setSourceMode] = useState<"off" | "facts" | "cited">("off");
   const [structureId, setStructureId] = useState("");
   const [search, setSearch] = useState("");
   const [useCustom, setUseCustom] = useState(false);
@@ -74,8 +75,10 @@ export default function TextGenPage() {
       const res = await fetch("/api/seo/text", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          outline: outline.data, policy, language, tone: resolvedTone || undefined,
+          outline: outline.data, keyword: outline.keyword, policy, language, tone: resolvedTone || undefined,
           custom: useCustom && custom.trim() ? custom : undefined, promptType,
+          sourceMode, serpProvider: getSerpCreds().provider, serpKey: getSerpCreds().apiKey || undefined,
+          firecrawlKey: getFirecrawlKey() || undefined, scrapeCount: getFactSourceCount(),
           aiProvider: provider, aiApiKey: apiKey, model: model || undefined,
         }),
       });
@@ -137,7 +140,7 @@ export default function TextGenPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div className={card}>
             <label className="tool-field-label">{t("seoPromptType")}</label>
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "4px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "4px", marginBottom: "14px" }}>
               {([["service", t("seoPromptService")], ["custom", t("seoPromptCustom")]] as const).map(([v, l]) => (
                 <label key={v} style={{ display: "flex", alignItems: "center", gap: "9px", fontSize: "13px", color: "var(--color-text-primary)", cursor: "pointer" }}>
                   <input type="radio" checked={promptType === v} onChange={() => setPromptType(v as any)} />
@@ -145,6 +148,13 @@ export default function TextGenPage() {
                 </label>
               ))}
             </div>
+            <label className="tool-field-label">{t("seoSourcesMode")}</label>
+            <select style={selectStyle} value={sourceMode} onChange={e => setSourceMode(e.target.value as any)}>
+              <option value="off">{t("seoSourcesOff")}</option>
+              <option value="facts">{t("seoSourcesFacts")}</option>
+              <option value="cited">{t("seoSourcesCited")}</option>
+            </select>
+            <div style={{ fontSize: "11px", color: "var(--color-text-tertiary)", marginTop: "6px" }}>{t("seoSourcesModeHint")}</div>
           </div>
 
           <div className={card}>
