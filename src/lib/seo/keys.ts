@@ -55,6 +55,10 @@ export function getAutoImages(): boolean {
   if (typeof window === "undefined") return false;
   return (localStorage.getItem("seoAutoImages") ?? "1") !== "0";
 }
+export function getHardRedact(): boolean {
+  if (typeof window === "undefined") return false;
+  return (localStorage.getItem("seoHardRedact") ?? "0") === "1";
+}
 export function getFactSourceCount(): number {
   if (typeof window === "undefined") return 6;
   const n = parseInt(localStorage.getItem("seoFactSources") ?? "6", 10);

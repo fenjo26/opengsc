@@ -1114,5 +1114,8 @@
   "seoSourcesOff": "Don't use",
   "seoSourcesFacts": "Real facts, no competitors named",
   "seoSourcesCited": "Real data with source links",
-  "seoSourcesModeHint": "For commercial / own-brand pages choose «no competitors» or «don't use». Slower when on (SERP + scrape)."
+  "seoSourcesModeHint": "For commercial / own-brand pages choose «no competitors» or «don't use». Slower when on (SERP + scrape).",
+  "seoHardRedactLabel": "Hard-redact banned words",
+  "seoHardRedactDesc": "Replace policy banned words in the text with […] (for critical commercial pages). Can affect phrasing — review the result.",
+  "seoRedactedNote": "spots redacted — review them"
 }

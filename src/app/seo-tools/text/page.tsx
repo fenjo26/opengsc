@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PenLine, Loader2, AlertTriangle, Wand2, Eye } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
-import { getSeoGenCreds, getSerpCreds, getFirecrawlKey, getFactSourceCount, loadPolicies, getActivePolicyName } from "@/lib/seo/keys";
+import { getSeoGenCreds, getSerpCreds, getFirecrawlKey, getFactSourceCount, getHardRedact, loadPolicies, getActivePolicyName } from "@/lib/seo/keys";
 import { TONES, toneToPrompt } from "@/lib/seo/tones";
 import { LANGUAGES } from "@/lib/seo/regions";
 import { loadHistory, addHistory, patchHistory, HistoryItem } from "@/lib/seo/history";
@@ -78,7 +78,7 @@ export default function TextGenPage() {
           outline: outline.data, keyword: outline.keyword, policy, language, tone: resolvedTone || undefined,
           custom: useCustom && custom.trim() ? custom : undefined, promptType,
           sourceMode, serpProvider: getSerpCreds().provider, serpKey: getSerpCreds().apiKey || undefined,
-          firecrawlKey: getFirecrawlKey() || undefined, scrapeCount: getFactSourceCount(),
+          firecrawlKey: getFirecrawlKey() || undefined, scrapeCount: getFactSourceCount(), hardRedact: getHardRedact(),
           aiProvider: provider, aiApiKey: apiKey, model: model || undefined,
         }),
       });

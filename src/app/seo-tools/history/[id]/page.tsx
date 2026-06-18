@@ -11,7 +11,7 @@ import { OutlineStructure, OutlineEntities, GapReport } from "@/components/SeoRe
 import SeoTextDetail from "@/components/SeoTextDetail";
 import { getHistoryItem, updateHistory, addHistory, HistoryItem } from "@/lib/seo/history";
 import { outlineToMarkdown, outlineToHtml, htmlDocument, outlineHeadings, outlineSummary } from "@/lib/seo/outlineFormat";
-import { getSeoGenCreds, getSerpCreds, getFirecrawlKey, getFactSourceCount, loadPolicies, getActivePolicyName } from "@/lib/seo/keys";
+import { getSeoGenCreds, getSerpCreds, getFirecrawlKey, getFactSourceCount, getHardRedact, loadPolicies, getActivePolicyName } from "@/lib/seo/keys";
 import { TONES, toneToPrompt } from "@/lib/seo/tones";
 import { LANGUAGES } from "@/lib/seo/regions";
 
@@ -254,7 +254,7 @@ function GenTextModal({ item, t, onClose, onDone }: { item: HistoryItem; t: any;
       const serp = getSerpCreds();
       const res = await fetch("/api/seo/text", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ outline: item.data, keyword: item.keyword, policy, language, tone: resolvedTone || undefined, sourceMode, serpProvider: serp.provider, serpKey: serp.apiKey || undefined, firecrawlKey: getFirecrawlKey() || undefined, scrapeCount: getFactSourceCount(), aiProvider: provider, aiApiKey: apiKey, model: model || undefined }),
+        body: JSON.stringify({ outline: item.data, keyword: item.keyword, policy, language, tone: resolvedTone || undefined, sourceMode, serpProvider: serp.provider, serpKey: serp.apiKey || undefined, firecrawlKey: getFirecrawlKey() || undefined, scrapeCount: getFactSourceCount(), hardRedact: getHardRedact(), aiProvider: provider, aiApiKey: apiKey, model: model || undefined }),
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || t("seoErrText")); setLoading(false); return; }

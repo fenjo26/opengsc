@@ -219,6 +219,36 @@ export function buildImagePromptsPrompt(args: { outlineJson?: any; article?: str
 ${src}`;
 }
 
+// Deterministic safety net: enforce link policy on generated text.
+// - facts mode → strip ALL markdown links (keep anchor text)
+// - any mode → strip links whose URL or anchor contains a banned word/topic token
+export function enforceLinkPolicy(text: string, bannedTokens: string[], sourceMode?: "off" | "facts" | "cited"): string {
+  if (!text) return text;
+  const tokens = (bannedTokens || []).map(t => t.trim().toLowerCase()).filter(t => t.length > 1);
+  return text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (full, anchor, url) => {
+    if (sourceMode === "facts") return anchor; // facts mode must not carry links
+    const hay = `${anchor} ${url}`.toLowerCase();
+    return tokens.some(tok => hay.includes(tok)) ? anchor : full;
+  });
+}
+
+// Hard redaction: replace banned words/topics in prose with a neutral placeholder […].
+// Aggressive — can affect phrasing, so it's opt-in. Returns count for a "check these" notice.
+export function redactBannedWords(text: string, bannedTokens: string[]): { text: string; count: number } {
+  let out = text || "";
+  let count = 0;
+  const tokens = (bannedTokens || []).map(t => t.trim()).filter(t => t.length > 1)
+    .sort((a, b) => b.length - a.length); // longer phrases first
+  for (const tok of tokens) {
+    const esc = tok.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    let re: RegExp;
+    try { re = new RegExp(`(?<![\\p{L}\\p{N}])${esc}(?![\\p{L}\\p{N}])`, "giu"); }
+    catch { re = new RegExp(esc, "gi"); }
+    out = out.replace(re, () => { count++; return "[…]"; });
+  }
+  return { text: out, count };
+}
+
 // ─── Strict-JSON extraction (spec §6) ───────────────────────────────────────────
 // Strips ```json fences and grabs the outermost {...} before JSON.parse.
 export function extractJson<T = any>(raw: string | null): T | null {

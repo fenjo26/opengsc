@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { fetchLLM } from "@/lib/llm";
 import { runSerp } from "@/lib/seo/serp";
 import { scrapeMany } from "@/lib/seo/scrape";
-import { buildTextPrompt } from "@/lib/seo/prompts";
+import { buildTextPrompt, enforceLinkPolicy, redactBannedWords } from "@/lib/seo/prompts";
 
 // POST /api/seo/text — generate final article text from an outline (spec §9.3)
 // body: { outline, keyword?, policy?, tone?, language?, custom?, promptType?,
@@ -53,8 +53,18 @@ export async function POST(req: Request) {
   });
   const model = b.model ? String(b.model) : undefined;
 
-  const text = await fetchLLM(prompt, provider, apiKey, 8000, model);
+  let text = await fetchLLM(prompt, provider, apiKey, 8000, model);
   if (!text) return NextResponse.json({ error: "generation_failed" }, { status: 502 });
 
-  return NextResponse.json({ text, usedSources: sources.length });
+  // Deterministic safety net: strip competitor links per policy banned words / facts mode
+  const banned = [
+    ...String(b.policy?.restrictions?.wordsToAvoid ?? "").split(","),
+    ...String(b.policy?.restrictions?.topicsToAvoid ?? "").split(","),
+  ];
+  text = enforceLinkPolicy(text, banned, sourceMode);
+
+  let redacted = 0;
+  if (b.hardRedact) { const r = redactBannedWords(text, banned); text = r.text; redacted = r.count; }
+
+  return NextResponse.json({ text, usedSources: sources.length, redacted });
 }
