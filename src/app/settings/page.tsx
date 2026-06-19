@@ -914,16 +914,22 @@ function FactCheckSettings() {
   const [autoFc, setAutoFc] = useState(true);
   const [autoImg, setAutoImg] = useState(true);
   const [hardRedact, setHardRedact] = useState(false);
+  const [bearingOnly, setBearingOnly] = useState(true);
+  const [reuseCorpus, setReuseCorpus] = useState(false);
   const [srcCount, setSrcCount] = useState(6);
   useEffect(() => {
     setAutoFc((localStorage.getItem("seoAutoFactcheck") ?? "1") !== "0");
     setAutoImg((localStorage.getItem("seoAutoImages") ?? "1") !== "0");
     setHardRedact((localStorage.getItem("seoHardRedact") ?? "0") === "1");
+    setBearingOnly((localStorage.getItem("seoFactBearingOnly") ?? "1") !== "0");
+    setReuseCorpus((localStorage.getItem("seoFactReuseCorpus") ?? "0") === "1");
     setSrcCount(parseInt(localStorage.getItem("seoFactSources") ?? "6", 10) || 6);
   }, []);
   const toggleFc = () => { const v = !autoFc; setAutoFc(v); localStorage.setItem("seoAutoFactcheck", v ? "1" : "0"); };
   const toggleImg = () => { const v = !autoImg; setAutoImg(v); localStorage.setItem("seoAutoImages", v ? "1" : "0"); };
   const toggleRedact = () => { const v = !hardRedact; setHardRedact(v); localStorage.setItem("seoHardRedact", v ? "1" : "0"); };
+  const toggleBearing = () => { const v = !bearingOnly; setBearingOnly(v); localStorage.setItem("seoFactBearingOnly", v ? "1" : "0"); };
+  const toggleReuse = () => { const v = !reuseCorpus; setReuseCorpus(v); localStorage.setItem("seoFactReuseCorpus", v ? "1" : "0"); };
   const setSrc = (n: number) => { const v = Math.max(0, Math.min(10, n)); setSrcCount(v); localStorage.setItem("seoFactSources", String(v)); };
 
   return (
@@ -932,6 +938,8 @@ function FactCheckSettings() {
       <ToggleRowSetting label={t("seoAutoFactcheckLabel")} desc={t("seoAutoFactcheckDesc")} on={autoFc} onToggle={toggleFc} />
       <ToggleRowSetting label={t("seoAutoImagesLabel")} desc={t("seoAutoImagesDesc")} on={autoImg} onToggle={toggleImg} />
       <ToggleRowSetting label={t("seoHardRedactLabel")} desc={t("seoHardRedactDesc")} on={hardRedact} onToggle={toggleRedact} />
+      <ToggleRowSetting label={t("seoFactBearingLabel")} desc={t("seoFactBearingDesc")} on={bearingOnly} onToggle={toggleBearing} />
+      <ToggleRowSetting label={t("seoFactReuseLabel")} desc={t("seoFactReuseDesc")} on={reuseCorpus} onToggle={toggleReuse} />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "14px", padding: "10px 0" }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{t("seoFactSourcesLabel")}</div>

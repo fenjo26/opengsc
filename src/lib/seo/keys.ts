@@ -70,6 +70,17 @@ export function getFactSourceCount(): number {
   const n = parseInt(localStorage.getItem("seoFactSources") ?? "6", 10);
   return isNaN(n) ? 6 : Math.max(0, Math.min(10, n));
 }
+// Cost saver #2: fact-check only sections that contain verifiable facts (default ON — no quality loss).
+export function getFactBearingOnly(): boolean {
+  if (typeof window === "undefined") return true;
+  return (localStorage.getItem("seoFactBearingOnly") ?? "1") !== "0";
+}
+// Cost saver #1: verify all sections against ONE shared competitor corpus instead of a live
+// SERP per section (default OFF — keeps max-freshness live mode unless the user opts in).
+export function getFactReuseCorpus(): boolean {
+  if (typeof window === "undefined") return false;
+  return (localStorage.getItem("seoFactReuseCorpus") ?? "0") === "1";
+}
 
 // Optional stronger model for outline/analysis (Anthropic only). Empty = provider default.
 export function getSeoModel(): string {

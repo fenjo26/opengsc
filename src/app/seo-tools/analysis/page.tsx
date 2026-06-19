@@ -66,12 +66,19 @@ export default function AnalysisPage() {
     if (!sk) { setErr(t("seoErrNoSerpKey")); return; }
     setBusy(true); setStage(t("seoStageSerp"));
     try {
-      const res = await fetch("/api/seo/serp", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ keyword, provider: sp, apiKey: sk, gl: country, hl: language, location: city || undefined, num: topN }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setErr(data.error || t("seoErrSerp")); setBusy(false); return; }
+      // Saver #3: cache SERP by query for 30 min — re-running the same keyword won't re-hit the API.
+      const cacheKey = `serpCache:${sp}:${country}:${language}:${city}:${topN}:${keyword.trim().toLowerCase()}`;
+      let data: any = null;
+      try { const c = sessionStorage.getItem(cacheKey); if (c) { const o = JSON.parse(c); if (Date.now() - o.ts < 1800000) data = o.data; } } catch {}
+      if (!data) {
+        const res = await fetch("/api/seo/serp", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ keyword, provider: sp, apiKey: sk, gl: country, hl: language, location: city || undefined, num: topN }),
+        });
+        data = await res.json();
+        if (!res.ok) { setErr(data.error || t("seoErrSerp")); setBusy(false); return; }
+        try { sessionStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data })); } catch {}
+      }
       const items = (data.results || []).slice(0, topN);
       setSerp(items);
       const sel: Record<string, boolean> = {};

@@ -105,6 +105,18 @@ export function countWords(s: string): number {
   return t ? t.split(/\s+/).length : 0;
 }
 
+// Cost saver: does a section contain verifiable facts worth fact-checking?
+// Looks for currency, percentages, units (km/min/kg/…), times, and multi-digit numbers.
+// Narrative/intro prose without such signals is skipped (nothing to verify there).
+export function hasVerifiableFacts(text: string): boolean {
+  if (!text) return false;
+  if (/[€$£%]/.test(text)) return true;
+  if (/\b\d{1,4}\s?(km|км|m|м|mi|min|мин|h|hr|hrs?|hours?|часов?|час|kg|кг|°|am|pm)\b/i.test(text)) return true;
+  if (/\b\d{1,2}[:.]\d{2}\b/.test(text)) return true; // times like 10:30
+  if (/\b\d{2,}\b/.test(text)) return true;           // any number with 2+ digits
+  return false;
+}
+
 // Split a generated article (markdown) into H2/H3 sections for fact-checking.
 export function splitArticleSections(md: string): { heading: string; level: string; text: string }[] {
   const lines = (md || "").split(/\r?\n/);

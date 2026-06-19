@@ -8,8 +8,8 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { HistoryItem, getHistoryItem, updateHistory, patchHistory } from "@/lib/seo/history";
-import { outlineHeadings, articleHeadings, markdownToHtml, htmlDocument, countWords, splitArticleSections } from "@/lib/seo/outlineFormat";
-import { getSeoGenCreds, getSerpCreds, getFirecrawlKey, getAutoFactcheck, getAutoImages, getFactSourceCount } from "@/lib/seo/keys";
+import { outlineHeadings, articleHeadings, markdownToHtml, htmlDocument, countWords, splitArticleSections, hasVerifiableFacts } from "@/lib/seo/outlineFormat";
+import { getSeoGenCreds, getSerpCreds, getFirecrawlKey, getAutoFactcheck, getAutoImages, getFactSourceCount, getFactBearingOnly, getFactReuseCorpus } from "@/lib/seo/keys";
 
 export default function SeoTextDetail({ item: initial }: { item: HistoryItem }) {
   const { t } = useLanguage();
@@ -196,16 +196,49 @@ function FactCheck({ item, setItem, article, t, autoStart }: any) {
     setErr("");
     const ai = getSeoGenCreds(); const serp = getSerpCreds();
     if (!ai.apiKey) { setErr(t("seoErrNoAiKey")); return; }
-    const sections = splitArticleSections(article);
+    let sections = splitArticleSections(article);
     if (!sections.length) { setErr("—"); return; }
+    // Saver #2: only fact-check sections that actually contain verifiable facts.
+    if (getFactBearingOnly()) {
+      const withFacts = sections.filter(s => hasVerifiableFacts(s.text));
+      if (withFacts.length) sections = withFacts; // keep all if nothing matched (avoid empty report)
+    }
     setRunning(true); setProgress({ done: 0, total: sections.length });
+
+    // Saver #1: build ONE shared competitor corpus and verify every section against it,
+    // instead of a live SERP per section. Off by default; uses the same SERP+scrape path once.
+    let shared: any[] | null = null;
+    if (getFactReuseCorpus() && serp.apiKey) {
+      try {
+        const sr = await fetch("/api/seo/serp", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ keyword: item.keyword, provider: serp.provider, apiKey: serp.apiKey, num: 10, engine: "google" }),
+        }).then(r => r.json());
+        const results0 = sr.results || [];
+        const cnt = getFactSourceCount();
+        const top = results0.slice(0, cnt).map((r: any) => r.url);
+        let pages: any[] = [];
+        if (cnt > 0 && top.length) {
+          pages = (await fetch("/api/seo/scrape", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ urls: top, firecrawlKey: getFirecrawlKey() || undefined }) }).then(r => r.json())).pages || [];
+        }
+        shared = results0.map((r: any) => {
+          const p = pages.find((x: any) => x.url === r.url);
+          const ev = p ? `${p.metaDescription || ""} ${p.textSample || ""}`.trim().slice(0, 1100) : "";
+          return { title: r.title, snippet: ev || r.snippet, url: r.url, domain: r.domain };
+        });
+      } catch { shared = null; }
+    }
+
     const results: any[] = [];
     for (let i = 0; i < sections.length; i++) {
       const s = sections[i];
       try {
+        const body: any = { heading: s.heading, text: s.text, keyword: item.keyword, aiProvider: ai.provider, aiApiKey: ai.apiKey, model: ai.model || undefined };
+        if (shared) { body.sources = shared; } // reuse-corpus mode → route skips its own SERP
+        else { body.serpProvider = serp.provider; body.serpKey = serp.apiKey; body.firecrawlKey = getFirecrawlKey() || undefined; body.scrapeCount = getFactSourceCount(); body.engine = "google"; }
         const res = await fetch("/api/seo/factcheck-section", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ heading: s.heading, text: s.text, keyword: item.keyword, serpProvider: serp.provider, serpKey: serp.apiKey, firecrawlKey: getFirecrawlKey() || undefined, scrapeCount: getFactSourceCount(), engine: "google", aiProvider: ai.provider, aiApiKey: ai.apiKey, model: ai.model || undefined }),
+          body: JSON.stringify(body),
         });
         const data = await res.json();
         results.push(res.ok ? { heading: s.heading, status: data.status, facts: data.facts, sources: data.sources } : { heading: s.heading, status: "partial", facts: [], sources: data.sources || [] });

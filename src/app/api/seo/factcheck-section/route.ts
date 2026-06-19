@@ -21,9 +21,11 @@ export async function POST(req: Request) {
   const aiKey = String(b.aiApiKey ?? "");
   if (!aiKey) return NextResponse.json({ error: "no_ai_key" }, { status: 400 });
 
-  // 1) gather real sources via SERP, then FULL-SCRAPE the top pages as evidence
-  let sources: { title: string; snippet: string; url: string; domain: string }[] = [];
-  if (b.serpKey) {
+  // 1) gather real sources. Cost saver: if the client supplies a shared competitor corpus
+  // (reuse-corpus mode), use it directly and skip the per-section SERP + scrape entirely.
+  let sources: { title: string; snippet: string; url: string; domain: string }[] =
+    Array.isArray(b.sources) ? b.sources.filter((s: any) => s && s.url) : [];
+  if (!sources.length && b.serpKey) {
     const serp = await runSerp(String(b.serpProvider || "serper"), String(b.serpKey), heading || String(b.keyword ?? ""), {
       gl: b.gl, hl: b.hl, num: 10, engine: (b.engine as SerpEngine) ?? "google",
     });
