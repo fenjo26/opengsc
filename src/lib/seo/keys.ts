@@ -46,6 +46,12 @@ export function getFirecrawlKey(): string {
   return localStorage.getItem("seoKey_firecrawl") || "";
 }
 
+// DataForSEO key specifically (Keywords Data / Labs need DataForSEO, regardless of active SERP provider).
+export function getDataForSeoKey(): string {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem("seoKey_dataforseo") || "";
+}
+
 // ─── Fact-check / enrichment preferences ────────────────────────────────────────
 export function getAutoFactcheck(): boolean {
   if (typeof window === "undefined") return false;

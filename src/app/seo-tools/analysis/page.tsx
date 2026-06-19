@@ -1,122 +1,271 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Search, Loader2, AlertTriangle } from "lucide-react";
+import { Loader2, AlertTriangle, Search, ArrowLeft, Plus, X } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
-import { GapReport } from "@/components/SeoRenderers";
-import { getSeoGenCreds, getSerpCreds, getFirecrawlKey } from "@/lib/seo/keys";
+import SeoContentAnalysis from "@/components/SeoContentAnalysis";
+import { getSeoGenCreds, getSerpCreds, getFirecrawlKey, loadPolicies, getActivePolicyName } from "@/lib/seo/keys";
 import { COUNTRIES, LANGUAGES } from "@/lib/seo/regions";
 import { addHistory, takeView } from "@/lib/seo/history";
 
 const card = "panel";
-const inputStyle = "tool-input";
 
-function Field({ l, children }: { l: string; children: React.ReactNode }) { return <div><span className="tool-field-label">{l}</span>{children}</div>; }
+function host(u: string): string { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } }
 
 export default function AnalysisPage() {
   const { t } = useLanguage();
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+
+  // step 1
   const [keyword, setKeyword] = useState("");
-  const [targetUrl, setTargetUrl] = useState("");
   const [country, setCountry] = useState("us");
   const [language, setLanguage] = useState("en");
+  const [city, setCity] = useState("");
   const [topN, setTopN] = useState(10);
-  const [loading, setLoading] = useState(false);
+
+  // step 2
+  const [targetUrl, setTargetUrl] = useState("");
+  const [serp, setSerp] = useState<any[]>([]);
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [manual, setManual] = useState("");
+
+  const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState("");
+  const [progress, setProgress] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
   const [err, setErr] = useState("");
   const [report, setReport] = useState<any>(null);
+  const timer = useRef<any>(null);
 
-  const ai = typeof window !== "undefined" ? getSeoGenCreds() : { provider: "", apiKey: "", model: "" };
   const serpCreds = typeof window !== "undefined" ? getSerpCreds() : { provider: "", apiKey: "" };
+  const ai = typeof window !== "undefined" ? getSeoGenCreds() : { provider: "", apiKey: "", model: "" };
+  const noKeys = !serpCreds.apiKey || !ai.apiKey;
 
   useEffect(() => {
     const v = takeView();
-    if (v?.type === "analysis") { setReport(v.data); if (v.data?.keyword) setKeyword(v.data.keyword); if (v.data?.target_url) setTargetUrl(v.data.target_url); }
+    if (v?.type === "analysis") { setReport(v.data); setStep(3); if (v.data?.main_keyword || v.keyword) setKeyword(v.data?.main_keyword || v.keyword); }
   }, []);
 
-  async function run() {
-    setErr(""); setReport(null);
-    if (!keyword.trim() || !targetUrl.trim()) { setErr(t("seoErrFillKwUrl")); return; }
-    const { provider: sp, apiKey: sk } = getSerpCreds();
-    const { provider: ap, apiKey: ak, model: am } = getSeoGenCreds();
-    if (!sk) { setErr(t("seoErrNoSerpKey")); return; }
-    if (!ak) { setErr(t("seoErrNoAiKey")); return; }
-    setLoading(true);
-    try {
-      setStage(t("seoStageSerp"));
-      const serpRes = await fetch("/api/seo/serp", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ keyword, provider: sp, apiKey: sk, gl: country, hl: language, num: topN }),
-      });
-      const serpData = await serpRes.json();
-      if (!serpRes.ok) { setErr(serpData.error || t("seoErrSerp")); setLoading(false); return; }
-      const items = (serpData.results || []).filter((r: any) => r.domain !== new URL(targetUrl).hostname.replace(/^www\./, ""));
+  function startTimer() {
+    setElapsed(0); setProgress(4);
+    const t0 = Date.now();
+    timer.current = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - t0) / 1000));
+      setProgress(p => (p < 90 ? p + Math.max(0.4, (90 - p) * 0.012) : p));
+    }, 1000);
+  }
+  function stopTimer() { if (timer.current) { clearInterval(timer.current); timer.current = null; } }
+  useEffect(() => () => stopTimer(), []);
 
-      setStage(t("seoStageScrape"));
+  // Step 1 → SERP → step 2
+  async function findCompetitors() {
+    setErr("");
+    if (!keyword.trim()) { setErr(t("seoErrFillKwUrl")); return; }
+    const { provider: sp, apiKey: sk } = getSerpCreds();
+    if (!sk) { setErr(t("seoErrNoSerpKey")); return; }
+    setBusy(true); setStage(t("seoStageSerp"));
+    try {
+      const res = await fetch("/api/seo/serp", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keyword, provider: sp, apiKey: sk, gl: country, hl: language, location: city || undefined, num: topN }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || t("seoErrSerp")); setBusy(false); return; }
+      const items = (data.results || []).slice(0, topN);
+      setSerp(items);
+      const sel: Record<string, boolean> = {};
+      items.forEach((r: any) => { sel[r.url] = true; });
+      setSelected(sel);
+      setStep(2);
+    } catch (e: any) { setErr(String(e?.message ?? e)); }
+    setBusy(false); setStage("");
+  }
+
+  const selectedCount = serp.filter(r => selected[r.url]).length + manual.split(/\n/).map(s => s.trim()).filter(Boolean).length;
+
+  // Step 2 → scrape + analyze → step 3
+  async function runAnalysis() {
+    setErr("");
+    if (!targetUrl.trim()) { setErr(t("seoCaErrNoTarget")); return; }
+    const { provider: ap, apiKey: ak, model: am } = getSeoGenCreds();
+    if (!ak) { setErr(t("seoErrNoAiKey")); return; }
+
+    const manualUrls = manual.split(/\n/).map(s => s.trim()).filter(Boolean).slice(0, 5);
+    const compUrls = [...serp.filter(r => selected[r.url]).map(r => r.url), ...manualUrls]
+      .filter(u => host(u) !== host(targetUrl));
+    if (compUrls.length === 0) { setErr(t("seoCaErrNoCompetitors")); return; }
+
+    setStep(3); setReport(null); setBusy(true); startTimer();
+    try {
       const fc = getFirecrawlKey();
+      setStage(t("seoStageScrape"));
       const [compScrape, targetScrape] = await Promise.all([
-        fetch("/api/seo/scrape", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ urls: items.slice(0, topN).map((r: any) => r.url), firecrawlKey: fc }) }).then(r => r.json()),
+        fetch("/api/seo/scrape", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ urls: compUrls, firecrawlKey: fc }) }).then(r => r.json()),
         fetch("/api/seo/scrape", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ urls: [targetUrl], firecrawlKey: fc }) }).then(r => r.json()),
       ]);
       const pages = compScrape.pages || [];
       const target = (targetScrape.pages || [])[0];
 
-      const competitors = items.slice(0, topN).map((s: any) => {
-        const p = pages.find((x: any) => x.url === s.url);
-        return { position: s.position, url: s.url, site_type: s.site_type || undefined, title: p?.title || s.title, headings: p?.headings || [], word_count: p?.wordCount || 0, has_price_table: !!p?.hasPriceTable, has_faq: !!p?.hasFaq };
+      const serpByUrl: Record<string, any> = {};
+      serp.forEach(r => { serpByUrl[r.url] = r; });
+      const competitors = compUrls.map((url, i) => {
+        const p = pages.find((x: any) => x.url === url);
+        const s = serpByUrl[url];
+        return { position: s?.position || i + 1, url, site_type: s?.site_type || undefined, title: p?.title || s?.title || url, headings: p?.headings || [], word_count: p?.wordCount || 0, has_price_table: !!p?.hasPriceTable, has_faq: !!p?.hasFaq };
       });
       const targetPage = { url: targetUrl, title: target?.title, meta: target?.metaDescription, headings: target?.headings || [], word_count: target?.wordCount || 0, has_price_table: !!target?.hasPriceTable, has_faq: !!target?.hasFaq, text_sample: target?.textSample };
 
       setStage(t("seoStageGap"));
+      const policy = loadPolicies().find(p => p.name === getActivePolicyName());
       const res = await fetch("/api/seo/analysis", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ keyword, targetPage, competitors, aiProvider: ap, aiApiKey: ak, model: am || undefined }),
+        body: JSON.stringify({ keyword, targetPage, competitors, language, country, policy, aiProvider: ap, aiApiKey: ak, model: am || undefined }),
       });
       const data = await res.json();
-      if (!res.ok) { setErr(data.error === "parse_failed" ? t("seoErrParseJsonShort") : (data.error || t("seoErrAnalysis"))); setLoading(false); return; }
+      if (!res.ok) { setErr(data.error === "parse_failed" ? t("seoErrParseJsonShort") : (data.error || t("seoErrAnalysis"))); stopTimer(); setBusy(false); return; }
+      setProgress(100);
       setReport(data.report);
       addHistory({ type: "analysis", keyword: keyword || targetUrl, data: data.report });
     } catch (e: any) { setErr(String(e?.message ?? e)); }
-    setLoading(false); setStage("");
+    stopTimer(); setBusy(false); setStage("");
   }
 
-  const noKeys = !serpCreds.apiKey || !ai.apiKey;
+  function reset() { setStep(1); setReport(null); setSerp([]); setErr(""); }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
-      {noKeys && (
+      {noKeys && step !== 3 && (
         <div className={card} style={{ borderColor: "rgba(255,159,10,0.35)", background: "rgba(255,159,10,0.06)", display: "flex", gap: "10px", alignItems: "center", fontSize: "13px", color: "var(--color-text-secondary)" }}>
           <AlertTriangle size={18} color="var(--color-accent-orange)" /> {t("seoNeedKeysPrefix")} <b>{t("seoSerpProviderLabel")}</b> + <b>{t("seoAiProviderLabel")}</b>. <Link href="/settings" style={{ color: "var(--color-accent-blue)" }}>{t("seoSettingsShort")}</Link>
         </div>
       )}
 
+      {/* Stepper */}
       <div className={card}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
-          <Field l={t("seoYourPageUrl")}><input className={inputStyle} value={targetUrl} onChange={e => setTargetUrl(e.target.value)} placeholder="https://example.com/page" /></Field>
-          <Field l={t("seoKeywordRanks")}><input className={inputStyle} value={keyword} onChange={e => setKeyword(e.target.value)} placeholder={t("seoKeywordRanksPh")} /></Field>
+        <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--color-text-primary)", margin: "0 0 16px" }}>{t("seoCaProgressTitle")}</h2>
+        <div style={{ display: "flex", justifyContent: "space-between" }}>
+          {[[1, t("seoCaStep1")], [2, t("seoCaStep2")], [3, t("seoCaStep3")]].map(([n, label]) => {
+            const active = step >= (n as number);
+            return (
+              <div key={n as number} style={{ display: "flex", flexDirection: "column", alignItems: (n as number) === 1 ? "flex-start" : (n as number) === 3 ? "flex-end" : "center", gap: "8px", flex: 1 }}>
+                <span style={{ fontSize: "13px", fontWeight: 600, color: active ? "var(--color-text-primary)" : "var(--color-text-tertiary)" }}>{label}</span>
+                <span style={{ width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", fontWeight: 700, background: active ? "var(--color-text-primary)" : "var(--color-bg)", color: active ? "var(--color-bg)" : "var(--color-text-tertiary)", border: active ? "none" : "1px solid var(--color-border)" }}>{n as number}</span>
+              </div>
+            );
+          })}
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: "12px", alignItems: "end" }}>
-          <Field l={t("seoCountry")}>
-            <select className={inputStyle} value={country} onChange={e => setCountry(e.target.value)}>
-              {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
-            </select>
-          </Field>
-          <Field l={t("seoLanguage")}>
-            <select className={inputStyle} value={language} onChange={e => setLanguage(e.target.value)}>
-              {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
-            </select>
-          </Field>
-          <Field l="Top N"><select className={inputStyle} value={topN} onChange={e => setTopN(Number(e.target.value))}>{[5, 10, 15].map(n => <option key={n} value={n}>{n}</option>)}</select></Field>
-          <button onClick={run} disabled={loading} style={{ padding: "9px 18px", borderRadius: "8px", border: "none", cursor: "pointer", background: "var(--color-accent-purple)", color: "#fff", fontSize: "13px", fontWeight: 600, display: "flex", alignItems: "center", gap: "7px", height: "38px" }}>
-            {loading ? <Loader2 size={15} className="spin" /> : <Search size={15} />} {t("seoAnalyze")}
-          </button>
-        </div>
-        {loading && stage && <div style={{ marginTop: "12px", fontSize: "12px", color: "var(--color-text-secondary)", display: "flex", alignItems: "center", gap: "7px" }}><Loader2 size={13} className="spin" /> {stage}</div>}
       </div>
 
       {err && <div className={card} style={{ borderColor: "rgba(255,69,58,0.35)", background: "rgba(255,69,58,0.06)", color: "var(--color-accent-red)", fontSize: "13px", display: "flex", gap: "8px", alignItems: "center" }}><AlertTriangle size={16} /> {err}</div>}
 
-      {report && <GapReport report={report} />}
+      {/* STEP 1 */}
+      {step === 1 && (
+        <div className={card}>
+          <h3 style={{ fontSize: "16px", fontWeight: 700, color: "var(--color-text-primary)", margin: "0 0 16px" }}>{t("seoCaStep1Title")}</h3>
+          <span className="tool-field-label">{t("seoCaMainKeyword")} *</span>
+          <input className="tool-input" value={keyword} onChange={e => setKeyword(e.target.value)} placeholder={t("seoKeywordRanksPh")} onKeyDown={e => e.key === "Enter" && findCompetitors()} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "12px", marginTop: "14px" }}>
+            <div><span className="tool-field-label">{t("seoCountry")}</span>
+              <select className="tool-input" value={country} onChange={e => setCountry(e.target.value)}>{COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}</select>
+            </div>
+            <div><span className="tool-field-label">{t("seoLanguage")}</span>
+              <select className="tool-input" value={language} onChange={e => setLanguage(e.target.value)}>{LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}</select>
+            </div>
+            <div><span className="tool-field-label">{t("seoCaLocation")}</span>
+              <input className="tool-input" value={city} onChange={e => setCity(e.target.value)} placeholder={t("seoCaLocationPh")} />
+            </div>
+            <div><span className="tool-field-label">{t("seoCaTopPositions")}</span>
+              <select className="tool-input" value={topN} onChange={e => setTopN(Number(e.target.value))}>{[10, 12, 15, 18, 20].map(n => <option key={n} value={n}>{n}</option>)}</select>
+            </div>
+          </div>
+          <button onClick={findCompetitors} disabled={busy} style={primaryBtn}>
+            {busy ? <Loader2 size={15} className="spin" /> : <Search size={15} />} {t("seoCaNextCompetitors")}
+          </button>
+        </div>
+      )}
+
+      {/* STEP 2 */}
+      {step === 2 && (
+        <>
+          <div className={card} style={{ background: "var(--color-bg)" }}>
+            <h3 style={{ fontSize: "16px", fontWeight: 700, color: "var(--color-text-primary)", margin: "0 0 4px" }}>{t("seoCaYourUrl")}</h3>
+            <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: "0 0 14px" }}>{t("seoCaYourUrlHint")}</p>
+            <span className="tool-field-label">{t("seoCaYourArticleUrl")}</span>
+            <input className="tool-input" value={targetUrl} onChange={e => setTargetUrl(e.target.value)} placeholder="https://example.com/page" />
+          </div>
+
+          <div className={card}>
+            <h3 style={{ fontSize: "16px", fontWeight: 700, color: "var(--color-text-primary)", margin: "0 0 4px" }}>{t("seoCaSelectCompetitors")}</h3>
+            <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: "0 0 14px" }}>{t("seoCaSelectCompetitorsHint")}</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {serp.map((r, i) => {
+                const on = !!selected[r.url];
+                return (
+                  <label key={r.url} style={{ display: "flex", gap: "12px", alignItems: "flex-start", padding: "13px 15px", borderRadius: "11px", border: `1px solid ${on ? "var(--color-accent-purple)" : "var(--color-border)"}`, background: on ? "rgba(191,90,242,0.06)" : "transparent", cursor: "pointer" }}>
+                    <input type="checkbox" checked={on} onChange={e => setSelected(s => ({ ...s, [r.url]: e.target.checked }))} style={{ marginTop: "3px" }} />
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span className="pill" style={{ flexShrink: 0 }}>#{r.position || i + 1}</span>
+                        <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.title}</span>
+                      </div>
+                      <div style={{ fontSize: "12px", color: "var(--color-accent-blue)", marginTop: "4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.url}</div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+            <div style={{ marginTop: "12px", padding: "11px 14px", borderRadius: "9px", background: "var(--color-bg)", fontSize: "13px", color: "var(--color-text-secondary)" }}>
+              {t("seoCaSelectedN")}: <b style={{ color: "var(--color-text-primary)" }}>{selectedCount}</b>
+            </div>
+          </div>
+
+          <div className={card}>
+            <h3 style={{ fontSize: "16px", fontWeight: 700, color: "var(--color-text-primary)", margin: "0 0 4px" }}>{t("seoCaAddCustom")}</h3>
+            <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: "0 0 12px" }}>{t("seoCaAddCustomHint")}</p>
+            <textarea className="tool-input" style={{ minHeight: "84px", resize: "vertical" }} value={manual} onChange={e => setManual(e.target.value)} placeholder={"https://competitor.com/article"} />
+            <p style={{ fontSize: "11px", color: "var(--color-text-tertiary)", margin: "8px 0 0" }}>{t("seoCaAddCustomMulti")}</p>
+          </div>
+
+          <button onClick={runAnalysis} disabled={busy} style={{ ...darkBtn, width: "100%" }}>
+            {busy ? <Loader2 size={15} className="spin" /> : null} {t("seoCaStartAnalysis")}
+          </button>
+          <button onClick={() => setStep(1)} style={ghostBtn}><ArrowLeft size={14} /> {t("seoCaBackStep")}</button>
+        </>
+      )}
+
+      {/* STEP 3 */}
+      {step === 3 && (
+        busy || (!report && !err) ? (
+          <div className={card}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+              <h3 style={{ fontSize: "18px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0, display: "flex", alignItems: "center", gap: "10px" }}><Loader2 size={18} className="spin" /> {t("seoCaAnalyzing")}</h3>
+              <span className="pill">processing</span>
+            </div>
+            <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "14px" }}>{t("seoCaKeyword")}: {keyword} · URL: {targetUrl}</div>
+            <div style={{ height: "10px", borderRadius: "6px", background: "var(--color-bg)", overflow: "hidden", marginBottom: "8px" }}>
+              <div style={{ width: `${progress}%`, height: "100%", background: "var(--color-text-primary)", transition: "width 0.6s" }} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "var(--color-text-secondary)" }}>
+              <span>{Math.round(progress)}%</span><span>{stage}</span>
+            </div>
+            <div style={{ marginTop: "16px", padding: "13px 15px", borderRadius: "10px", background: "rgba(41,151,255,0.06)", border: "1px solid rgba(41,151,255,0.25)", fontSize: "13px", color: "var(--color-text-secondary)" }}>
+              {t("seoCaAnalyzingHint")} · {t("seoCaElapsed")}: {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")}
+            </div>
+          </div>
+        ) : report ? (
+          <>
+            <button onClick={reset} style={ghostBtn}><Plus size={14} /> {t("seoCaNewAnalysis")}</button>
+            <SeoContentAnalysis report={report} />
+          </>
+        ) : (
+          <button onClick={reset} style={ghostBtn}><X size={14} /> {t("seoCaBackStep")}</button>
+        )
+      )}
     </div>
   );
 }
+
+const primaryBtn: React.CSSProperties = { marginTop: "18px", width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", padding: "12px", borderRadius: "10px", border: "none", background: "var(--color-text-primary)", color: "var(--color-bg)", fontSize: "14px", fontWeight: 700, cursor: "pointer" };
+const darkBtn: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", padding: "13px", borderRadius: "10px", border: "none", background: "var(--color-text-primary)", color: "var(--color-bg)", fontSize: "14px", fontWeight: 700, cursor: "pointer" };
+const ghostBtn: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: "7px", padding: "9px 16px", borderRadius: "9px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-secondary)", fontSize: "13px", fontWeight: 600, cursor: "pointer", alignSelf: "flex-start" };

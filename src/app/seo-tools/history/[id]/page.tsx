@@ -7,7 +7,8 @@ import {
   FileText, ListTree, Target, Hash, HelpCircle, ArrowUp, Loader2,
 } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
-import { OutlineStructure, OutlineEntities, GapReport } from "@/components/SeoRenderers";
+import { OutlineStructure, OutlineEntities } from "@/components/SeoRenderers";
+import SeoContentAnalysis from "@/components/SeoContentAnalysis";
 import SeoTextDetail from "@/components/SeoTextDetail";
 import { getHistoryItem, updateHistory, addHistory, HistoryItem } from "@/lib/seo/history";
 import { outlineToMarkdown, outlineToHtml, htmlDocument, outlineHeadings, outlineSummary } from "@/lib/seo/outlineFormat";
@@ -139,7 +140,7 @@ export default function TaskDetailPage() {
         {edit ? (
           <textarea className="tool-input" style={{ minHeight: "420px", resize: "vertical", fontFamily: "monospace", fontSize: "12px" }} value={editText} onChange={e => setEditText(e.target.value)} />
         ) : isAnalysis ? (
-          <GapReport report={item.data} />
+          <SeoContentAnalysis report={item.data} />
         ) : isText ? (
           <pre style={{ whiteSpace: "pre-wrap", fontSize: "13px", lineHeight: 1.6, color: "var(--color-text-primary)", margin: 0, fontFamily: "inherit" }}>{plainText()}</pre>
         ) : (

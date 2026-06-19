@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { OutlineView } from "@/components/SeoRenderers";
-import { getSeoGenCreds, getSerpCreds, getFirecrawlKey, loadPolicies, getActivePolicyName } from "@/lib/seo/keys";
+import { getSeoGenCreds, getSerpCreds, getFirecrawlKey, getDataForSeoKey, loadPolicies, getActivePolicyName } from "@/lib/seo/keys";
 import { COUNTRIES, LANGUAGES } from "@/lib/seo/regions";
 import { TONES, toneToPrompt } from "@/lib/seo/tones";
 import { addHistory, takeView } from "@/lib/seo/history";
@@ -41,6 +41,8 @@ export default function OutlinePage() {
   const [related, setRelated] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [scraped, setScraped] = useState<Record<string, Scraped>>({});
+  const [keywordsData, setKeywordsData] = useState<{ keyword: string; volume: number; cpc: number; competition: number }[]>([]);
+  const [kwLoading, setKwLoading] = useState(false);
 
   // step-2 config
   const [tone, setTone] = useState("");        // "" = default from policy
@@ -89,8 +91,23 @@ export default function OutlinePage() {
     return next;
   }
 
+  async function fetchKeywords() {
+    const dfsKey = getDataForSeoKey();
+    if (!dfsKey || !keyword.trim()) { setKeywordsData([]); return; }
+    setKwLoading(true);
+    try {
+      const res = await fetch("/api/seo/keywords", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keyword, dfsKey, gl: country, hl: language, limit: 60 }),
+      });
+      const data = await res.json();
+      setKeywordsData(res.ok ? (data.items || []) : []);
+    } catch { setKeywordsData([]); }
+    setKwLoading(false);
+  }
+
   async function runSerp() {
-    setErr(""); setOutline(null); setArticle(""); setSerp([]); setSelected(new Set()); setScraped({});
+    setErr(""); setOutline(null); setArticle(""); setSerp([]); setSelected(new Set()); setScraped({}); setKeywordsData([]);
     if (!keyword.trim()) { setErr(t("seoErrEnterKeyword")); return; }
     const { provider, apiKey } = getSerpCreds();
     if (!apiKey) { setErr(t("seoErrNoSerpKey")); return; }
@@ -106,6 +123,7 @@ export default function OutlinePage() {
       setPaa(data.peopleAlsoAsk || []);
       setRelated(data.relatedSearches || []);
       setSelected(new Set((data.results || []).slice(0, 5).map((r: SerpItem) => r.url)));
+      fetchKeywords(); // grounding keywords with real volumes (DataForSEO), if key present
     } catch (e: any) { setErr(String(e?.message ?? e)); }
     setLoading("");
   }
@@ -159,7 +177,7 @@ export default function OutlinePage() {
           policy: activePolicy, paa, related,
           tone: resolvedTone, persona: resolvedPersona,
           additionalKeywords: addKeywords, targetWordCount: targetWords ? Number(targetWords) : undefined,
-          manualTexts,
+          manualTexts, keywordsData,
         }),
       });
       const data = await res.json();
@@ -295,6 +313,32 @@ export default function OutlinePage() {
             <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: "1px solid var(--color-border)", fontSize: "12px", color: "var(--color-text-secondary)" }}>
               {paa.length > 0 && <div style={{ marginBottom: "6px" }}><b>People Also Ask:</b> {paa.join(" · ")}</div>}
               {related.length > 0 && <div><b>Related:</b> {related.join(" · ")}</div>}
+            </div>
+          )}
+
+          {(kwLoading || keywordsData.length > 0) && (
+            <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: "1px solid var(--color-border)" }}>
+              <div className="tool-section-label">{t("seoKwBlockTitle")}</div>
+              {kwLoading ? (
+                <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", display: "flex", alignItems: "center", gap: "7px" }}><Loader2 size={13} className="spin" /> {t("seoKwLoading")}</div>
+              ) : (
+                <>
+                  <div style={{ fontSize: "11px", color: "var(--color-text-tertiary)", marginBottom: "8px" }}>{t("seoKwFeedNote")}</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "2px", maxHeight: "240px", overflow: "auto" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 70px 60px 80px", gap: "8px", fontSize: "10px", fontWeight: 700, color: "var(--color-text-tertiary)", textTransform: "uppercase", padding: "4px 0", borderBottom: "1px solid var(--color-border)" }}>
+                      <span>{t("seoKeyword")}</span><span style={{ textAlign: "right" }}>{t("seoKwVolume")}</span><span style={{ textAlign: "right" }}>{t("seoKwCpc")}</span><span style={{ textAlign: "right" }}>{t("seoKwComp")}</span>
+                    </div>
+                    {keywordsData.slice(0, 40).map((k, i) => (
+                      <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 70px 60px 80px", gap: "8px", fontSize: "12px", padding: "4px 0", color: "var(--color-text-secondary)" }}>
+                        <span style={{ color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{k.keyword}</span>
+                        <span style={{ textAlign: "right", fontWeight: 600, color: "var(--color-text-primary)" }}>{k.volume.toLocaleString()}</span>
+                        <span style={{ textAlign: "right" }}>{k.cpc ? `$${k.cpc.toFixed(2)}` : "—"}</span>
+                        <span style={{ textAlign: "right" }}>{k.competition ? `${Math.round(k.competition * 100)}%` : "—"}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           )}
 

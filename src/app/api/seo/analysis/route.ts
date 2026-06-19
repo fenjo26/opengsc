@@ -22,15 +22,20 @@ export async function POST(req: Request) {
   if (!apiKey) return NextResponse.json({ error: "no_ai_key" }, { status: 400 });
 
   const competitors: CompetitorInput[] = Array.isArray(b.competitors) ? b.competitors : [];
-  const prompt = buildAnalysisPrompt({ keyword, targetPage: b.targetPage, competitors });
+  const prompt = buildAnalysisPrompt({
+    keyword, targetPage: b.targetPage, competitors,
+    language: b.language ? String(b.language) : undefined,
+    country: b.country ? String(b.country) : undefined,
+    policy: b.policy || undefined,
+  });
   const model = b.model ? String(b.model) : undefined;
 
-  let raw = await fetchLLM(prompt, provider, apiKey, 4000, model);
+  let raw = await fetchLLM(prompt, provider, apiKey, 16000, model);
   let report = extractJson(raw);
   if (!report) {
     raw = await fetchLLM(
       prompt + "\n\nПредыдущий ответ не распарсился. Верни ТОЛЬКО валидный JSON.",
-      provider, apiKey, 4000, model,
+      provider, apiKey, 16000, model,
     );
     report = extractJson(raw);
   }

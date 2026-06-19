@@ -75,8 +75,21 @@ async function serperSearch(
 }
 
 // ─── DataForSEO ──────────────────────────────────────────────────────────────
-// Docs: https://docs.dataforseo.com — SERP API (Live Advanced). Auth: Basic login:password.
-// We accept the credential as "login:password" in a single key field.
+// Country (gl) → DataForSEO location_code (country-level). Free-text location_name is
+// error-prone, so we use codes. Fallback = United States (2840).
+const DFS_LOC: Record<string, number> = {
+  us: 2840, gb: 2826, ca: 2124, au: 2036, nz: 2554, ie: 2372,
+  de: 2276, fr: 2250, nl: 2528, be: 2056, ch: 2756, at: 2040,
+  se: 2752, no: 2578, dk: 2208, fi: 2246, it: 2380, es: 2724, pt: 2620,
+  gr: 2300, cy: 2196, pl: 2616, cz: 2203, sk: 2703, hu: 2348, ro: 2642, bg: 2100,
+  hr: 2191, rs: 2688, ua: 2804, ru: 2643, tr: 2792, sg: 2702, hk: 2344, jp: 2392,
+  kr: 2410, il: 2376, ae: 2784, sa: 2682, in: 2356, id: 2360, my: 2458, th: 2764,
+  vn: 2704, ph: 2608, br: 2076, mx: 2484, ar: 2032, cl: 2152, co: 2170, za: 2710,
+  eg: 2818, ma: 2504, ng: 2566, ge: 2268, kz: 2398, az: 2031, am: 2051,
+};
+
+// Docs: https://docs.dataforseo.com — SERP API (Live Advanced). Auth: HTTP Basic.
+// Credential field accepts EITHER "login:password" OR the ready Base64 token from the dashboard.
 async function dataForSeoSearch(
   credential: string,
   keyword: string,
@@ -87,26 +100,40 @@ async function dataForSeoSearch(
     ? "https://api.dataforseo.com/v3/serp/bing/organic/live/advanced"
     : "https://api.dataforseo.com/v3/serp/google/organic/live/advanced";
 
-  const auth = Buffer.from(credential).toString("base64");
+  // "login:password" → base64; an already-base64 token → use as-is.
+  const cred = (credential || "").trim();
+  const auth = cred.includes(":") ? Buffer.from(cred).toString("base64") : cred;
+
   const task = [{
     keyword,
     language_code: opts.hl || "en",
-    location_name: opts.location || undefined,
-    location_code: !opts.location ? 2840 : undefined, // 2840 = United States
+    location_code: DFS_LOC[(opts.gl || "us").toLowerCase()] ?? 2840,
     depth: opts.num || 10,
   }];
 
-  const res = await fetch(path, {
-    method: "POST",
-    headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/json" },
-    body: JSON.stringify(task),
-    signal: AbortSignal.timeout(30000),
-  });
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      method: "POST",
+      headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/json" },
+      body: JSON.stringify(task),
+      signal: AbortSignal.timeout(45000),
+    });
+  } catch (e: any) {
+    return { engine, provider: "dataforseo", keyword, results: [], error: `сеть DataForSEO: ${e?.cause?.code || e?.cause?.message || e?.message || "fetch failed"}` };
+  }
   if (!res.ok) {
-    return { engine, provider: "dataforseo", keyword, results: [], error: `dataforseo ${res.status}: ${await res.text()}` };
+    return { engine, provider: "dataforseo", keyword, results: [], error: `dataforseo ${res.status}: ${(await res.text()).slice(0, 200)}` };
   }
   const data = await res.json();
-  const items: any[] = data?.tasks?.[0]?.result?.[0]?.items ?? [];
+  if (data?.status_code && data.status_code !== 20000) {
+    return { engine, provider: "dataforseo", keyword, results: [], error: `dataforseo ${data.status_code}: ${data.status_message}` };
+  }
+  const taskObj = data?.tasks?.[0];
+  if (taskObj?.status_code && taskObj.status_code !== 20000) {
+    return { engine, provider: "dataforseo", keyword, results: [], error: `dataforseo task ${taskObj.status_code}: ${taskObj.status_message}` };
+  }
+  const items: any[] = taskObj?.result?.[0]?.items ?? [];
   const organic = items.filter((it) => it.type === "organic");
   const results: SerpResultItem[] = organic.slice(0, opts.num || 10).map((r, i) => ({
     position: r.rank_absolute ?? r.rank_group ?? i + 1,

@@ -35,6 +35,7 @@ export async function POST(req: Request) {
     additionalKeywords: b.additionalKeywords ? String(b.additionalKeywords) : undefined,
     targetWordCount: b.targetWordCount ? Number(b.targetWordCount) : undefined,
     manualTexts: Array.isArray(b.manualTexts) ? b.manualTexts : undefined,
+    keywordsData: Array.isArray(b.keywordsData) ? b.keywordsData : undefined,
   });
 
   const model = b.model ? String(b.model) : undefined;

@@ -734,7 +734,7 @@ const SEO_PROVIDERS = [
     storageKey: "seoKey_dataforseo",
     name: "DataForSEO",
     roleKey: "seoRoleDfs",
-    placeholder: "login:password",
+    placeholder: "login:password или Base64-токен",
     hintKey: "seoSetHintDfs",
     instrKey: "seoSetInstrDfs",
     docsUrl: "https://app.dataforseo.com/api-access",

@@ -29,9 +29,13 @@ export function buildOutlinePrompt(args: {
   additionalKeywords?: string;
   targetWordCount?: number;
   manualTexts?: { name: string; text: string }[];
+  keywordsData?: { keyword: string; volume: number }[];
 }): string {
   const policyBlock = args.policy ? renderPolicy(args.policy) + "\n\n" : "";
   const paaBlock = args.paa?.length ? `\nPeople-Also-Ask из выдачи: ${JSON.stringify(args.paa)}` : "";
+  const kwData = args.keywordsData?.length
+    ? `\n- РЕАЛЬНЫЕ КЛЮЧИ С ОБЪЁМАМИ ПОИСКА (DataForSEO — используй ИМЕННО ЭТИ формулировки в section.keywords; приоритет ключам с бОльшим объёмом, распределяй по релевантным секциям): ${JSON.stringify(args.keywordsData.slice(0, 50).map(k => `${k.keyword} (${k.volume}/мес)`))}`
+    : "";
   const relBlock = args.related?.length ? `\nСвязанные запросы: ${JSON.stringify(args.related)}` : "";
   const toneBlock = args.tone ? `\n- тон повествования: ${args.tone}` : "";
   const personaBlock = args.persona ? `\n- от лица: ${args.persona}` : "";
@@ -53,7 +57,7 @@ export function buildOutlinePrompt(args: {
 ДАНО:
 - keyword: ${args.keyword}
 - язык/страна: ${args.language}/${args.country}${toneBlock}${personaBlock}${addKw}${twc}${paaBlock}${relBlock}
-- топ-конкуренты (типы + структура): ${JSON.stringify(args.competitors)}${manual}
+- топ-конкуренты (типы + структура): ${JSON.stringify(args.competitors)}${manual}${kwData}
 
 ВЕРНИ JSON строго по схеме (только JSON):
 {
@@ -95,40 +99,52 @@ export function buildOutlinePrompt(args: {
 }`;
 }
 
-// ─── Gap-report / content-analysis prompt (spec §11.2) ──────────────────────────
+// ─── Content Analysis (comprehensive, EAV) — drives Dashboard / Guideline / Gaps / Constructor ──
+// Compares the target page against scraped top competitors and returns a rich JSON spec.
 export function buildAnalysisPrompt(args: {
   keyword: string;
   targetPage: any;
   competitors: CompetitorInput[];
+  language?: string;
+  country?: string;
+  policy?: EditorialPolicy;
 }): string {
-  return `Ты — SEO-аналитик. Сравни целевую страницу с топ-конкурентами из выдачи и верни СТРОГИЙ JSON с пробелами и приоритизированными рекомендациями. Без преамбулы, без markdown-обёрток.
+  const policyBlock = args.policy ? renderPolicy(args.policy) + "\n\n" : "";
+  const loc = [args.language, args.country].filter(Boolean).join("/");
+  return `${policyBlock}Ты — SEO/GEO entity-аналитик. Сравни ЦЕЛЕВУЮ страницу с топ-конкурентами из выдачи и построй ПОЛНЫЙ план улучшения контента в EAV-модели (Entity-Attribute-Value), чтобы целевая страница стала полнее и авторитетнее конкурентов и попадала в цитирование ИИ-движков (ChatGPT/Perplexity/Yandex). Верни СТРОГИЙ JSON без преамбулы и без markdown-обёрток.
 
-ЦЕЛЕВАЯ СТРАНИЦА:
-${JSON.stringify(args.targetPage)}
+ЧТО СДЕЛАТЬ:
+1. Извлеки ключевые СУЩНОСТИ темы из конкурентов (товары, услуги, места, виды транспорта, объекты). Для каждой определи: покрыта ли она на целевой странице (mentions), сколько у целевой связей-триплетов vs медиана конкурентов, статус покрытия (well / underdeveloped / missing), важность (high/medium/low) и семантическую близость к теме (0..1).
+2. Составь приоритизированные РЕКОМЕНДАЦИИ (sub-intents) — секции, которые надо ДОБАВИТЬ (new_h2/new_h3), РАСШИРИТЬ (expand), УСИЛИТЬ (enhance) или СОКРАТИТЬ (reduce). Для каждой: статус, NEW/EXISTING, точное место вставки (placement по заголовкам конкурентов/целевой), целевой объём (из/в словах), заметки копирайтеру, ключи, и сущности с обязательными триплетами (subject → predicate → object) и инструкцией «как раскрыть».
+3. Найди КОНКУРЕНТНЫЕ ГЭПЫ — темы/секции/таблицы, которые есть у конкурентов, но нет у нас. Для каждого: рекомендация add/skip/merge/expand, причина (со ссылкой на конкретных конкурентов по URL) и потенциальные сущности с триплетами.
 
-КОНКУРЕНТЫ (топ выдачи, с типами):
-${JSON.stringify(args.competitors)}
+ПРИНЦИПЫ: front-load факты (цена/время/расстояние); для коммерческих тем — честное сравнение ВСЕХ вариантов; НЕ выдумывай лицензии/отзывы/опыт; приоритеты в долях 0..1.
 
-ПРОАНАЛИЗИРУЙ:
-1. Темы/сущности/sub-intents, которые покрыты у конкурентов, но НЕ у целевой страницы.
-2. Извлекаемые факты, которых не хватает целевой (цены по классам, время, расстояние) — именно их цитируют AI-движки.
-3. Front-loading: стоит ли ключевой факт в первых секциях или закопан.
-4. AI-видимость: какие источники из выдачи — агрегаторы и форумы (их цитирует AI)? Присутствует ли бренд во внешних источниках (consensus signal). Если бренд только на своём домене — это главный пробел для AI-поиска.
-5. Качество: машинный перевод, вода, превосходные степени, ошибки.
+ДАНО:
+- keyword: ${args.keyword}${loc ? `\n- язык/страна: ${loc}` : ""}
+- ЦЕЛЕВАЯ СТРАНИЦА: ${JSON.stringify(args.targetPage)}
+- КОНКУРЕНТЫ (топ выдачи, со структурой): ${JSON.stringify(args.competitors)}
 
-НЕ предлагай выдумывать лицензии/отзывы/опыт. Рекомендации по authority — только через реальные данные.
-
-ВЕРНИ JSON строго по схеме (только JSON):
+ВЕРНИ JSON строго по схеме (только JSON, без markdown):
 {
+  "main_keyword": "",
   "target_url": "",
-  "keyword": "",
-  "summary": "",
-  "content_gaps": [ { "type": "", "item": "", "priority": "high|medium|low" } ],
-  "extractable_fact_gaps": [ { "fact": "", "competitor_has": "", "target_has": "", "priority": "", "fix": "" } ],
-  "front_loading": { "issue": "", "priority": "" },
-  "ai_visibility": { "cited_source_types_in_serp": [""], "brand_external_presence": "", "main_gap": "", "priority": "" },
-  "quality_issues": [ { "issue": "", "priority": "" } ],
-  "prioritized_actions": [ "" ]
+  "summary": { "total_entities": 0, "entities_found": 0, "entities_missing": 0, "coverage_percent": 0, "coverage_label": "underdeveloped|developing|strong", "content_gaps": 0, "recommendations": 0, "sub_intents": 0 },
+  "entities": [ { "id": "E_001", "name": "", "kind": "core|secondary", "coverage": "well|underdeveloped|missing", "mentions": 0, "triplets_current": 0, "triplets_competitor_median": 0, "similarity": 0.0, "importance": "high|medium|low", "required_triplets": 0 } ],
+  "recommendations": [ {
+    "id": "SI_001", "title": "", "priority": 0.0, "relevance": 0.0,
+    "type": "new_h2|new_h3|expand|enhance|reduce", "section": "NEW|EXISTING", "placement": "",
+    "words_from": 0, "words_to": 0,
+    "copywriter_notes": "",
+    "keywords": [""],
+    "entities": [ { "name": "", "role": "primary|supporting", "required_triplets": ["Subject → predicate → Object"], "how_to_cover": "" } ]
+  } ],
+  "competitor_gaps": [ {
+    "id": "GAP_001", "title": "", "recommendation": "add|skip|merge|expand", "reason": "",
+    "found_in_competitors": ["https://..."],
+    "potential_entities": [ { "id": "E_016", "name": "", "triplets": ["Subject → predicate → Object"] } ]
+  } ],
+  "excluded": [ { "name": "", "kind": "entity|section", "reason": "low_priority|irrelevant" } ]
 }`;
 }
 
