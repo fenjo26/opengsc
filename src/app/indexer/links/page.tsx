@@ -130,7 +130,7 @@ export default function IndexerLinksPage() {
       });
     }
     navigator.clipboard.writeText(code);
-    alert("Cross-linking HTML code copied to clipboard!");
+    alert(t("linksAlertCopied"));
   };
 
   return (
@@ -170,21 +170,21 @@ export default function IndexerLinksPage() {
         gap: "16px"
       }}>
         <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>
-          Link Juice Distribution
+          {t("linksTitle")}
         </h3>
         <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: 0 }}>
-          Configure how doorways in your bot farm link to each other to spread crawl budget and avoid search footprint.
+          {t("linksDesc")}
         </p>
 
         {/* Selection */}
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           <span style={{ fontSize: "12px", color: "var(--color-text-secondary)", fontWeight: 600 }}>
-            Topology Type
+            {t("linksTopologyType")}
           </span>
           {[
-            { id: "ring", label: "Ring Chain (Recommended)", desc: "Each site links to the next one in a circle. Avoids footprints, looks natural." },
-            { id: "mesh", label: "Random Mesh Matrix", desc: "Complex cross-linking with multiple overlapping links for aggressive indexing." },
-            { id: "pyramid", label: "Tiered SEO Pyramid", desc: "Low-quality doorways pass authority to mid-tier satellites, pointing to target money domain." }
+            { id: "ring", label: t("linksRingLabel"), desc: t("linksRingDesc") },
+            { id: "mesh", label: t("linksMeshLabel"), desc: t("linksMeshDesc") },
+            { id: "pyramid", label: t("linksPyramidLabel"), desc: t("linksPyramidDesc") }
           ].map(top => (
             <div
               key={top.id}
@@ -243,7 +243,7 @@ export default function IndexerLinksPage() {
           onMouseOut={e => { if (domains.length > 0) e.currentTarget.style.background = "var(--color-accent-blue)"; }}
         >
           <Download size={14} />
-          Export HTML Links Block
+          {t("linksExportButton")}
         </button>
       </div>
 
@@ -260,14 +260,14 @@ export default function IndexerLinksPage() {
         <div style={{ display: "flex", alignItems: "center", justifyItems: "center", gap: "8px" }}>
           <GitFork size={16} color="var(--color-accent-blue)" />
           <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>
-            Farm Topology Visualization
+            {t("linksVisualTitle")}
           </h3>
         </div>
 
         {loading ? (
           <div style={{ height: "300px", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-secondary)" }}>
             <RefreshCw size={20} className="animate-spin" style={{ marginRight: "8px" }} />
-            Calculating topology map...
+            {t("linksCalculating")}
           </div>
         ) : domains.length === 0 ? (
           <div style={{
@@ -284,8 +284,8 @@ export default function IndexerLinksPage() {
             textAlign: "center"
           }}>
             <AlertCircle size={24} />
-            No domains available to map.
-            <span style={{ fontSize: "11px" }}>Add domains to your farm, or run the traffic simulator to generate mock nodes.</span>
+            {t("linksNoDomainsTitle")}
+            <span style={{ fontSize: "11px" }}>{t("linksNoDomainsDesc")}</span>
           </div>
         ) : (
           <div style={{ background: "var(--color-bg)", borderRadius: "12px", border: "1px solid var(--color-border-soft)", padding: "10px", display: "flex", justifyContent: "center" }}>
@@ -358,7 +358,7 @@ export default function IndexerLinksPage() {
         }}>
           <Info size={14} color="var(--color-accent-blue)" style={{ marginTop: "2px", flexShrink: 0 }} />
           <span>
-            The doorway PHP script will automatically read the links map and inject cross-domain references into generated templates dynamically to direct crawl authority across nodes.
+            {t("linksFooterNote")}
           </span>
         </div>
       </div>

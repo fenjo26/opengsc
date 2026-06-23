@@ -116,9 +116,9 @@ export default function IndexerLogsPage() {
     const diffSec = Math.floor(diffMs / 1000);
     const diffMin = Math.floor(diffSec / 60);
 
-    if (diffSec < 15) return "Just now";
-    if (diffSec < 60) return `${diffSec}s ago`;
-    if (diffMin < 60) return `${diffMin}m ago`;
+    if (diffSec < 15) return t("logsRelativeJustNow");
+    if (diffSec < 60) return `${diffSec}${t("logsRelativeSecAgo")}`;
+    if (diffMin < 60) return `${diffMin}${t("logsRelativeMinAgo")}`;
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   };
 
@@ -158,7 +158,7 @@ export default function IndexerLogsPage() {
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px" }}>
           {/* Domain Filter */}
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>Домен:</span>
+            <span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>{t("logsDomainLabel")}</span>
             <select
               value={domainId}
               onChange={e => setDomainId(e.target.value)}
@@ -172,7 +172,7 @@ export default function IndexerLogsPage() {
                 outline: "none"
               }}
             >
-              <option value="">Все домены</option>
+              <option value="">{t("logsAllDomains")}</option>
               {domains.map(d => (
                 <option key={d.id} value={d.id}>{d.domain}</option>
               ))}
@@ -181,7 +181,7 @@ export default function IndexerLogsPage() {
 
           {/* Bot Filter */}
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>Робот:</span>
+            <span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>{t("logsBotLabel")}</span>
             <select
               value={botType}
               onChange={e => setBotType(e.target.value)}
@@ -195,13 +195,13 @@ export default function IndexerLogsPage() {
                 outline: "none"
               }}
             >
-              <option value="">Весь трафик</option>
+              <option value="">{t("logsAllTraffic")}</option>
               <option value="google">Googlebot</option>
               <option value="bing">Bingbot</option>
               <option value="yandex">YandexBot</option>
               <option value="mailru">MailruBot</option>
-              <option value="redirect">Перенаправления (Люди)</option>
-              <option value="other">Другие боты</option>
+              <option value="redirect">{t("logsRedirectsFilter")}</option>
+              <option value="other">{t("logsOtherBotsFilter")}</option>
             </select>
           </div>
         </div>
@@ -211,7 +211,7 @@ export default function IndexerLogsPage() {
           {fetchingMore && (
             <span style={{ fontSize: "12px", color: "var(--color-text-secondary)", display: "flex", alignItems: "center", gap: "6px" }}>
               <RefreshCw size={12} className="animate-spin" />
-              обновление...
+              {t("logsUpdating")}
             </span>
           )}
 
@@ -231,13 +231,13 @@ export default function IndexerLogsPage() {
           >
             <Activity size={14} color={liveMode ? "#34C759" : "var(--color-text-secondary)"} className={liveMode ? "animate-pulse" : ""} />
             <span style={{ fontSize: "12px", fontWeight: 600, color: liveMode ? "#34C759" : "var(--color-text-secondary)" }}>
-              {liveMode ? "ПРЯМОЙ ЭФИР АКТИВЕН" : "ВКЛЮЧИТЬ ЭФИР"}
+              {liveMode ? t("logsLiveActive") : t("logsLiveEnable")}
             </span>
           </div>
         </div>
       </div>
 
-      {/* Logs Table */}
+      {/* Table */}
       <div style={{
         background: "var(--color-card)",
         border: "1px solid var(--color-border)",
@@ -253,8 +253,8 @@ export default function IndexerLogsPage() {
         ) : logs.length === 0 ? (
           <div style={{ padding: "40px 16px", textAlign: "center", color: "var(--color-text-secondary)", display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
             <AlertCircle size={24} />
-            No matching log entries found.
-            <span style={{ fontSize: "12px" }}>Ensure you have active domains and running simulation traffic.</span>
+            <span style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{t("indexerNoLogsTitle")}</span>
+            <span style={{ fontSize: "12px" }}>{t("indexerNoLogsDesc")}</span>
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>

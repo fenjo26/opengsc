@@ -63,27 +63,7 @@ export default function IndexerStatsPage() {
     setIsLarge(window.innerWidth > 960);
   }, []);
 
-  const triggerSimulation = async () => {
-    setSimulating(true);
-    setMsg("Generating 30 days of crawler visits, redirects, and mock domains...");
-    try {
-      const res = await fetch("/api/indexer/logs", {
-        method: "POST",
-      });
-      const d = await res.json();
-      if (d.success) {
-        setMsg(`Success! Generated ${d.count} log events in the database.`);
-        await fetchStats();
-      } else {
-        setMsg("Simulation failed: " + (d.error || "Unknown error"));
-      }
-    } catch (e: any) {
-      setMsg("Error: " + e.message);
-    } finally {
-      setSimulating(false);
-      setTimeout(() => setMsg(null), 5000);
-    }
-  };
+
 
   const formatNumber = (num: number) => {
     return new Intl.NumberFormat().format(num);
@@ -222,7 +202,6 @@ export default function IndexerStatsPage() {
       </div>
 
       {!hasData ? (
-        /* Empty State Simulator Card */
         <div style={{
           background: "var(--color-card)",
           border: "1px solid var(--color-border)",
@@ -246,47 +225,14 @@ export default function IndexerStatsPage() {
             justifyContent: "center",
             color: "var(--color-accent-blue)"
           }}>
-            <Play size={26} />
+            <ShieldAlert size={26} />
           </div>
           <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>
-            Start Indexer Simulation
+            {t("indexerNoDataTitle")}
           </h2>
           <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: 1.5, margin: 0 }}>
-            You haven't configured any domains or received traffic yet. Run the Traffic Simulator to instantly populate mock domains (e.g. ecommerce doorway shop) and log 30 days of crawler visits.
+            {t("indexerNoDataDesc")}
           </p>
-          <button
-            onClick={triggerSimulation}
-            disabled={simulating}
-            style={{
-              padding: "10px 20px",
-              borderRadius: "8px",
-              background: "var(--color-accent-blue)",
-              color: "#fff",
-              fontSize: "13px",
-              fontWeight: 600,
-              border: "none",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              opacity: simulating ? 0.7 : 1,
-              transition: "background 0.15s",
-            }}
-            onMouseOver={e => { if (!simulating) e.currentTarget.style.background = "var(--color-accent-blue-dark)"; }}
-            onMouseOut={e => { if (!simulating) e.currentTarget.style.background = "var(--color-accent-blue)"; }}
-          >
-            {simulating ? (
-              <>
-                <RefreshCw size={15} className="animate-spin" />
-                Simulating...
-              </>
-            ) : (
-              <>
-                <Play size={15} />
-                Run Traffic Simulator
-              </>
-            )}
-          </button>
         </div>
       ) : (
         <>
@@ -309,28 +255,7 @@ export default function IndexerStatsPage() {
                   Daily trend of search crawls vs human redirects
                 </p>
               </div>
-              <button
-                onClick={triggerSimulation}
-                disabled={simulating}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: "6px",
-                  border: "1px solid var(--color-border)",
-                  background: "transparent",
-                  color: "var(--color-text-secondary)",
-                  fontSize: "12px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  transition: "all 0.15s"
-                }}
-                onMouseOver={e => { e.currentTarget.style.borderColor = "var(--color-accent-blue)"; e.currentTarget.style.color = "var(--color-text-primary)"; }}
-                onMouseOut={e => { e.currentTarget.style.borderColor = "var(--color-border)"; e.currentTarget.style.color = "var(--color-text-secondary)"; }}
-              >
-                <RefreshCw size={12} className={simulating ? "animate-spin" : ""} />
-                Inject More Traffic
-              </button>
+
             </div>
 
             <div style={{ width: "100%", height: "220px", marginTop: "10px" }}>

@@ -238,7 +238,7 @@ function send_log_ping($is_redirect, $status_code = 200) {
         {/* Public Endpoint URL */}
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
           <label style={{ fontSize: "12px", color: "var(--color-text-secondary)", fontWeight: 600 }}>
-            OpenGSC Public Deployment URL
+            {t("settPublicUrlLabel")}
           </label>
           <input
             type="text"
@@ -256,14 +256,14 @@ function send_log_ping($is_redirect, $status_code = 200) {
             }}
           />
           <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
-            Used to tell the PHP script where to send cURL logs. Do not include trailing slashes.
+            {t("settPublicUrlDesc")}
           </span>
         </div>
 
         {/* Selected Domain */}
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
           <label style={{ fontSize: "12px", color: "var(--color-text-secondary)", fontWeight: 600 }}>
-            Select Domain for API pre-fill
+            {t("settSelectDomainLabel")}
           </label>
           <select
             value={selectedDomainId}
@@ -281,9 +281,9 @@ function send_log_ping($is_redirect, $status_code = 200) {
             }}
           >
             {loading ? (
-              <option>Loading domains...</option>
+              <option>{t("settLoadingDomains")}</option>
             ) : domains.length === 0 ? (
-              <option>No domains added yet</option>
+              <option>{t("settNoDomainsYet")}</option>
             ) : (
               domains.map(d => (
                 <option key={d.id} value={d.id}>{d.domain}</option>
@@ -291,7 +291,7 @@ function send_log_ping($is_redirect, $status_code = 200) {
             )}
           </select>
           <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
-            Pre-fills credentials and redirect targets in the PHP script copybox below.
+            {t("settPreFillDesc")}
           </span>
         </div>
       </div>
@@ -310,7 +310,7 @@ function send_log_ping($is_redirect, $status_code = 200) {
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <Code size={16} color="var(--color-accent-blue)" />
             <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>
-              PHP Doorway Script (index.php)
+              {t("settScriptTitle")}
             </h3>
           </div>
           <button
@@ -335,7 +335,7 @@ function send_log_ping($is_redirect, $status_code = 200) {
             onMouseOut={e => { if (domains.length > 0) e.currentTarget.style.background = "var(--color-accent-blue)"; }}
           >
             {copied ? <Check size={14} color="#fff" /> : <Copy size={14} />}
-            {copied ? "Copied!" : "Copy Code"}
+            {copied ? t("settCopied") : t("settCopyCode")}
           </button>
         </div>
 
@@ -348,7 +348,7 @@ function send_log_ping($is_redirect, $status_code = 200) {
             color: "var(--color-text-secondary)",
             fontSize: "13px"
           }}>
-            Please add at least one domain to your farm to configure credentials.
+            {t("settNoDomainsWarning")}
           </div>
         ) : (
           <div style={{
@@ -386,7 +386,7 @@ function send_log_ping($is_redirect, $status_code = 200) {
         }}>
           <Shield size={14} color="var(--color-accent-green)" style={{ marginTop: "2px", flexShrink: 0 }} />
           <span>
-            <strong>How cloaking works:</strong> Human visits triggers redirection webhook and redirects to target money site. Bots receive keyword mash pages (served with ETag + 200/304 response) and send crawl logs webhook to OpenGSC.
+            <strong>{t("settCloakingTitle")}</strong> {t("settCloakingDesc")}
           </span>
         </div>
       </div>

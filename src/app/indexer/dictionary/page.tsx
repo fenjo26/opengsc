@@ -37,7 +37,7 @@ export default function IndexerDictionaryPage() {
   const handleBulkAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim()) {
-      setMsg({ type: "error", text: "Please enter some keywords." });
+      setMsg({ type: "error", text: t("dictEnterWordsError") });
       return;
     }
 
@@ -56,11 +56,11 @@ export default function IndexerDictionaryPage() {
 
       const d = await res.json();
       if (res.ok && d.success) {
-        setMsg({ type: "success", text: `Successfully added ${d.count} keywords.` });
+        setMsg({ type: "success", text: t("dictAddSuccess").replace("{count}", d.count.toString()) });
         setInputText("");
         fetchDictionary();
       } else {
-        setMsg({ type: "error", text: d.error || "Failed to add words." });
+        setMsg({ type: "error", text: d.error || t("dictAddError") });
       }
     } catch (err: any) {
       setMsg({ type: "error", text: err.message });
@@ -91,10 +91,10 @@ export default function IndexerDictionaryPage() {
 
       const d = await res.json();
       if (res.ok && d.success) {
-        setMsg({ type: "success", text: `AI generated and saved ${d.count} keywords for niche: ${niche}.` });
+        setMsg({ type: "success", text: t("dictAiSuccess").replace("{count}", d.count.toString()).replace("{niche}", niche) });
         fetchDictionary();
       } else {
-        setMsg({ type: "error", text: d.error || "AI generation failed." });
+        setMsg({ type: "error", text: d.error || t("dictAiError") });
       }
     } catch (err: any) {
       setMsg({ type: "error", text: err.message });
@@ -104,11 +104,11 @@ export default function IndexerDictionaryPage() {
   };
 
   const handleClear = async () => {
-    if (!confirm("Are you sure you want to delete all keywords from the dictionary? doorways will fall back to default keywords.")) return;
+    if (!confirm(t("dictClearConfirm"))) return;
     try {
       const res = await fetch("/api/indexer/dictionary", { method: "DELETE" });
       if (res.ok) {
-        setMsg({ type: "success", text: "Dictionary cleared." });
+        setMsg({ type: "success", text: t("dictClearSuccess") });
         fetchDictionary();
       }
     } catch (e: any) {
@@ -158,15 +158,15 @@ export default function IndexerDictionaryPage() {
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <Sparkles size={16} color="var(--color-accent-purple)" />
             <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>
-              AI Keyword Generator
+              {t("dictAiTitle")}
             </h3>
           </div>
           <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: 0 }}>
-            Automatically seed your doorway dictionaries using your AI API Provider keys.
+            {t("dictAiDesc")}
           </p>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            <span style={{ fontSize: "12px", color: "var(--color-text-secondary)", fontWeight: 600 }}>Niche Topic</span>
+            <span style={{ fontSize: "12px", color: "var(--color-text-secondary)", fontWeight: 600 }}>{t("dictNicheLabel")}</span>
             <select
               value={niche}
               onChange={e => setNiche(e.target.value)}
@@ -180,10 +180,10 @@ export default function IndexerDictionaryPage() {
                 outline: "none"
               }}
             >
-              <option value="ecommerce">Ecommerce (shopping, stores, reviews)</option>
-              <option value="crypto">Crypto (blockchain, staking, mining)</option>
-              <option value="finance">Finance (credit, cards, banking, loans)</option>
-              <option value="general">General (tips, reviews, latest news)</option>
+              <option value="ecommerce">{t("dictNicheEcommerce")}</option>
+              <option value="crypto">{t("dictNicheCrypto")}</option>
+              <option value="finance">{t("dictNicheFinance")}</option>
+              <option value="general">{t("dictNicheGeneral")}</option>
             </select>
           </div>
 
@@ -212,12 +212,12 @@ export default function IndexerDictionaryPage() {
             {generating ? (
               <>
                 <RefreshCw size={14} className="animate-spin" />
-                AI Seeding...
+                {t("dictAiGenerating")}
               </>
             ) : (
               <>
                 <Sparkles size={14} />
-                Generate and Seed Niche Words
+                {t("dictAiGenerateBtn")}
               </>
             )}
           </button>
@@ -234,13 +234,13 @@ export default function IndexerDictionaryPage() {
           gap: "14px"
         }}>
           <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>
-            Bulk Import Dictionary Words
+            {t("dictBulkTitle")}
           </h3>
           <form onSubmit={handleBulkAdd} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
             <textarea
               value={inputText}
               onChange={e => setInputText(e.target.value)}
-              placeholder="best sneakers sale&#10;cheap flight tickets&#10;bitcoin mining pool&#10;instant loan approval"
+              placeholder={t("dictBulkPlaceholder")}
               rows={6}
               style={{
                 background: "var(--color-bg)",
@@ -277,7 +277,7 @@ export default function IndexerDictionaryPage() {
               onMouseOut={e => { if (!submitting) e.currentTarget.style.background = "var(--color-accent-blue)"; }}
             >
               <Plus size={14} />
-              Add Keywords to Pool
+              {t("dictBulkBtn")}
             </button>
           </form>
         </div>
@@ -298,7 +298,7 @@ export default function IndexerDictionaryPage() {
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <FileText size={16} color="var(--color-accent-blue)" />
             <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>
-              Dictionary Pool ({words.length} keywords)
+              {t("dictPoolTitle").replace("{count}", words.length.toString())}
             </h3>
           </div>
           {words.length > 0 && (
@@ -321,7 +321,7 @@ export default function IndexerDictionaryPage() {
               onMouseOut={e => { e.currentTarget.style.background = "transparent"; }}
             >
               <Trash2 size={12} />
-              Clear Dictionary
+              {t("dictClearBtn")}
             </button>
           )}
         </div>
@@ -346,7 +346,7 @@ export default function IndexerDictionaryPage() {
         {loading ? (
           <div style={{ padding: "40px 0", textAlign: "center", color: "var(--color-text-secondary)" }}>
             <RefreshCw size={18} className="animate-spin" style={{ margin: "0 auto 12px" }} />
-            Loading dictionary...
+            {t("dictLoading")}
           </div>
         ) : words.length === 0 ? (
           <div style={{
@@ -362,8 +362,8 @@ export default function IndexerDictionaryPage() {
             gap: "10px"
           }}>
             <Sparkles size={24} color="var(--color-text-tertiary)" />
-            Dictionary is empty.
-            <span style={{ fontSize: "11px" }}>doorway generators will fall back to generic ecommerce keywords until you seed the pool.</span>
+            {t("dictEmptyTitle")}
+            <span style={{ fontSize: "11px" }}>{t("dictEmptyDesc")}</span>
           </div>
         ) : (
           <div style={{
