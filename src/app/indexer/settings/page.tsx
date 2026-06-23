@@ -208,6 +208,23 @@ function send_log_ping($is_redirect, $status_code = 200) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+      {/* Description Banner */}
+      <div style={{
+        background: "var(--color-card)",
+        border: "1px solid var(--color-border)",
+        borderRadius: "16px",
+        padding: "16px 20px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "4px"
+      }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>
+          {t("indexerTabSettings")}
+        </h2>
+        <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: 0, lineHeight: 1.5 }}>
+          {t("indexerTabDescSettings")}
+        </p>
+      </div>
       
       {/* Settings inputs */}
       <div style={{

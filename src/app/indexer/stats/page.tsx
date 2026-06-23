@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Play, ShieldAlert, CheckCircle, RefreshCw } from "lucide-react";
+import { Play, ShieldAlert, CheckCircle, RefreshCw, Download } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis } from "recharts";
+import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 interface StatsData {
   summary: {
@@ -38,6 +39,7 @@ interface StatsData {
 }
 
 export default function IndexerStatsPage() {
+  const { t } = useLanguage();
   const [data, setData] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [simulating, setSimulating] = useState(false);
@@ -96,11 +98,57 @@ export default function IndexerStatsPage() {
     );
   }
 
+  const exportDailyToCSV = () => {
+    if (!data?.daily) return;
+    
+    const headers = ["Date", "Google", "Google 304", "Yandex", "Yandex 304", "Bing", "Mail.ru", "Other", "Total", "Redirects"];
+    const rows = data.daily.map(row => [
+      row.date,
+      row.google,
+      row.google304,
+      row.yandex,
+      row.yandex304,
+      row.bing,
+      row.mailru || 0,
+      row.other,
+      row.total,
+      row.redirects
+    ]);
+    
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+      
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `opengsc_indexer_daily_stats_${new Date().toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const chartData = data?.daily ? [...data.daily].reverse() : [];
   const hasData = data && (data.summary.google > 0 || data.summary.other > 0 || data.byDomain.length > 0);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+      {/* Description Banner */}
+      <div style={{
+        background: "var(--color-card)",
+        border: "1px solid var(--color-border)",
+        borderRadius: "16px",
+        padding: "16px 20px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "4px"
+      }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>
+          {t("indexerTabStats")}
+        </h2>
+        <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: 0, lineHeight: 1.5 }}>
+          {t("indexerTabDescStats")}
+        </p>
+      </div>
       {/* Simulation alert */}
       {msg && (
         <div style={{
@@ -290,11 +338,27 @@ export default function IndexerStatsPage() {
                 <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorGoogle" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--color-accent-blue)" stopOpacity={0.25}/>
+                      <stop offset="5%" stopColor="var(--color-accent-blue)" stopOpacity={0.15}/>
                       <stop offset="95%" stopColor="var(--color-accent-blue)" stopOpacity={0.01}/>
                     </linearGradient>
+                    <linearGradient id="colorYandex" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--color-accent-red)" stopOpacity={0.15}/>
+                      <stop offset="95%" stopColor="var(--color-accent-red)" stopOpacity={0.01}/>
+                    </linearGradient>
+                    <linearGradient id="colorBing" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--color-accent-orange)" stopOpacity={0.15}/>
+                      <stop offset="95%" stopColor="var(--color-accent-orange)" stopOpacity={0.01}/>
+                    </linearGradient>
+                    <linearGradient id="colorMailru" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--color-text-secondary)" stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor="var(--color-text-secondary)" stopOpacity={0.01}/>
+                    </linearGradient>
+                    <linearGradient id="colorOther" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--color-text-primary)" stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor="var(--color-text-primary)" stopOpacity={0.01}/>
+                    </linearGradient>
                     <linearGradient id="colorRedirects" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--color-accent-green)" stopOpacity={0.25}/>
+                      <stop offset="5%" stopColor="var(--color-accent-green)" stopOpacity={0.15}/>
                       <stop offset="95%" stopColor="var(--color-accent-green)" stopOpacity={0.01}/>
                     </linearGradient>
                   </defs>
@@ -326,6 +390,42 @@ export default function IndexerStatsPage() {
                     strokeWidth={2}
                     fillOpacity={1}
                     fill="url(#colorGoogle)"
+                  />
+                  <Area
+                    type="monotone"
+                    name="YandexBot"
+                    dataKey="yandex"
+                    stroke="var(--color-accent-red)"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#colorYandex)"
+                  />
+                  <Area
+                    type="monotone"
+                    name="Bingbot"
+                    dataKey="bing"
+                    stroke="var(--color-accent-orange)"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#colorBing)"
+                  />
+                  <Area
+                    type="monotone"
+                    name="MailruBot"
+                    dataKey="mailru"
+                    stroke="var(--color-text-secondary)"
+                    strokeWidth={1.5}
+                    fillOpacity={1}
+                    fill="url(#colorMailru)"
+                  />
+                  <Area
+                    type="monotone"
+                    name="Other Bots"
+                    dataKey="other"
+                    stroke="var(--color-text-primary)"
+                    strokeWidth={1.5}
+                    fillOpacity={1}
+                    fill="url(#colorOther)"
                   />
                   <Area
                     type="monotone"
@@ -401,9 +501,33 @@ export default function IndexerStatsPage() {
               borderRadius: "16px",
               padding: "20px",
             }}>
-              <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", margin: "0 0 16px" }}>
-                Daily Breakdown — Last 30 Days
-              </h3>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+                <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>
+                  Daily Breakdown — Last 30 Days
+                </h3>
+                <button
+                  onClick={exportDailyToCSV}
+                  style={{
+                    padding: "4px 8px",
+                    borderRadius: "6px",
+                    border: "1px solid var(--color-border)",
+                    background: "transparent",
+                    color: "var(--color-text-secondary)",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    transition: "all 0.15s"
+                  }}
+                  onMouseOver={e => { e.currentTarget.style.borderColor = "var(--color-accent-blue)"; e.currentTarget.style.color = "var(--color-text-primary)"; }}
+                  onMouseOut={e => { e.currentTarget.style.borderColor = "var(--color-border)"; e.currentTarget.style.color = "var(--color-text-secondary)"; }}
+                >
+                  <Download size={11} />
+                  Export CSV
+                </button>
+              </div>
               <div style={{ overflowX: "auto", maxHeight: "350px", overflowY: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
                   <thead>

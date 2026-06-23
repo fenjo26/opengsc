@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { GitFork, Download, Info, RefreshCw, AlertCircle, Sparkles } from "lucide-react";
+import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 interface DomainNode {
   id: string;
@@ -10,6 +11,7 @@ interface DomainNode {
 }
 
 export default function IndexerLinksPage() {
+  const { t } = useLanguage();
   const [domains, setDomains] = useState<DomainNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [topology, setTopology] = useState<"mesh" | "ring" | "pyramid">("ring");
@@ -132,12 +134,31 @@ export default function IndexerLinksPage() {
   };
 
   return (
-    <div style={{
-      display: "grid",
-      gridTemplateColumns: isLarge ? "1fr 1.3fr" : "1fr",
-      gap: "24px",
-      alignItems: "start",
-    }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+      {/* Description Banner */}
+      <div style={{
+        background: "var(--color-card)",
+        border: "1px solid var(--color-border)",
+        borderRadius: "16px",
+        padding: "16px 20px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "4px"
+      }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>
+          {t("indexerTabLinks")}
+        </h2>
+        <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: 0, lineHeight: 1.5 }}>
+          {t("indexerTabDescLinks")}
+        </p>
+      </div>
+
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: isLarge ? "1fr 1.3fr" : "1fr",
+        gap: "24px",
+        alignItems: "start",
+      }}>
       {/* Configuration Controls */}
       <div style={{
         background: "var(--color-card)",
@@ -340,6 +361,7 @@ export default function IndexerLinksPage() {
             The doorway PHP script will automatically read the links map and inject cross-domain references into generated templates dynamically to direct crawl authority across nodes.
           </span>
         </div>
+      </div>
       </div>
     </div>
   );

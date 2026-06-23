@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Plus, Globe, Settings, Trash2, Copy, Check, Eye, EyeOff, AlertCircle, RefreshCw, Code } from "lucide-react";
+import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 interface IndexerDomain {
   id: string;
@@ -17,6 +18,7 @@ interface IndexerDomain {
 }
 
 export default function IndexerDomainsPage() {
+  const { t } = useLanguage();
   const [domains, setDomains] = useState<IndexerDomain[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -120,13 +122,32 @@ export default function IndexerDomainsPage() {
   };
 
   return (
-    <div style={{
-      display: "grid",
-      gridTemplateColumns: isLarge ? "1fr 1.3fr" : "1fr",
-      gap: "24px",
-      alignItems: "start",
-    }}>
-      {/* Add Domain Form */}
+    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+      {/* Description Banner */}
+      <div style={{
+        background: "var(--color-card)",
+        border: "1px solid var(--color-border)",
+        borderRadius: "16px",
+        padding: "16px 20px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "4px"
+      }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>
+          {t("indexerTabDomains")}
+        </h2>
+        <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: 0, lineHeight: 1.5 }}>
+          {t("indexerTabDescDomains")}
+        </p>
+      </div>
+
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: isLarge ? "1fr 1.3fr" : "1fr",
+        gap: "24px",
+        alignItems: "start",
+      }}>
+        {/* Add Domain Form */}
       <div style={{
         background: "var(--color-card)",
         border: "1px solid var(--color-border)",
@@ -445,6 +466,7 @@ export default function IndexerDomainsPage() {
             })}
           </div>
         )}
+      </div>
       </div>
     </div>
   );

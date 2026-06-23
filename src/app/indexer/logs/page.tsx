@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { Search, Globe, ChevronRight, Activity, RefreshCw, AlertCircle } from "lucide-react";
+import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 interface LogEntry {
   id: string;
@@ -24,6 +25,7 @@ interface DomainOpt {
 }
 
 export default function IndexerLogsPage() {
+  const { t } = useLanguage();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [domains, setDomains] = useState<DomainOpt[]>([]);
   const [domainId, setDomainId] = useState("");
@@ -103,6 +105,7 @@ export default function IndexerLogsPage() {
     if (type === "google") return { label: "Googlebot", color: "#2997ff" };
     if (type === "bing") return { label: "Bingbot", color: "#ff9f0a" };
     if (type === "yandex") return { label: "YandexBot", color: "#ff453a" };
+    if (type === "mailru") return { label: "MailruBot", color: "#8e8e93" };
     if (type === "redirect") return { label: "Redirect", color: "#34c759" };
     return { label: "Other Bot", color: "#a1a1a6" };
   };
@@ -121,6 +124,24 @@ export default function IndexerLogsPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+      {/* Description Banner */}
+      <div style={{
+        background: "var(--color-card)",
+        border: "1px solid var(--color-border)",
+        borderRadius: "16px",
+        padding: "16px 20px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "4px"
+      }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>
+          {t("indexerTabLogs")}
+        </h2>
+        <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: 0, lineHeight: 1.5 }}>
+          {t("indexerTabDescLogs")}
+        </p>
+      </div>
+
       {/* Control panel */}
       <div style={{
         background: "var(--color-card)",
@@ -137,7 +158,7 @@ export default function IndexerLogsPage() {
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px" }}>
           {/* Domain Filter */}
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>Domain:</span>
+            <span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>Домен:</span>
             <select
               value={domainId}
               onChange={e => setDomainId(e.target.value)}
@@ -151,7 +172,7 @@ export default function IndexerLogsPage() {
                 outline: "none"
               }}
             >
-              <option value="">All Domains</option>
+              <option value="">Все домены</option>
               {domains.map(d => (
                 <option key={d.id} value={d.id}>{d.domain}</option>
               ))}
@@ -160,7 +181,7 @@ export default function IndexerLogsPage() {
 
           {/* Bot Filter */}
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>Agent:</span>
+            <span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>Робот:</span>
             <select
               value={botType}
               onChange={e => setBotType(e.target.value)}
@@ -174,12 +195,13 @@ export default function IndexerLogsPage() {
                 outline: "none"
               }}
             >
-              <option value="">All Traffic</option>
+              <option value="">Весь трафик</option>
               <option value="google">Googlebot</option>
               <option value="bing">Bingbot</option>
               <option value="yandex">YandexBot</option>
-              <option value="redirect">Redirects (Humans)</option>
-              <option value="other">Other Bots</option>
+              <option value="mailru">MailruBot</option>
+              <option value="redirect">Перенаправления (Люди)</option>
+              <option value="other">Другие боты</option>
             </select>
           </div>
         </div>
@@ -189,7 +211,7 @@ export default function IndexerLogsPage() {
           {fetchingMore && (
             <span style={{ fontSize: "12px", color: "var(--color-text-secondary)", display: "flex", alignItems: "center", gap: "6px" }}>
               <RefreshCw size={12} className="animate-spin" />
-              refreshing...
+              обновление...
             </span>
           )}
 
@@ -209,7 +231,7 @@ export default function IndexerLogsPage() {
           >
             <Activity size={14} color={liveMode ? "#34C759" : "var(--color-text-secondary)"} className={liveMode ? "animate-pulse" : ""} />
             <span style={{ fontSize: "12px", fontWeight: 600, color: liveMode ? "#34C759" : "var(--color-text-secondary)" }}>
-              {liveMode ? "LIVE FEED ACTIVE" : "GO LIVE"}
+              {liveMode ? "ПРЯМОЙ ЭФИР АКТИВЕН" : "ВКЛЮЧИТЬ ЭФИР"}
             </span>
           </div>
         </div>

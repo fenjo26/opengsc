@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { Sparkles, FileText, Trash2, Plus, AlertCircle, RefreshCw } from "lucide-react";
+import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 export default function IndexerDictionaryPage() {
+  const { t } = useLanguage();
   const [words, setWords] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [inputText, setInputText] = useState("");
@@ -115,14 +117,33 @@ export default function IndexerDictionaryPage() {
   };
 
   return (
-    <div style={{
-      display: "grid",
-      gridTemplateColumns: isLarge ? "1fr 1.3fr" : "1fr",
-      gap: "24px",
-      alignItems: "start",
-    }}>
-      {/* Import / AI Generator controls */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+      {/* Description Banner */}
+      <div style={{
+        background: "var(--color-card)",
+        border: "1px solid var(--color-border)",
+        borderRadius: "16px",
+        padding: "16px 20px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "4px"
+      }}>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>
+          {t("indexerTabDict")}
+        </h2>
+        <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: 0, lineHeight: 1.5 }}>
+          {t("indexerTabDescDict")}
+        </p>
+      </div>
+
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: isLarge ? "1fr 1.3fr" : "1fr",
+        gap: "24px",
+        alignItems: "start",
+      }}>
+        {/* Import / AI Generator controls */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
         
         {/* AI generator */}
         <div style={{
@@ -374,6 +395,7 @@ export default function IndexerDictionaryPage() {
             ))}
           </div>
         )}
+      </div>
       </div>
     </div>
   );
