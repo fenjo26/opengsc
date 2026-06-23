@@ -1317,7 +1317,7 @@ export default function PortfolioPage() {
         <div style={{position:"relative",flex:"1 1 180px"}}>
           <Search size={14} style={{position:"absolute",left:"10px",top:"50%",transform:"translateY(-50%)",color:"var(--color-text-secondary)"}}/>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder={t("searchSites")}
-            style={{width:"100%",padding:"7px 12px 7px 32px",borderRadius:"8px",border:"1px solid var(--color-border)",background:"var(--color-card)",color:"#fff",fontSize:"13px",outline:"none"}}/>
+            style={{width:"100%",padding:"7px 12px 7px 32px",borderRadius:"8px",border:"1px solid var(--color-border)",background:"var(--color-card)",color:"var(--color-text-primary)",fontSize:"13px",outline:"none"}}/>
         </div>
         {SortDd}
         {FilterDd}
