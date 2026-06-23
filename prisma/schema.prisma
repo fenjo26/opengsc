@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
   output   = "../src/generated/prisma"
 }
 
@@ -50,6 +50,10 @@ model User {
   xmlRiverUserId     String?
   xmlRiverApiKey     String?
   twoIndexToken      String?
+
+  // Custom Indexer Bot Farm
+  indexerDomains      IndexerDomain[]
+  indexerDictionaries IndexerDictionary[]
 }
 
 model VerificationToken {
@@ -248,4 +252,63 @@ model SiteHealth {
   virusTotal   String?  // JSON: { clean, malicious, suspicious, error? }
 
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+}
+
+// ─── Custom Indexer Bot Farm Models ──────────────────────────────────────────
+
+model IndexerDomain {
+  id              String         @id @default(cuid())
+  userId          String
+  domain          String
+  status          String         @default("active") // "active", "inactive", "expired"
+  createdAt       DateTime       @default(now())
+  apiKey          String         @default(cuid())
+  template        String         @default("ecommerce")
+  moneyUrl        String?
+  allowedBots     String         @default("google,bing,yandex")
+  pagesCount      Int            @default(0)
+  subdomainsCount Int            @default(0)
+  
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logs            IndexerLog[]
+  queue           IndexerQueue[]
+
+  @@unique([userId, domain])
+}
+
+model IndexerLog {
+  id        String        @id @default(cuid())
+  domainId  String
+  timestamp DateTime      @default(now())
+  url       String
+  ip        String
+  userAgent String
+  botType   String        // "google", "bing", "yandex", "other", "redirect"
+  statusCode Int          @default(200)
+  referer   String?
+
+  domain    IndexerDomain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  @@index([domainId, timestamp])
+}
+
+model IndexerQueue {
+  id        String        @id @default(cuid())
+  domainId  String
+  url       String
+  status    String        @default("pending") // "pending", "crawled", "indexed"
+  createdAt DateTime      @default(now())
+  crawledAt DateTime?
+
+  domain    IndexerDomain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  @@unique([domainId, url])
+}
+
+model IndexerDictionary {
+  id        String        @id @default(cuid())
+  userId    String
+  word      String
+  createdAt DateTime      @default(now())
+
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([userId, word])
 }

@@ -2333,6 +2333,12 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
   const [hasXmlRiver, setHasXmlRiver] = useState(false);
   const [hasTwoIndex, setHasTwoIndex] = useState(false);
 
+  // ── Custom Bot Farm Indexer ──
+  const [indexerDomains, setIndexerDomains] = useState<any[]>([]);
+  const [selectedFarmDomainId, setSelectedFarmDomainId] = useState("");
+  const [submittingToFarm, setSubmittingToFarm] = useState(false);
+  const [farmSubmitResult, setFarmSubmitResult] = useState<string | null>(null);
+
   // ── Submit state ──
   const [submitting,   setSubmitting]   = useState(false);
   const [submitResult, setSubmitResult] = useState<any>(null);
@@ -2370,7 +2376,7 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
     setLoading(false);
   };
 
-  // ── Load API keys ──
+  // ── Load API keys and Private Indexer domains ──
   useEffect(() => {
     fetch("/api/settings/api-keys")
       .then(r => r.json())
@@ -2378,6 +2384,15 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
         setHasNeural(d.neuralIndexer?.configured ?? false);
         setHasXmlRiver(d.xmlRiver?.configured ?? false);
         setHasTwoIndex(d.twoIndex?.configured ?? false);
+      }).catch(() => {});
+
+    fetch("/api/indexer/domains")
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d)) {
+          setIndexerDomains(d);
+          if (d.length > 0) setSelectedFarmDomainId(d[0].id);
+        }
       }).catch(() => {});
   }, []);
 
@@ -2443,6 +2458,44 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
       if (d.ok) await loadUrls(page, statusFilter, search);
     } catch {}
     setSubmitting(false);
+  };
+
+  // ── Private Bot Farm submit ──
+  const runFarmSubmit = async () => {
+    if (!selectedFarmDomainId) {
+      setFarmSubmitResult("✗ Choose a domain first");
+      return;
+    }
+    const urls = selected.size > 0
+      ? [...selected]
+      : urlRows.map(r => r.url);
+
+    if (!urls.length) return;
+    setSubmittingToFarm(true);
+    setFarmSubmitResult(null);
+
+    try {
+      const res = await fetch("/api/indexer/queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          domainId: selectedFarmDomainId,
+          urls,
+        }),
+      });
+      const d = await res.json();
+      if (res.ok && d.success) {
+        setFarmSubmitResult(`✓ Queued ${d.count} URLs`);
+        setSelected(new Set());
+        await loadUrls(page, statusFilter, search);
+      } else {
+        setFarmSubmitResult(`✗ ${d.error || "Failed to submit"}`);
+      }
+    } catch (e: any) {
+      setFarmSubmitResult(`✗ ${e.message}`);
+    } finally {
+      setSubmittingToFarm(false);
+    }
   };
 
   // ── XMLRiver / NeuralIndexer indexation check ──
@@ -2683,9 +2736,77 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
         </div>
       )}
 
-      {/* ── NeuralIndexer primary submit toolbar ── */}
-      {counters.total > 0 && (hasNeural || hasXmlRiver || hasTwoIndex) && (
+      {/* ── Indexer submission toolbar ── */}
+      {counters.total > 0 && (hasNeural || hasXmlRiver || hasTwoIndex || indexerDomains.length > 0) && (
         <div style={{ borderRadius: "12px", background: "var(--color-card)", border: "1px solid var(--color-border)", overflow: "hidden" }}>
+          {indexerDomains.length > 0 && (
+            <div style={{
+              padding: "10px 14px",
+              borderBottom: hasNeural || hasXmlRiver || hasTwoIndex ? "1px solid var(--color-border)" : "none",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              flexWrap: "wrap"
+            }}>
+              <div style={{
+                width: 22, height: 22, borderRadius: "5px",
+                background: "linear-gradient(135deg, rgba(41,151,255,0.3), rgba(52,199,89,0.3))",
+                border: "1px solid rgba(41,151,255,0.4)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: "9px", fontWeight: 800, color: "var(--color-accent-blue)"
+              }}>PF</div>
+              <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--color-accent-blue)" }}>Private Bot Farm</span>
+              <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
+                {selected.size > 0 ? `· ${selected.size} selected` : `· All ${counters.total} URLs`}
+              </span>
+              
+              <select
+                value={selectedFarmDomainId}
+                onChange={e => setSelectedFarmDomainId(e.target.value)}
+                style={{
+                  background: "var(--color-bg)",
+                  border: "1px solid var(--color-border)",
+                  borderRadius: "6px",
+                  padding: "4px 8px",
+                  fontSize: "11px",
+                  color: "var(--color-text-primary)",
+                  outline: "none"
+                }}
+              >
+                {indexerDomains.map(d => (
+                  <option key={d.id} value={d.id}>{d.domain}</option>
+                ))}
+              </select>
+
+              <button
+                onClick={runFarmSubmit}
+                disabled={submittingToFarm}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: "7px",
+                  border: "none",
+                  background: submittingToFarm ? "rgba(41,151,255,0.2)" : "rgba(41,151,255,0.85)",
+                  color: "#fff",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  cursor: submittingToFarm ? "not-allowed" : "pointer",
+                  opacity: submittingToFarm ? 0.7 : 1
+                }}
+              >
+                {submittingToFarm ? "Queuing..." : "▶ Submit to Doorway Queue"}
+              </button>
+
+              {farmSubmitResult && (
+                <span style={{
+                  fontSize: "12px",
+                  color: farmSubmitResult.startsWith("✓") ? "#4ADE80" : "#F87171",
+                  fontWeight: 600
+                }}>
+                  {farmSubmitResult}
+                </span>
+              )}
+            </div>
+          )}
           {hasNeural && (
             <div style={{ padding: "10px 14px", borderBottom: hasXmlRiver || hasTwoIndex ? "1px solid var(--color-border)" : "none", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
               <div style={{ width: 22, height: 22, borderRadius: "5px", background: "linear-gradient(135deg,rgba(139,92,246,0.3),rgba(59,130,246,0.3))", border: "1px solid rgba(139,92,246,0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 800, color: "#a78bfa" }}>NI</div>

@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useState } from "react";
-import { Settings, LogOut, Sparkles } from "lucide-react";
+import { Settings, LogOut, Sparkles, Globe } from "lucide-react";
 import { usePrivacy } from "@/lib/PrivacyContext";
 import { useTheme } from "@/lib/ThemeContext";
 import { useLayout } from "@/lib/LayoutContext";
@@ -503,6 +503,28 @@ function TopBar() {
             >
               <Sparkles size={15} />
               {t("seoNavTitle")}
+            </button>
+          );
+        })()}
+        {(() => {
+          const active = pathname?.startsWith("/indexer");
+          return (
+            <button
+              onClick={() => router.push("/indexer")}
+              style={{
+                display: "flex", alignItems: "center", gap: "7px",
+                padding: "6px 14px", borderRadius: "8px",
+                fontSize: "13px", fontWeight: active ? 700 : 500,
+                cursor: "pointer", border: "none",
+                color: active ? "var(--color-accent-blue)" : "var(--color-text-secondary)",
+                background: active ? "rgba(41,151,255,0.12)" : "transparent",
+                transition: "all 0.15s",
+              }}
+              onMouseOver={e => { if (!active) e.currentTarget.style.background = "var(--color-card-hover)"; }}
+              onMouseOut={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
+            >
+              <Globe size={15} />
+              {t("indexerNavTitle")}
             </button>
           );
         })()}
