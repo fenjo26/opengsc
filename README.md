@@ -199,7 +199,7 @@ pm2 status             # статус всех процессов
 cd /root/opengsc
 git pull
 npm install
-npx prisma migrate deploy
+npx prisma db push
 npm run build
 pm2 restart opengsc
 ```
