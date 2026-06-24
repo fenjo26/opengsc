@@ -46,6 +46,15 @@ export default function TextGenPage() {
     outlines.filter(o => !search.trim() || o.keyword.toLowerCase().includes(search.toLowerCase())),
     [outlines, search]);
 
+  // Paginate the structure list (newest first — loadHistory is already newest-first) so it
+  // stays usable with hundreds of saved outlines. Search filters across ALL of them.
+  const PER = 10;
+  const [stPage, setStPage] = useState(0);
+  useEffect(() => { setStPage(0); }, [search]);
+  const stTotalPages = Math.max(1, Math.ceil(filteredOutlines.length / PER));
+  const stSafePage = Math.min(stPage, stTotalPages - 1);
+  const pageOutlines = filteredOutlines.slice(stSafePage * PER, stSafePage * PER + PER);
+
   const ai = typeof window !== "undefined" ? getSeoGenCreds() : { provider: "", apiKey: "", model: "" };
 
   const textHistory = useMemo(() => {
@@ -150,17 +159,26 @@ export default function TextGenPage() {
             {filteredOutlines.length === 0 ? (
               <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", padding: "10px 0" }}>{t("seoNoStructures")}</div>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px", maxHeight: "220px", overflow: "auto" }}>
-                {filteredOutlines.map(o => {
-                  const on = structureId === o.id;
-                  return (
-                    <button key={o.id} onClick={() => setStructureId(o.id)} style={{ textAlign: "left", padding: "10px 12px", borderRadius: "8px", cursor: "pointer", border: `1.5px solid ${on ? "var(--color-accent-blue)" : "var(--color-border)"}`, background: on ? "rgba(41,151,255,0.08)" : "var(--color-bg)" }}>
-                      <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{o.keyword}</div>
-                      <div style={{ fontSize: "11px", color: "var(--color-text-tertiary)" }}>ID: {o.id.slice(0, 18)}…</div>
-                    </button>
-                  );
-                })}
-              </div>
+              <>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  {pageOutlines.map(o => {
+                    const on = structureId === o.id;
+                    return (
+                      <button key={o.id} onClick={() => setStructureId(o.id)} style={{ textAlign: "left", padding: "10px 12px", borderRadius: "8px", cursor: "pointer", border: `1.5px solid ${on ? "var(--color-accent-blue)" : "var(--color-border)"}`, background: on ? "rgba(41,151,255,0.08)" : "var(--color-bg)" }}>
+                        <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{o.keyword}</div>
+                        <div style={{ fontSize: "11px", color: "var(--color-text-tertiary)" }}>{new Date(o.createdAt).toLocaleString()} · ID: {o.id.slice(0, 12)}…</div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {stTotalPages > 1 && (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "10px" }}>
+                    <button onClick={() => setStPage(p => Math.max(0, p - 1))} disabled={stSafePage === 0} style={pagerBtn(stSafePage === 0)}>← {t("seoPagePrev")}</button>
+                    <span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>{stSafePage + 1} / {stTotalPages} · {filteredOutlines.length}</span>
+                    <button onClick={() => setStPage(p => Math.min(stTotalPages - 1, p + 1))} disabled={stSafePage >= stTotalPages - 1} style={pagerBtn(stSafePage >= stTotalPages - 1)}>{t("seoPageNext")} →</button>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -229,6 +247,10 @@ export default function TextGenPage() {
       </div>
     </div>
   );
+}
+
+function pagerBtn(disabled: boolean): React.CSSProperties {
+  return { padding: "6px 12px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-secondary)", fontSize: "12px", fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1 };
 }
 
 function StatusIcon({ status }: { status: string }) {

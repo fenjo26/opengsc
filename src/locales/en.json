@@ -1154,6 +1154,8 @@
   "seoSearchKeywordPh": "Type a keyword to search…",
   "seoChooseStructure": "Choose an outline",
   "seoNoStructures": "No saved outlines — generate a structure first.",
+  "seoPagePrev": "Prev",
+  "seoPageNext": "Next",
   "seoAddCustomInstruction": "Add custom instruction",
   "seoCustomInstructionPh": "Anything to add to the generation from your side…",
   "seoTextHistory": "Text generation history",

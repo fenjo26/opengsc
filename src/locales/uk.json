@@ -1154,6 +1154,8 @@
   "seoSearchKeywordPh": "Введіть ключове слово для пошуку…",
   "seoChooseStructure": "Виберіть структуру",
   "seoNoStructures": "Немає збережених структур — згенеруйте спершу структуру.",
+  "seoPagePrev": "Назад",
+  "seoPageNext": "Вперед",
   "seoAddCustomInstruction": "Додати користувацьку інструкцію",
   "seoCustomInstructionPh": "Що додати від себе в генерацію…",
   "seoTextHistory": "Історія генерації тексту",
