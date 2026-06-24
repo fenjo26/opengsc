@@ -20,6 +20,15 @@ function Field({ l, children }: { l: string; children: React.ReactNode }) {
   return <div><span className="tool-field-label">{l}</span>{children}</div>;
 }
 
+// Page goal (structure/titles) is derived from the chosen narrative tone — the tone labels
+// already say "for commercial content" / "for informational articles", so one control drives both.
+function goalFromTone(toneValue: string): "informational" | "commercial" | "mixed" {
+  const v = (toneValue || "").toLowerCase();
+  if (v === "professional" || v === "business") return "commercial";
+  if (v === "expert" || v === "analytical" || v === "neutral") return "informational";
+  return "mixed"; // friendly / inspiring / practical / custom / default
+}
+
 const SITE_TYPE_COLOR: Record<string, string> = {
   aggregator: "#ff9f0a", forum_ugc: "#34c759", editorial: "#2997ff", monobrand: "#bf5af2",
 };
@@ -47,7 +56,6 @@ export default function OutlinePage() {
   const [kwLoading, setKwLoading] = useState(false);
 
   // step-2 config
-  const [pageGoal, setPageGoal] = useState<"informational" | "commercial" | "mixed">("mixed");
   const [tone, setTone] = useState("");        // "" = default from policy
   const [customTone, setCustomTone] = useState("");
   const [persona, setPersona] = useState("");
@@ -172,6 +180,7 @@ export default function OutlinePage() {
       });
       const resolvedTone = resolveTone();
       const resolvedPersona = persona || activePolicy?.voice?.authorPersona || "";
+      const pageGoal = goalFromTone(tone || activePolicy?.voice?.toneOfVoice || "");
       const res = await fetch("/api/seo/outline", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -350,16 +359,6 @@ export default function OutlinePage() {
           {/* config */}
           <div style={{ marginTop: "18px", paddingTop: "16px", borderTop: "1px solid var(--color-border)" }}>
             <div className="tool-section-label">{t("seoConfigTitle")}</div>
-            <div style={{ marginTop: "4px", marginBottom: "12px" }}>
-              <Field l={t("seoCfgPageGoal")}>
-                <select className={inputStyle} value={pageGoal} onChange={e => setPageGoal(e.target.value as any)}>
-                  <option value="commercial">{t("seoGoalCommercial")}</option>
-                  <option value="mixed">{t("seoGoalMixed")}</option>
-                  <option value="informational">{t("seoGoalInformational")}</option>
-                </select>
-              </Field>
-              <div style={{ fontSize: "11px", color: "var(--color-text-tertiary)", marginTop: "4px" }}>{t("seoCfgPageGoalHint")}</div>
-            </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginTop: "4px" }}>
               <Field l={t("seoCfgTone")}>
                 <select className={inputStyle} value={tone} onChange={e => setTone(e.target.value)}>
