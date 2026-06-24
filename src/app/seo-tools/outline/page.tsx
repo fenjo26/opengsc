@@ -9,6 +9,7 @@ import {
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { OutlineView } from "@/components/SeoRenderers";
 import SeoJobProgress from "@/components/SeoJobProgress";
+import SeoRecentList from "@/components/SeoRecentList";
 import { getSeoGenCreds, getSerpCreds, getFirecrawlKey, getDataForSeoKey, loadPolicies, getActivePolicyName } from "@/lib/seo/keys";
 import { COUNTRIES, LANGUAGES } from "@/lib/seo/regions";
 import { TONES, toneToPrompt } from "@/lib/seo/tones";
@@ -443,6 +444,8 @@ export default function OutlinePage() {
           <pre style={{ whiteSpace: "pre-wrap", fontSize: "13px", lineHeight: 1.6, color: "var(--color-text-primary)", margin: 0, fontFamily: "inherit" }}>{article}</pre>
         </div>
       )}
+
+      {!outline && <SeoRecentList type="outline" />}
     </div>
   );
 }

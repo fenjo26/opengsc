@@ -6,6 +6,7 @@ import { Loader2, AlertTriangle, Search, ArrowLeft, Plus, X } from "lucide-react
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import SeoContentAnalysis from "@/components/SeoContentAnalysis";
 import SeoJobProgress from "@/components/SeoJobProgress";
+import SeoRecentList from "@/components/SeoRecentList";
 import { getSeoGenCreds, getSerpCreds, getFirecrawlKey, loadPolicies, getActivePolicyName } from "@/lib/seo/keys";
 import { COUNTRIES, LANGUAGES } from "@/lib/seo/regions";
 import { takeView } from "@/lib/seo/history";
@@ -276,6 +277,8 @@ export default function AnalysisPage() {
           <button onClick={reset} style={ghostBtn}><X size={14} /> {t("seoCaBackStep")}</button>
         )
       )}
+
+      {step === 1 && !anJobId && <SeoRecentList type="analysis" />}
     </div>
   );
 }

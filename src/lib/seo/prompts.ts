@@ -32,13 +32,15 @@ export function buildOutlinePrompt(args: {
   keywordsData?: { keyword: string; volume: number }[];
   pageGoal?: "informational" | "commercial" | "mixed";
 }): string {
-  const policyBlock = args.policy ? renderPolicy(args.policy) + "\n\n" : "";
+  // Tone is rendered once: folded into the policy block (override) when a policy exists,
+  // otherwise as a standalone line. Never both → no conflicting tone signals.
+  const policyBlock = args.policy ? renderPolicy(args.policy, args.tone) + "\n\n" : "";
   const paaBlock = args.paa?.length ? `\nPeople-Also-Ask из выдачи: ${JSON.stringify(args.paa)}` : "";
   const kwData = args.keywordsData?.length
     ? `\n- РЕАЛЬНЫЕ КЛЮЧИ С ОБЪЁМАМИ ПОИСКА (DataForSEO — используй ИМЕННО ЭТИ формулировки в section.keywords; приоритет ключам с бОльшим объёмом, распределяй по релевантным секциям): ${JSON.stringify(args.keywordsData.slice(0, 50).map(k => `${k.keyword} (${k.volume}/мес)`))}`
     : "";
   const relBlock = args.related?.length ? `\nСвязанные запросы: ${JSON.stringify(args.related)}` : "";
-  const toneBlock = args.tone ? `\n- тон повествования: ${args.tone}` : "";
+  const toneBlock = args.tone && !args.policy ? `\n- тон повествования: ${args.tone}` : "";
   const personaBlock = args.persona ? `\n- от лица: ${args.persona}` : "";
   const addKw = args.additionalKeywords?.trim() ? `\n- доп. ключевые слова (обязательно учесть): ${args.additionalKeywords}` : "";
   const twc = args.targetWordCount ? `\n- целевой объём статьи: ~${args.targetWordCount} слов (распредели по секциям, не раздувай)` : "";
@@ -188,7 +190,9 @@ export function buildTextPrompt(args: {
   sources?: { title: string; snippet: string; url: string; domain: string }[];
   sourceMode?: "off" | "facts" | "cited";
 }): string {
-  const policyBlock = args.policy ? renderPolicy(args.policy) + "\n\n" : "";
+  // Tone folded into the policy block (single source) when a policy exists; otherwise a header line.
+  const policyBlock = args.policy ? renderPolicy(args.policy, args.tone) + "\n\n" : "";
+  const toneHeader = args.policy ? "" : `Тон повествования: ${args.tone}\n`;
   const today = new Date().toISOString().slice(0, 10);
   const year = today.slice(0, 4);
   const dateLine = `Сегодня ${today}. Если нужен год — используй ТЕКУЩИЙ (${year}); никогда не пиши устаревшие годы (2023/2024) и не выдумывай год.\n`;
@@ -210,8 +214,7 @@ export function buildTextPrompt(args: {
 
   // Custom prompt type: the author's instruction drives the writing; service template is minimal.
   if (args.promptType === "custom" && args.custom) {
-    return `${policyBlock}Тон повествования: ${args.tone}
-Язык вывода: ${args.language}
+    return `${policyBlock}${toneHeader}Язык вывода: ${args.language}
 ${dateLine}
 ГЛАВНАЯ ИНСТРУКЦИЯ АВТОРА:
 ${args.custom}
@@ -224,8 +227,7 @@ ${sourcesBlock}
 ${JSON.stringify(args.outlineJson)}`;
   }
 
-  return `${policyBlock}Тон повествования: ${args.tone}
-Язык вывода: ${args.language}
+  return `${policyBlock}${toneHeader}Язык вывода: ${args.language}
 ${dateLine}${customLine}${sourcesBlock}
 Напиши статью строго по структуре ниже. Для каждой секции — текст в рамках указанного word_count, не раздувай. Используй summary, keywords, entities_to_cover и copywriter_notes как ориентир. Естественно вплетай сущности и ключи.
 

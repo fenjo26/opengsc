@@ -102,7 +102,9 @@ function has(v: unknown): boolean {
 }
 
 // Render policy to the <editorial_policy> block. Skips every empty field (spec §10.3).
-export function renderPolicy(p: EditorialPolicy): string {
+// `toneOverride` (a ready prompt descriptor) wins over the policy's own tone, so the
+// per-generation tone selector is the single source of truth — no double/conflicting tone.
+export function renderPolicy(p: EditorialPolicy, toneOverride?: string): string {
   const lines: string[] = ["<editorial_policy>"];
 
   // BRAND
@@ -127,7 +129,8 @@ export function renderPolicy(p: EditorialPolicy): string {
   const v = p.voice ?? ({} as EditorialPolicy["voice"]);
   const voiceLines: string[] = [];
   if (has(v.authorPersona)) voiceLines.push(`Author persona: ${v.authorPersona}`);
-  if (has(v.toneOfVoice)) voiceLines.push(`Tone: ${toneToPrompt(v.toneOfVoice)}`);
+  const tone = has(toneOverride) ? String(toneOverride) : (has(v.toneOfVoice) ? toneToPrompt(v.toneOfVoice) : "");
+  if (tone) voiceLines.push(`Tone: ${tone}`);
   if (voiceLines.length) { lines.push("## VOICE & TONE", ...voiceLines); }
 
   // STRUCTURE

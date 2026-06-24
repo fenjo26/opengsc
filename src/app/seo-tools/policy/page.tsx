@@ -83,6 +83,7 @@ export default function PolicyPage() {
   const [genNiche, setGenNiche] = useState("");
   const [genLoading, setGenLoading] = useState(false);
   const [genErr, setGenErr] = useState("");
+  const [showHelp, setShowHelp] = useState(false);
 
   useEffect(() => {
     setPolicies(loadPolicies());
@@ -158,10 +159,28 @@ export default function PolicyPage() {
               <span style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>{t("seoPolHubSub")}</span>
             </div>
           </div>
-          <a href="https://docs.claude.com" target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 14px", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "13px", color: "var(--color-text-secondary)", textDecoration: "none", flexShrink: 0 }}>
-            <HelpCircle size={14} /> {t("seoPolDocs")}
-          </a>
+          <button onClick={() => setShowHelp(s => !s)} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 14px", borderRadius: "8px", border: "1px solid var(--color-border)", background: showHelp ? "var(--color-accent-purple)" : "var(--color-bg)", color: showHelp ? "#fff" : "var(--color-text-secondary)", fontSize: "13px", cursor: "pointer", flexShrink: 0 }}>
+            <HelpCircle size={14} /> {t("seoPolHelpToggle")}
+          </button>
         </div>
+
+        {/* How it works / why / what it affects */}
+        {showHelp && (
+          <div className="panel" style={{ display: "flex", flexDirection: "column", gap: "14px", background: "var(--color-bg)" }}>
+            {([
+              ["seoPolHelpWhatTitle", "seoPolHelpWhat"],
+              ["seoPolHelpWhyTitle", "seoPolHelpWhy"],
+              ["seoPolHelpAffectsTitle", "seoPolHelpAffects"],
+              ["seoPolHelpToneTitle", "seoPolHelpTone"],
+              ["seoPolHelpTipTitle", "seoPolHelpTip"],
+            ] as const).map(([title, body]) => (
+              <div key={title}>
+                <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "3px" }}>{t(title)}</div>
+                <div style={{ fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>{t(body)}</div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Create */}
         <div className="panel">
