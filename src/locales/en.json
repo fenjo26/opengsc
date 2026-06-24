@@ -1075,6 +1075,7 @@
   "seoModelLive": "Models load live from your configured providers.",
   "seoModelErrFetch": "Couldn't load some providers — check the key.",
   "seoTabHistory": "History",
+  "seoTabSettings": "Settings",
   "seoHistoryTitle": "History",
   "seoHistorySub": "All your generated outlines, texts and content analyses",
   "seoHistoryAll": "All tasks",

@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { FileText, Search, ScrollText, Sparkles, History, PenLine, Quote } from "lucide-react";
+import { FileText, Search, ScrollText, Sparkles, History, PenLine, Quote, SlidersHorizontal } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 const TABS = [
@@ -11,6 +11,7 @@ const TABS = [
   { href: "/seo-tools/citations", key: "seoTabCitations" as const, icon: Quote },
   { href: "/seo-tools/policy", key: "seoTabPolicy" as const, icon: ScrollText },
   { href: "/seo-tools/history", key: "seoTabHistory" as const, icon: History },
+  { href: "/seo-tools/settings", key: "seoTabSettings" as const, icon: SlidersHorizontal },
 ];
 
 export default function SeoToolsLayout({ children }: { children: React.ReactNode }) {

@@ -26,7 +26,12 @@ export async function POST(req: Request) {
   let sources: { title: string; snippet: string; url: string; domain: string }[] =
     Array.isArray(b.sources) ? b.sources.filter((s: any) => s && s.url) : [];
   if (!sources.length && b.serpKey) {
-    const serp = await runSerp(String(b.serpProvider || "serper"), String(b.serpKey), heading || String(b.keyword ?? ""), {
+    // Query MUST be topic-led: searching the bare heading ("Key Facts at a Glance",
+    // "Transport Modes Comparison") returns generic/off-topic pages. Prefix the main keyword
+    // so sources are about the actual subject (and right country/language).
+    const kw = String(b.keyword ?? "").trim();
+    const query = [kw, heading].filter(Boolean).join(" ").trim() || kw || heading;
+    const serp = await runSerp(String(b.serpProvider || "serper"), String(b.serpKey), query, {
       gl: b.gl, hl: b.hl, num: 10, engine: (b.engine as SerpEngine) ?? "google",
     });
     const results = serp.results || [];
