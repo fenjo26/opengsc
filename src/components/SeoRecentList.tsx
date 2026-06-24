@@ -28,12 +28,16 @@ export default function SeoRecentList({ type, limit = 6 }: { type: HistoryType; 
         </div>
         <button onClick={() => router.push("/seo-tools/history")} style={{ fontSize: "12px", color: "var(--color-accent-blue)", background: "none", border: "none", cursor: "pointer" }}>{t("seoRecentAll")}</button>
       </div>
-      <div style={{ display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
         {items.map(it => (
-          <button key={it.id} onClick={() => router.push(`/seo-tools/history/${it.id}`)} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 6px", borderTop: "1px solid var(--color-border)", background: "none", border: "none", borderTopStyle: "solid", cursor: "pointer", textAlign: "left", width: "100%" }}>
-            <span style={{ flex: 1, minWidth: 0, fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.keyword}</span>
-            <span style={{ fontSize: "11px", color: "var(--color-text-tertiary)", flexShrink: 0 }}>{new Date(it.createdAt).toLocaleDateString()}</span>
-            <Eye size={14} color="var(--color-accent-blue)" style={{ flexShrink: 0 }} />
+          <button key={it.id} onClick={() => router.push(`/seo-tools/history/${it.id}`)}
+            style={{ display: "flex", alignItems: "center", gap: "12px", padding: "13px 16px", borderRadius: "10px", border: "1px solid var(--color-border)", background: "var(--color-bg)", cursor: "pointer", textAlign: "left", width: "100%" }}>
+            <span style={{ width: 9, height: 9, borderRadius: "50%", flexShrink: 0, background: "var(--color-accent-green)" }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.keyword}</div>
+              <div style={{ fontSize: "12px", color: "var(--color-text-tertiary)", marginTop: "2px" }}>{t("seoCreatedAt")}: {new Date(it.createdAt).toLocaleString()}</div>
+            </div>
+            <Eye size={16} color="var(--color-accent-blue)" style={{ flexShrink: 0 }} />
           </button>
         ))}
       </div>
