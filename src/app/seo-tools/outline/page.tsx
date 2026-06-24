@@ -188,7 +188,8 @@ export default function OutlinePage() {
           aiProvider: provider, aiApiKey: apiKey, model: model || undefined,
           policy: activePolicy, paa, related,
           tone: resolvedTone, persona: resolvedPersona,
-          additionalKeywords: addKeywords, targetWordCount: targetWords ? Number(targetWords) : undefined,
+          additionalKeywords: addKeywords.split(/[\n,]+/).map(s => s.trim()).filter(Boolean).join(", "),
+          targetWordCount: targetWords ? Number(targetWords) : undefined,
           manualTexts, keywordsData, pageGoal,
         }),
       });

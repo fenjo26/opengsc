@@ -1028,7 +1028,7 @@
   "seoCfgPersona": "От какого лица писать",
   "seoCfgPersonaPh": "напр. опытный местный водитель",
   "seoCfgAddKeywords": "Дополнительные ключевые слова",
-  "seoCfgAddKeywordsPh": "через запятую или с новой строки",
+  "seoCfgAddKeywordsPh": "по одному ключу в строке",
   "seoCfgTargetWords": "Целевое количество слов",
   "seoCfgUseAverage": "Использовать среднее",
   "seoCfgAverageNote": "Среднее рассчитано по выбранным конкурентам",

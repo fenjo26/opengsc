@@ -1028,7 +1028,7 @@
   "seoCfgPersona": "Author persona",
   "seoCfgPersonaPh": "e.g. experienced local driver",
   "seoCfgAddKeywords": "Additional keywords",
-  "seoCfgAddKeywordsPh": "comma-separated or new lines",
+  "seoCfgAddKeywordsPh": "one keyword per line",
   "seoCfgTargetWords": "Target word count",
   "seoCfgUseAverage": "Use average",
   "seoCfgAverageNote": "Average computed across selected competitors",

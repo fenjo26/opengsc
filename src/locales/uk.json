@@ -1028,7 +1028,7 @@
   "seoCfgPersona": "Від якої особи писати",
   "seoCfgPersonaPh": "напр. досвідчений місцевий водій",
   "seoCfgAddKeywords": "Додаткові ключові слова",
-  "seoCfgAddKeywordsPh": "через кому або з нового рядка",
+  "seoCfgAddKeywordsPh": "по одному ключу в рядку",
   "seoCfgTargetWords": "Цільова кількість слів",
   "seoCfgUseAverage": "Використати середнє",
   "seoCfgAverageNote": "Середнє розраховано за вибраними конкурентами",
