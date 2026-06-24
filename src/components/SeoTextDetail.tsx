@@ -84,38 +84,44 @@ export default function SeoTextDetail({ item: initial }: { item: HistoryItem }) 
         {edit && <button onClick={saveEdit} style={btnDark}><Save size={15} /> {t("seoSaveBtn")}</button>}
       </div>
 
-      {/* Outline summary card */}
-      {outline && (
+      {/* Outline summary card — always shown; uses the linked outline when present,
+          otherwise falls back to the article's own keyword / words / headings. */}
+      {(() => {
+        const structHd = outline ? outlineHd : artHeadings;
+        return (
         <div className="panel">
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
             <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)", display: "flex", alignItems: "center", gap: "8px" }}><FileText size={15} /> {t("seoOutlineCard")}</div>
-            <button onClick={() => router.push(`/seo-tools/history/${item.meta!.outlineId}`)} style={btnGhost}><ExternalLink size={14} /> {t("seoOpenOutline")}</button>
+            {outline && item.meta?.outlineId && <button onClick={() => router.push(`/seo-tools/history/${item.meta!.outlineId}`)} style={btnGhost}><ExternalLink size={14} /> {t("seoOpenOutline")}</button>}
           </div>
-          <Row icon={<Target size={14} />} label={t("seoMainKey")} value={outline.meta?.keyword || item.keyword} />
+          <Row icon={<Target size={14} />} label={t("seoMainKey")} value={outline?.meta?.keyword || item.keyword} />
           <div style={{ display: "flex", gap: "9px", margin: "10px 0 6px" }}>
             <Hash size={14} color="var(--color-text-tertiary)" style={{ marginTop: "2px", flexShrink: 0 }} />
             <div style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>
-              {t("seoPlanWords")}: <b style={{ color: "var(--color-text-primary)" }}>{planWords || "—"} {t("seoWordsShortUnit")}</b>
-              <span style={{ margin: "0 14px" }}>{t("seoFactWords")}: <b style={{ color: "var(--color-text-primary)" }}>{factWords} {t("seoWordsShortUnit")}</b></span>
-              {planWords ? <b style={{ color: delta > 0 ? "var(--color-accent-red)" : "var(--color-accent-green)" }}>{delta > 0 ? "+" : ""}{delta}%</b> : null}
+              {planWords ? <>{t("seoPlanWords")}: <b style={{ color: "var(--color-text-primary)" }}>{planWords} {t("seoWordsShortUnit")}</b><span style={{ margin: "0 14px" }} /></> : null}
+              {t("seoFactWords")}: <b style={{ color: "var(--color-text-primary)" }}>{factWords} {t("seoWordsShortUnit")}</b>
+              {planWords ? <b style={{ marginLeft: "14px", color: delta > 0 ? "var(--color-accent-red)" : "var(--color-accent-green)" }}>{delta > 0 ? "+" : ""}{delta}%</b> : null}
             </div>
           </div>
           {outlineItem?.createdAt && <div style={{ fontSize: "12px", color: "var(--color-text-tertiary)", marginBottom: "8px" }}>{t("seoOutlineCreated")}: {new Date(outlineItem.createdAt).toLocaleDateString()}</div>}
+          {structHd.length > 0 && (
           <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: "10px" }}>
             <button onClick={() => setOutlineOpen(o => !o)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: "none", border: "none", cursor: "pointer", fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>
-              <span>{t("seoOutlineStructure")} · {outlineHd.length} {t("seoHeadingsCount")}</span>
+              <span>{t("seoOutlineStructure")} · {structHd.length} {t("seoHeadingsCount")}</span>
               <ChevronDown size={16} style={{ transform: outlineOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
             </button>
             {outlineOpen && (
               <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "4px" }}>
-                {outlineHd.map((h, i) => (
+                {structHd.map((h, i) => (
                   <div key={i} style={{ fontSize: "13px", paddingLeft: h.level === "H3" ? "20px" : h.level === "H4" ? "36px" : 0, color: h.level === "H1" ? "var(--color-text-primary)" : h.level === "H2" ? "var(--color-text-primary)" : "var(--color-text-secondary)", fontWeight: h.level === "H1" ? 700 : 400 }}>{h.text}</div>
                 ))}
               </div>
             )}
           </div>
+          )}
         </div>
-      )}
+        );
+      })()}
 
       {/* Tabs */}
       <div className="panel">
