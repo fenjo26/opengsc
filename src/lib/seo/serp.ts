@@ -43,11 +43,14 @@ async function serperSearch(
     ? "https://google.serper.dev/search" // Serper is Google-only; Bing falls back to google endpoint
     : "https://google.serper.dev/search";
 
+  // Serper pages in 10s and rounds `num` down — request the next multiple of 10 so we can
+  // return exactly how many the user asked for (e.g. 15 → request 20, then slice to 15).
+  const want = opts.num || 10;
   const body: Record<string, unknown> = {
     q: keyword,
     gl: opts.gl || "us",
     hl: opts.hl || "en",
-    num: opts.num || 10,
+    num: Math.min(100, Math.ceil(want / 10) * 10),
   };
   if (opts.location) body.location = opts.location;
 

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  Search, Loader2, Check, AlertTriangle, FileText, Wand2, Copy, Plus, X,
+  Search, Loader2, Check, AlertTriangle, Wand2, Copy, Plus, X,
 } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { OutlineView } from "@/components/SeoRenderers";
@@ -22,6 +22,8 @@ function Field({ l, children }: { l: string; children: React.ReactNode }) {
 
 // Page goal (structure/titles) is derived from the chosen narrative tone — the tone labels
 // already say "for commercial content" / "for informational articles", so one control drives both.
+function domainOf(url: string): string { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; } }
+
 function goalFromTone(toneValue: string): "informational" | "commercial" | "mixed" {
   const v = (toneValue || "").toLowerCase();
   if (v === "professional" || v === "business") return "commercial";
@@ -35,7 +37,6 @@ const SITE_TYPE_COLOR: Record<string, string> = {
 
 type SerpItem = { position: number; url: string; title: string; snippet: string; domain: string; site_type: string | null };
 type Scraped = { url: string; ok: boolean; via: string; title: string; metaDescription: string; headings: string[]; wordCount: number; hasPriceTable: boolean; hasFaq: boolean; error?: string };
-type ManualText = { name: string; text: string };
 
 export default function OutlinePage() {
   const { t } = useLanguage();
@@ -61,9 +62,7 @@ export default function OutlinePage() {
   const [persona, setPersona] = useState("");
   const [addKeywords, setAddKeywords] = useState("");
   const [targetWords, setTargetWords] = useState("");
-  const [manualTexts, setManualTexts] = useState<ManualText[]>([]);
-  const [mtName, setMtName] = useState("");
-  const [mtText, setMtText] = useState("");
+  const [manualUrl, setManualUrl] = useState("");
 
   const [loading, setLoading] = useState<"" | "serp" | "outline" | "text" | "avg">("");
   const [err, setErr] = useState("");
@@ -133,7 +132,7 @@ export default function OutlinePage() {
       setSerp(data.results || []);
       setPaa(data.peopleAlsoAsk || []);
       setRelated(data.relatedSearches || []);
-      setSelected(new Set((data.results || []).slice(0, 5).map((r: SerpItem) => r.url)));
+      setSelected(new Set((data.results || []).map((r: SerpItem) => r.url)));
       fetchKeywords(); // grounding keywords with real volumes (DataForSEO), if key present
     } catch (e: any) { setErr(String(e?.message ?? e)); }
     setLoading("");
@@ -155,10 +154,24 @@ export default function OutlinePage() {
     setLoading("");
   }
 
-  function addManual() {
-    if (!mtText.trim()) return;
-    setManualTexts(m => [...m, { name: mtName.trim() || `Competitor ${m.length + 1}`, text: mtText.trim() }].slice(0, 5));
-    setMtName(""); setMtText("");
+  function addCompetitorUrls() {
+    const urls = manualUrl.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+    if (!urls.length) return;
+    setSerp(prev => {
+      const have = new Set(prev.map(s => s.url));
+      const additions: SerpItem[] = [];
+      const sel = new Set(selected);
+      for (const u of urls) {
+        let url = u; try { url = new URL(u.startsWith("http") ? u : `https://${u}`).toString(); } catch { continue; }
+        if (have.has(url)) { sel.add(url); continue; }
+        have.add(url);
+        additions.push({ position: prev.length + additions.length + 1, url, title: domainOf(url), snippet: "", domain: domainOf(url), site_type: "manual" });
+        sel.add(url);
+      }
+      setSelected(sel);
+      return [...prev, ...additions];
+    });
+    setManualUrl("");
   }
 
   async function generate() {
@@ -166,7 +179,7 @@ export default function OutlinePage() {
     const { provider, apiKey, model } = getSeoGenCreds();
     if (!apiKey) { setErr(t("seoErrNoAiKey")); return; }
     const urls = serp.filter(s => selected.has(s.url)).map(s => s.url);
-    if (!urls.length && !manualTexts.length) { setErr(t("seoErrSelectComp")); return; }
+    if (!urls.length) { setErr(t("seoErrSelectComp")); return; }
     setLoading("outline");
     try {
       const cache = await ensureScraped(urls);
@@ -190,7 +203,7 @@ export default function OutlinePage() {
           tone: resolvedTone, persona: resolvedPersona,
           additionalKeywords: addKeywords.split(/[\n,]+/).map(s => s.trim()).filter(Boolean).join(", "),
           targetWordCount: targetWords ? Number(targetWords) : undefined,
-          manualTexts, keywordsData, pageGoal,
+          keywordsData, pageGoal,
         }),
       });
       const data = await res.json();
@@ -266,7 +279,7 @@ export default function OutlinePage() {
           </Field>
           <Field l="Top N">
             <select className={inputStyle} value={topN} onChange={e => setTopN(Number(e.target.value))}>
-              {[5, 10, 15, 20].map(n => <option key={n} value={n}>{n}</option>)}
+              {[10, 20, 30].map(n => <option key={n} value={n}>{n}</option>)}
             </select>
           </Field>
           <button onClick={runSerp} disabled={loading === "serp"} style={btnPurple}>
@@ -395,25 +408,14 @@ export default function OutlinePage() {
               <div style={{ fontSize: "11px", color: "var(--color-text-tertiary)", marginTop: "4px" }}>{t("seoCfgAverageNote")}</div>
             </div>
 
-            {/* manual texts */}
+            {/* add competitor URL — appends to the SERP list above (for rising sites not yet in top) */}
             <div style={{ marginTop: "14px" }}>
-              <span className="tool-field-label">{t("seoCfgManualTexts")} <span style={{ textTransform: "none", fontWeight: 400, color: "var(--color-text-tertiary)" }}>· {manualTexts.length}/5</span></span>
-              <div style={{ fontSize: "11px", color: "var(--color-text-tertiary)", marginBottom: "8px" }}>{t("seoCfgManualSub")}</div>
-              {manualTexts.map((m, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "7px 10px", borderRadius: "7px", border: "1px solid var(--color-border)", marginBottom: "6px", fontSize: "12px" }}>
-                  <FileText size={13} color="var(--color-text-secondary)" />
-                  <span style={{ flex: 1, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</span>
-                  <span style={{ color: "var(--color-text-tertiary)" }}>{m.text.split(/\s+/).length} {t("seoWords")}</span>
-                  <button onClick={() => setManualTexts(mt => mt.filter((_, j) => j !== i))} style={{ ...btnGhost, padding: "4px 6px" }}><X size={12} /></button>
-                </div>
-              ))}
-              {manualTexts.length < 5 && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  <input className={inputStyle} value={mtName} onChange={e => setMtName(e.target.value)} placeholder={t("seoCfgManualNamePh")} />
-                  <textarea className={inputStyle} style={{ minHeight: "60px", resize: "vertical" }} value={mtText} onChange={e => setMtText(e.target.value)} placeholder={t("seoCfgManualTextPh")} />
-                  <button onClick={addManual} disabled={!mtText.trim()} style={{ ...btnGhost, alignSelf: "flex-start", opacity: mtText.trim() ? 1 : 0.5 }}><Plus size={13} /> {t("seoCfgAddText")}</button>
-                </div>
-              )}
+              <span className="tool-field-label">{t("seoCfgAddCompUrl")}</span>
+              <div style={{ fontSize: "11px", color: "var(--color-text-tertiary)", marginBottom: "8px" }}>{t("seoCfgAddCompUrlSub")}</div>
+              <div style={{ display: "flex", gap: "6px" }}>
+                <input className={inputStyle} style={{ flex: 1 }} value={manualUrl} onChange={e => setManualUrl(e.target.value)} onKeyDown={e => e.key === "Enter" && addCompetitorUrls()} placeholder="https://competitor.com/page" />
+                <button onClick={addCompetitorUrls} disabled={!manualUrl.trim()} style={{ ...btnGhost, opacity: manualUrl.trim() ? 1 : 0.5 }}><Plus size={13} /> {t("seoCfgAddCompUrlBtn")}</button>
+              </div>
             </div>
 
             <button onClick={generate} disabled={loading === "outline"} style={{ ...btnDark, width: "100%", justifyContent: "center", marginTop: "16px", padding: "12px" }}>
