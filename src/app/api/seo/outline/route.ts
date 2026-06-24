@@ -36,18 +36,19 @@ export async function POST(req: Request) {
     targetWordCount: b.targetWordCount ? Number(b.targetWordCount) : undefined,
     manualTexts: Array.isArray(b.manualTexts) ? b.manualTexts : undefined,
     keywordsData: Array.isArray(b.keywordsData) ? b.keywordsData : undefined,
+    pageGoal: b.pageGoal === "commercial" || b.pageGoal === "informational" ? b.pageGoal : "mixed",
   });
 
   const model = b.model ? String(b.model) : undefined;
 
-  let raw = await fetchLLM(prompt, provider, apiKey, 8000, model);
+  let raw = await fetchLLM(prompt, provider, apiKey, 16000, model);
   let outline = extractJson(raw);
 
   // One retry on parse failure (spec §6)
   if (!outline) {
     raw = await fetchLLM(
       prompt + "\n\nПредыдущий ответ не распарсился. Верни ТОЛЬКО валидный JSON, без текста и без markdown-обёрток.",
-      provider, apiKey, 8000, model,
+      provider, apiKey, 16000, model,
     );
     outline = extractJson(raw);
   }

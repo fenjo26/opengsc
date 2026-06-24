@@ -47,6 +47,7 @@ export default function OutlinePage() {
   const [kwLoading, setKwLoading] = useState(false);
 
   // step-2 config
+  const [pageGoal, setPageGoal] = useState<"informational" | "commercial" | "mixed">("mixed");
   const [tone, setTone] = useState("");        // "" = default from policy
   const [customTone, setCustomTone] = useState("");
   const [persona, setPersona] = useState("");
@@ -179,7 +180,7 @@ export default function OutlinePage() {
           policy: activePolicy, paa, related,
           tone: resolvedTone, persona: resolvedPersona,
           additionalKeywords: addKeywords, targetWordCount: targetWords ? Number(targetWords) : undefined,
-          manualTexts, keywordsData,
+          manualTexts, keywordsData, pageGoal,
         }),
       });
       const data = await res.json();
@@ -349,6 +350,16 @@ export default function OutlinePage() {
           {/* config */}
           <div style={{ marginTop: "18px", paddingTop: "16px", borderTop: "1px solid var(--color-border)" }}>
             <div className="tool-section-label">{t("seoConfigTitle")}</div>
+            <div style={{ marginTop: "4px", marginBottom: "12px" }}>
+              <Field l={t("seoCfgPageGoal")}>
+                <select className={inputStyle} value={pageGoal} onChange={e => setPageGoal(e.target.value as any)}>
+                  <option value="commercial">{t("seoGoalCommercial")}</option>
+                  <option value="mixed">{t("seoGoalMixed")}</option>
+                  <option value="informational">{t("seoGoalInformational")}</option>
+                </select>
+              </Field>
+              <div style={{ fontSize: "11px", color: "var(--color-text-tertiary)", marginTop: "4px" }}>{t("seoCfgPageGoalHint")}</div>
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginTop: "4px" }}>
               <Field l={t("seoCfgTone")}>
                 <select className={inputStyle} value={tone} onChange={e => setTone(e.target.value)}>

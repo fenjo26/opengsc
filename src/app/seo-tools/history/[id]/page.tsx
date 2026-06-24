@@ -145,11 +145,14 @@ export default function TaskDetailPage() {
           <pre style={{ whiteSpace: "pre-wrap", fontSize: "13px", lineHeight: 1.6, color: "var(--color-text-primary)", margin: 0, fontFamily: "inherit" }}>{plainText()}</pre>
         ) : (
           <>
-            {/* tabs */}
-            <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
-              {([["structure", t("seoTabContentStructure")], ["entities", t("seoTabEntityAnalysis")]] as const).map(([k, label]) => (
-                <button key={k} onClick={() => setTab(k as any)} style={{ padding: "7px 14px", borderRadius: "8px", fontSize: "13px", fontWeight: tab === k ? 700 : 500, cursor: "pointer", border: "none", background: tab === k ? "var(--color-card-hover)" : "transparent", color: tab === k ? "var(--color-text-primary)" : "var(--color-text-secondary)" }}>{label}</button>
-              ))}
+            {/* tabs — segmented control for clear visibility */}
+            <div style={{ display: "inline-flex", gap: "4px", marginBottom: "16px", padding: "4px", borderRadius: "10px", background: "var(--color-bg)", border: "1px solid var(--color-border)" }}>
+              {([["structure", t("seoTabContentStructure")], ["entities", t("seoTabEntityAnalysis")]] as const).map(([k, label]) => {
+                const on = tab === k;
+                return (
+                  <button key={k} onClick={() => setTab(k as any)} style={{ padding: "8px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: on ? 700 : 500, cursor: "pointer", border: "none", background: on ? "var(--color-accent-purple)" : "transparent", color: on ? "#fff" : "var(--color-text-secondary)", boxShadow: on ? "0 1px 3px rgba(0,0,0,0.2)" : "none", transition: "all 0.15s" }}>{label}</button>
+                );
+              })}
             </div>
 
             <div style={{ display: "flex", gap: "20px", alignItems: "flex-start" }}>
