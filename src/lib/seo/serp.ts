@@ -43,38 +43,50 @@ async function serperSearch(
     ? "https://google.serper.dev/search" // Serper is Google-only; Bing falls back to google endpoint
     : "https://google.serper.dev/search";
 
-  // Serper pages in 10s and rounds `num` down — request the next multiple of 10 so we can
-  // return exactly how many the user asked for (e.g. 15 → request 20, then slice to 15).
+  // Serper returns one Google page (~10 organic) per call and does NOT expand via `num`.
+  // To honour Top N > 10 we paginate with the `page` param and merge (dedupe by URL).
   const want = opts.num || 10;
-  const body: Record<string, unknown> = {
-    q: keyword,
-    gl: opts.gl || "us",
-    hl: opts.hl || "en",
-    num: Math.min(100, Math.ceil(want / 10) * 10),
-  };
-  if (opts.location) body.location = opts.location;
+  const pages = Math.min(5, Math.max(1, Math.ceil(want / 10)));
+  const seen = new Set<string>();
+  const results: SerpResultItem[] = [];
+  let paa: string[] = [];
+  let related: string[] = [];
 
-  const res = await fetch(endpoint, {
-    method: "POST",
-    headers: { "X-API-KEY": apiKey, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(20000),
-  });
-  if (!res.ok) {
-    return { engine, provider: "serper", keyword, results: [], error: `serper ${res.status}: ${await res.text()}` };
+  for (let page = 1; page <= pages; page++) {
+    const body: Record<string, unknown> = { q: keyword, gl: opts.gl || "us", hl: opts.hl || "en", num: 10, page };
+    if (opts.location) body.location = opts.location;
+    let res: Response;
+    try {
+      res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "X-API-KEY": apiKey, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(20000),
+      });
+    } catch (e: any) {
+      if (page === 1) return { engine, provider: "serper", keyword, results: [], error: `сеть Serper: ${e?.cause?.code || e?.message || "fetch failed"}` };
+      break;
+    }
+    if (!res.ok) {
+      if (page === 1) return { engine, provider: "serper", keyword, results: [], error: `serper ${res.status}: ${(await res.text()).slice(0, 200)}` };
+      break;
+    }
+    const data = await res.json();
+    if (page === 1) {
+      paa = (data.peopleAlsoAsk ?? []).map((p: any) => p.question).filter(Boolean);
+      related = (data.relatedSearches ?? []).map((p: any) => p.query).filter(Boolean);
+    }
+    const organic: any[] = data.organic ?? [];
+    for (const r of organic) {
+      if (!r.link || seen.has(r.link)) continue;
+      seen.add(r.link);
+      results.push({ position: results.length + 1, url: r.link, title: r.title ?? "", snippet: r.snippet ?? "", domain: domainOf(r.link ?? "") });
+    }
+    if (organic.length < 10) break;     // Google has no further pages for this query
+    if (results.length >= want) break;
   }
-  const data = await res.json();
-  const organic: any[] = data.organic ?? [];
-  const results: SerpResultItem[] = organic.slice(0, opts.num || 10).map((r, i) => ({
-    position: r.position ?? i + 1,
-    url: r.link,
-    title: r.title ?? "",
-    snippet: r.snippet ?? "",
-    domain: domainOf(r.link ?? ""),
-  }));
-  const paa = (data.peopleAlsoAsk ?? []).map((p: any) => p.question).filter(Boolean);
-  const related = (data.relatedSearches ?? []).map((p: any) => p.query).filter(Boolean);
-  return { engine, provider: "serper", keyword, results, peopleAlsoAsk: paa, relatedSearches: related };
+
+  return { engine, provider: "serper", keyword, results: results.slice(0, want), peopleAlsoAsk: paa, relatedSearches: related };
 }
 
 // ─── DataForSEO ──────────────────────────────────────────────────────────────

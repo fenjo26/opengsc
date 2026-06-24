@@ -1,61 +1,18 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { fetchLLM } from "@/lib/llm";
-import { buildOutlinePrompt, extractJson, CompetitorInput } from "@/lib/seo/prompts";
+import { genOutline } from "@/lib/seo/generate";
 
-// POST /api/seo/outline
-// body: { keyword, language, country, competitors[], aiProvider, aiApiKey, model?, policy?, paa?, related? }
+// POST /api/seo/outline — synchronous outline generation (also available as a background job).
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
-  if (!(session?.user as any)?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!(session?.user as any)?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const b = await req.json();
-  const keyword = String(b.keyword ?? "").trim();
-  if (!keyword) return NextResponse.json({ error: "no_keyword" }, { status: 400 });
-
-  const provider = String(b.aiProvider ?? "anthropic");
-  const apiKey = String(b.aiApiKey ?? "");
-  if (!apiKey) return NextResponse.json({ error: "no_ai_key" }, { status: 400 });
-
-  const competitors: CompetitorInput[] = Array.isArray(b.competitors) ? b.competitors : [];
-
-  const prompt = buildOutlinePrompt({
-    keyword,
-    language: String(b.language ?? "en"),
-    country: String(b.country ?? "us"),
-    competitors,
-    policy: b.policy,
-    paa: b.paa,
-    related: b.related,
-    tone: b.tone ? String(b.tone) : undefined,
-    persona: b.persona ? String(b.persona) : undefined,
-    additionalKeywords: b.additionalKeywords ? String(b.additionalKeywords) : undefined,
-    targetWordCount: b.targetWordCount ? Number(b.targetWordCount) : undefined,
-    manualTexts: Array.isArray(b.manualTexts) ? b.manualTexts : undefined,
-    keywordsData: Array.isArray(b.keywordsData) ? b.keywordsData : undefined,
-    pageGoal: b.pageGoal === "commercial" || b.pageGoal === "informational" ? b.pageGoal : "mixed",
-  });
-
-  const model = b.model ? String(b.model) : undefined;
-
-  let raw = await fetchLLM(prompt, provider, apiKey, 16000, model);
-  let outline = extractJson(raw);
-
-  // One retry on parse failure (spec §6)
-  if (!outline) {
-    raw = await fetchLLM(
-      prompt + "\n\nПредыдущий ответ не распарсился. Верни ТОЛЬКО валидный JSON, без текста и без markdown-обёрток.",
-      provider, apiKey, 16000, model,
-    );
-    outline = extractJson(raw);
+  const r = await genOutline(b);
+  if (!r.ok) {
+    const status = r.error === "no_keyword" || r.error === "no_ai_key" ? 400 : 502;
+    return NextResponse.json({ error: r.error }, { status });
   }
-
-  if (!outline) {
-    return NextResponse.json({ error: "parse_failed", raw }, { status: 502 });
-  }
-
-  return NextResponse.json({ outline });
+  return NextResponse.json({ outline: r.data });
 }

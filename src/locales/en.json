@@ -1363,5 +1363,7 @@
   "seoCaSelected": "Selected",
   "seoCaCopySelected": "Copy selected",
   "seoFormatHtml": "Format as HTML",
-  "seoCopied": "Copied!"
+  "seoCopied": "Copied!",
+  "seoJobRunning": "Generating…",
+  "seoJobMinimizeNote": "You can minimize this page — the task keeps running and will appear in History when it's done."
 }

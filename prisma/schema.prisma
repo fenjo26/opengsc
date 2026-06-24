@@ -54,6 +54,9 @@ model User {
   // Custom Indexer Bot Farm
   indexerDomains      IndexerDomain[]
   indexerDictionaries IndexerDictionary[]
+
+  // SEO Tools background generation jobs
+  seoJobs             SeoJob[]
 }
 
 model VerificationToken {
@@ -311,4 +314,23 @@ model IndexerDictionary {
 
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@unique([userId, word])
+}
+
+// ─── SEO Tools — background generation jobs (outline / text / analysis) ──────────
+// Lets a generation run server-side and persist its result, so the user can close
+// the tab and pick the finished task up later from History.
+model SeoJob {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // "outline" | "text" | "analysis"
+  keyword   String   @default("")
+  status    String   @default("processing") // "processing" | "completed" | "error"
+  result    String?  // JSON string of the result (outline object / { text, ... } / report)
+  error     String?
+  meta      String?  // JSON string (tone, promptType, outlineId, factcheck/images flags…)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, createdAt])
 }

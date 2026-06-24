@@ -8,10 +8,12 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { OutlineView } from "@/components/SeoRenderers";
+import SeoJobProgress from "@/components/SeoJobProgress";
 import { getSeoGenCreds, getSerpCreds, getFirecrawlKey, getDataForSeoKey, loadPolicies, getActivePolicyName } from "@/lib/seo/keys";
 import { COUNTRIES, LANGUAGES } from "@/lib/seo/regions";
 import { TONES, toneToPrompt } from "@/lib/seo/tones";
 import { addHistory, takeView } from "@/lib/seo/history";
+import { startJob, importJob } from "@/lib/seo/jobs";
 
 const card = "panel";
 const inputStyle = "tool-input";
@@ -66,6 +68,7 @@ export default function OutlinePage() {
 
   const [loading, setLoading] = useState<"" | "serp" | "outline" | "text" | "avg">("");
   const [err, setErr] = useState("");
+  const [jobId, setJobId] = useState<string | null>(null);
   const [outline, setOutline] = useState<any>(null);
   const [article, setArticle] = useState("");
 
@@ -194,23 +197,17 @@ export default function OutlinePage() {
       const resolvedTone = resolveTone();
       const resolvedPersona = persona || activePolicy?.voice?.authorPersona || "";
       const pageGoal = goalFromTone(tone || activePolicy?.voice?.toneOfVoice || "");
-      const res = await fetch("/api/seo/outline", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          keyword, language, country, competitors,
-          aiProvider: provider, aiApiKey: apiKey, model: model || undefined,
-          policy: activePolicy, paa, related,
-          tone: resolvedTone, persona: resolvedPersona,
-          additionalKeywords: addKeywords.split(/[\n,]+/).map(s => s.trim()).filter(Boolean).join(", "),
-          targetWordCount: targetWords ? Number(targetWords) : undefined,
-          keywordsData, pageGoal,
-        }),
+      const { jobId: jid, error } = await startJob("outline", {
+        keyword, language, country, competitors,
+        aiProvider: provider, aiApiKey: apiKey, model: model || undefined,
+        policy: activePolicy, paa, related,
+        tone: resolvedTone, persona: resolvedPersona,
+        additionalKeywords: addKeywords.split(/[\n,]+/).map(s => s.trim()).filter(Boolean).join(", "),
+        targetWordCount: targetWords ? Number(targetWords) : undefined,
+        keywordsData, pageGoal,
       });
-      const data = await res.json();
-      if (!res.ok) { setErr(data.error === "parse_failed" ? t("seoErrParseJson") : (data.error || t("seoErrGen"))); setLoading(""); return; }
-      setOutline(data.outline);
-      const rec = addHistory({ type: "outline", keyword: data.outline?.meta?.keyword || keyword, data: data.outline });
-      router.push(`/seo-tools/history/${rec.id}`); // open the rich result page (H1, subtabs, outline sidebar)
+      if (error || !jid) { setErr(error === "parse_failed" ? t("seoErrParseJson") : (error || t("seoErrGen"))); setLoading(""); return; }
+      setJobId(jid); // background job started — render live progress; user can leave
     } catch (e: any) { setErr(String(e?.message ?? e)); }
     setLoading("");
   }
@@ -293,6 +290,15 @@ export default function OutlinePage() {
         <div className={card} style={{ borderColor: "rgba(255,69,58,0.35)", background: "rgba(255,69,58,0.06)", color: "var(--color-accent-red)", fontSize: "13px", display: "flex", gap: "8px", alignItems: "center" }}>
           <AlertTriangle size={16} /> {err}
         </div>
+      )}
+
+      {jobId && !outline && (
+        <SeoJobProgress
+          jobId={jobId}
+          keyword={keyword}
+          onDone={async (job) => { const rec = await importJob(job); setJobId(null); if (rec) router.push(`/seo-tools/history/${rec.id}`); }}
+          onError={(m) => { setErr(m === "parse_failed" ? t("seoErrParseJson") : m); setJobId(null); }}
+        />
       )}
 
       {/* Step 2: competitors + config */}

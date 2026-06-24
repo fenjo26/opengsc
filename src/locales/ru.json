@@ -1363,5 +1363,7 @@
   "seoCaSelected": "Выбрано",
   "seoCaCopySelected": "Скопировать выбранное",
   "seoFormatHtml": "Форматировать в HTML",
-  "seoCopied": "Скопировано!"
+  "seoCopied": "Скопировано!",
+  "seoJobRunning": "Генерация…",
+  "seoJobMinimizeNote": "Можно свернуть страницу — задание продолжит выполняться и появится в Истории, когда будет готово."
 }

@@ -5,9 +5,11 @@ import Link from "next/link";
 import { Loader2, AlertTriangle, Search, ArrowLeft, Plus, X } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import SeoContentAnalysis from "@/components/SeoContentAnalysis";
+import SeoJobProgress from "@/components/SeoJobProgress";
 import { getSeoGenCreds, getSerpCreds, getFirecrawlKey, loadPolicies, getActivePolicyName } from "@/lib/seo/keys";
 import { COUNTRIES, LANGUAGES } from "@/lib/seo/regions";
-import { addHistory, takeView } from "@/lib/seo/history";
+import { takeView } from "@/lib/seo/history";
+import { startJob, importJob } from "@/lib/seo/jobs";
 
 const card = "panel";
 
@@ -36,6 +38,7 @@ export default function AnalysisPage() {
   const [elapsed, setElapsed] = useState(0);
   const [err, setErr] = useState("");
   const [report, setReport] = useState<any>(null);
+  const [anJobId, setAnJobId] = useState<string | null>(null);
   const timer = useRef<any>(null);
 
   const serpCreds = typeof window !== "undefined" ? getSerpCreds() : { provider: "", apiKey: "" };
@@ -125,15 +128,11 @@ export default function AnalysisPage() {
 
       setStage(t("seoStageGap"));
       const policy = loadPolicies().find(p => p.name === getActivePolicyName());
-      const res = await fetch("/api/seo/analysis", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ keyword, targetPage, competitors, language, country, policy, aiProvider: ap, aiApiKey: ak, model: am || undefined }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setErr(data.error === "parse_failed" ? t("seoErrParseJsonShort") : (data.error || t("seoErrAnalysis"))); stopTimer(); setBusy(false); return; }
-      setProgress(100);
-      setReport(data.report);
-      addHistory({ type: "analysis", keyword: keyword || targetUrl, data: data.report });
+      const { jobId: jid, error } = await startJob("analysis", { keyword, targetPage, competitors, language, country, policy, aiProvider: ap, aiApiKey: ak, model: am || undefined });
+      if (error || !jid) { setErr(error === "parse_failed" ? t("seoErrParseJsonShort") : (error || t("seoErrAnalysis"))); stopTimer(); setBusy(false); return; }
+      stopTimer(); setBusy(false); setStage("");
+      setAnJobId(jid); // background job — live progress takes over; user can leave
+      return;
     } catch (e: any) { setErr(String(e?.message ?? e)); }
     stopTimer(); setBusy(false); setStage("");
   }
@@ -242,7 +241,15 @@ export default function AnalysisPage() {
       )}
 
       {/* STEP 3 */}
-      {step === 3 && (
+      {step === 3 && anJobId && (
+        <SeoJobProgress
+          jobId={anJobId}
+          keyword={keyword}
+          onDone={async (job) => { const rec = await importJob(job); setAnJobId(null); if (rec) setReport(rec.data); }}
+          onError={(m) => { setErr(m === "parse_failed" ? t("seoErrParseJsonShort") : m); setAnJobId(null); }}
+        />
+      )}
+      {step === 3 && !anJobId && (
         busy || (!report && !err) ? (
           <div className={card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>

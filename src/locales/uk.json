@@ -1363,5 +1363,7 @@
   "seoCaSelected": "Вибрано",
   "seoCaCopySelected": "Скопіювати вибране",
   "seoFormatHtml": "Форматувати в HTML",
-  "seoCopied": "Скопійовано!"
+  "seoCopied": "Скопійовано!",
+  "seoJobRunning": "Генерація…",
+  "seoJobMinimizeNote": "Можна згорнути сторінку — завдання продовжить виконуватися й з'явиться в Історії, коли буде готове."
 }

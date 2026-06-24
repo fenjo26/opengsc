@@ -8,7 +8,9 @@ import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { getSeoGenCreds, getSerpCreds, getFirecrawlKey, getFactSourceCount, getHardRedact, loadPolicies, getActivePolicyName } from "@/lib/seo/keys";
 import { TONES, toneToPrompt } from "@/lib/seo/tones";
 import { LANGUAGES } from "@/lib/seo/regions";
-import { loadHistory, addHistory, patchHistory, HistoryItem } from "@/lib/seo/history";
+import { loadHistory, HistoryItem } from "@/lib/seo/history";
+import { startJob, importJob } from "@/lib/seo/jobs";
+import SeoJobProgress from "@/components/SeoJobProgress";
 
 const card = "panel";
 
@@ -26,6 +28,8 @@ export default function TextGenPage() {
   const [useCustom, setUseCustom] = useState(false);
   const [custom, setCustom] = useState("");
   const [loading, setLoading] = useState(false);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [jobKeyword, setJobKeyword] = useState("");
   const [err, setErr] = useState("");
   const [filter, setFilter] = useState<"all" | "processing" | "error">("all");
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -64,34 +68,17 @@ export default function TextGenPage() {
     const policy = loadPolicies().find(p => p.name === policyName) || loadPolicies()[0];
     const resolvedTone = tone ? toneToPrompt(tone) : toneToPrompt((policy as any)?.voice?.toneOfVoice || "");
 
-    // create a processing record immediately (shows in history)
-    const rec = addHistory({
-      type: "text", keyword: outline.keyword, data: null, status: "processing",
-      meta: { tone: tone || (policy as any)?.voice?.toneOfVoice || "", promptType: promptType === "custom" ? t("seoPromptCustom") : t("seoPromptService"), outlineId: outline.id },
-    });
-    setHistory(loadHistory());
-    setLoading(true);
-    try {
-      const res = await fetch("/api/seo/text", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          outline: outline.data, keyword: outline.keyword, policy, language, tone: resolvedTone || undefined,
-          custom: useCustom && custom.trim() ? custom : undefined, promptType,
-          sourceMode, serpProvider: getSerpCreds().provider, serpKey: getSerpCreds().apiKey || undefined,
-          firecrawlKey: getFirecrawlKey() || undefined, scrapeCount: getFactSourceCount(), hardRedact: getHardRedact(),
-          aiProvider: provider, aiApiKey: apiKey, model: model || undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) { patchHistory(rec.id, { status: "error", meta: { error: data.error || t("seoErrText") } }); setHistory(loadHistory()); setErr(data.error || t("seoErrText")); setLoading(false); return; }
-      patchHistory(rec.id, { status: "completed", data: data.text });
-      setHistory(loadHistory());
-      setLoading(false);
-      router.push(`/seo-tools/history/${rec.id}`);
-    } catch (e: any) {
-      patchHistory(rec.id, { status: "error", meta: { error: String(e?.message ?? e) } }); setHistory(loadHistory());
-      setErr(String(e?.message ?? e)); setLoading(false);
-    }
+    setLoading(true); setErr("");
+    const { jobId: jid, error } = await startJob("text", {
+      outline: outline.data, keyword: outline.keyword, policy, language, tone: resolvedTone || undefined,
+      custom: useCustom && custom.trim() ? custom : undefined, promptType,
+      sourceMode, serpProvider: getSerpCreds().provider, serpKey: getSerpCreds().apiKey || undefined,
+      firecrawlKey: getFirecrawlKey() || undefined, scrapeCount: getFactSourceCount(), hardRedact: getHardRedact(),
+      aiProvider: provider, aiApiKey: apiKey, model: model || undefined,
+    }, { tone: tone || (policy as any)?.voice?.toneOfVoice || "", promptType: promptType === "custom" ? t("seoPromptCustom") : t("seoPromptService"), outlineId: outline.id });
+    setLoading(false);
+    if (error || !jid) { setErr(error || t("seoErrText")); return; }
+    setJobKeyword(outline.keyword); setJobId(jid); // background job — render live progress; user can leave
   }
 
   const selectStyle: React.CSSProperties = { width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "13px", outline: "none", boxSizing: "border-box" };
@@ -188,9 +175,20 @@ export default function TextGenPage() {
 
       {err && <div className={card} style={{ borderColor: "rgba(255,69,58,0.35)", background: "rgba(255,69,58,0.06)", color: "var(--color-accent-red)", fontSize: "13px", display: "flex", gap: "8px", alignItems: "center" }}><AlertTriangle size={16} /> {err}</div>}
 
-      <button onClick={generate} disabled={loading || !structureId} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", padding: "13px", borderRadius: "10px", border: "none", background: "var(--color-accent-purple)", color: "#fff", fontSize: "14px", fontWeight: 600, cursor: structureId ? "pointer" : "not-allowed", opacity: structureId ? 1 : 0.5 }}>
-        {loading ? <Loader2 size={16} className="spin" /> : <Wand2 size={16} />} {t("seoGenerate")}
-      </button>
+      {!jobId && (
+        <button onClick={generate} disabled={loading || !structureId} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", padding: "13px", borderRadius: "10px", border: "none", background: "var(--color-accent-purple)", color: "#fff", fontSize: "14px", fontWeight: 600, cursor: structureId ? "pointer" : "not-allowed", opacity: structureId ? 1 : 0.5 }}>
+          {loading ? <Loader2 size={16} className="spin" /> : <Wand2 size={16} />} {t("seoGenerate")}
+        </button>
+      )}
+
+      {jobId && (
+        <SeoJobProgress
+          jobId={jobId}
+          keyword={jobKeyword}
+          onDone={async (job) => { const rec = await importJob(job); setJobId(null); setHistory(loadHistory()); if (rec) router.push(`/seo-tools/history/${rec.id}`); }}
+          onError={(m) => { setErr(m); setJobId(null); }}
+        />
+      )}
 
       {/* History */}
       <div className={card}>

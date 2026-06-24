@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Eye, Trash2, FileText, ScrollText, BarChart3 } from "lucide-react";
+import { Search, Eye, Trash2, FileText, ScrollText, BarChart3, Loader2, AlertTriangle, X } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { loadHistory, removeHistory, clearHistory, HistoryItem, HistoryType } from "@/lib/seo/history";
+import { listJobs, importJob, deleteJob, SeoJobRec } from "@/lib/seo/jobs";
 
 const TYPE_META: Record<HistoryType, { labelKey: string; color: string; icon: any }> = {
   outline: { labelKey: "seoBadgeOutline", color: "#2997ff", icon: FileText },
@@ -18,16 +19,45 @@ export default function HistoryPage() {
   const { t } = useLanguage();
   const router = useRouter();
   const [items, setItems] = useState<HistoryItem[]>([]);
+  const [jobs, setJobs] = useState<SeoJobRec[]>([]);
   const [filter, setFilter] = useState<Filter>("all");
   const [q, setQ] = useState("");
 
-  useEffect(() => { setItems(loadHistory()); }, []);
+  // Pull server-side background jobs: import finished ones into local History, keep showing
+  // the ones still processing/errored, and poll while anything is in progress.
+  useEffect(() => {
+    setItems(loadHistory());
+    let alive = true;
+    let timer: any;
+    async function sync() {
+      const list = await listJobs();
+      if (!alive) return;
+      const completed = list.filter(j => j.status === "completed");
+      for (const j of completed) await importJob(j);
+      if (completed.length) setItems(loadHistory());
+      const rest = list.filter(j => j.status === "processing" || j.status === "error");
+      setJobs(rest);
+      if (alive) timer = setTimeout(sync, rest.some(j => j.status === "processing") ? 3000 : 20000);
+    }
+    sync();
+    return () => { alive = false; clearTimeout(timer); };
+  }, []);
+
+  async function dismissJob(id: string) { await deleteJob(id); setJobs(j => j.filter(x => x.id !== id)); }
 
   const counts = useMemo(() => ({
-    all: items.length,
+    all: items.length + jobs.length,
     done: items.filter(i => i.status === "completed").length,
-    progress: items.filter(i => i.status === "processing").length,
-  }), [items]);
+    progress: jobs.filter(j => j.status === "processing").length,
+  }), [items, jobs]);
+
+  const visibleJobs = useMemo(() => jobs.filter(j => {
+    if (filter === "done") return false;
+    if (filter === "progress") return j.status === "processing";
+    if (filter === "outline" || filter === "text" || filter === "analysis") return j.type === filter;
+    if (q.trim()) return j.keyword.toLowerCase().includes(q.toLowerCase());
+    return true;
+  }), [jobs, filter, q]);
 
   const filtered = useMemo(() => {
     let list = items;
@@ -85,9 +115,22 @@ export default function HistoryPage() {
         </div>
 
         <div style={{ borderTop: "1px solid var(--color-border)" }}>
-          {filtered.length === 0 ? (
+          {filtered.length === 0 && visibleJobs.length === 0 && (
             <div style={{ padding: "32px 12px", textAlign: "center", fontSize: "13px", color: "var(--color-text-secondary)" }}>{t("seoHistEmpty")}</div>
-          ) : filtered.map(item => {
+          )}
+          {visibleJobs.map(job => {
+            const m = TYPE_META[job.type]; const Icon = m.icon; const isErr = job.status === "error";
+            return (
+              <div key={job.id} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "13px 4px", borderBottom: "1px solid var(--color-border)", background: isErr ? "rgba(255,69,58,0.04)" : "rgba(41,151,255,0.04)" }}>
+                {isErr ? <AlertTriangle size={16} color="var(--color-accent-red)" style={{ flexShrink: 0 }} /> : <Loader2 size={16} className="spin" color="var(--color-accent-blue)" style={{ flexShrink: 0 }} />}
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "11px", fontWeight: 700, padding: "3px 9px", borderRadius: "6px", color: m.color, background: `${m.color}1a`, flexShrink: 0 }}><Icon size={12} /> {t(m.labelKey as any)}</span>
+                <span style={{ flex: 1, minWidth: 0, fontSize: "14px", color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.keyword || "—"}</span>
+                <span style={{ fontSize: "12px", color: isErr ? "var(--color-accent-red)" : "var(--color-accent-blue)", flexShrink: 0, maxWidth: "260px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{isErr ? (job.error || t("seoStatusError")) : t("seoStatusGenerating")}</span>
+                {isErr && <button onClick={() => dismissJob(job.id)} title={t("seoDelete")} style={{ ...iconBtn, color: "var(--color-accent-red)" }}><X size={14} /></button>}
+              </div>
+            );
+          })}
+          {filtered.map(item => {
             const m = TYPE_META[item.type]; const Icon = m.icon;
             return (
               <div key={item.id} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "13px 4px", borderBottom: "1px solid var(--color-border)" }}>
