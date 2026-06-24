@@ -1357,5 +1357,7 @@
   "seoCaProposed": "предложено",
   "seoCaCompetitorsCount": "конкурентов",
   "seoCaSelected": "Выбрано",
-  "seoCaCopySelected": "Скопировать выбранное"
+  "seoCaCopySelected": "Скопировать выбранное",
+  "seoFormatHtml": "Форматировать в HTML",
+  "seoCopied": "Скопировано!"
 }

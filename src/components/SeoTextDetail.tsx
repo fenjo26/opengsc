@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, Pencil, Copy, FileText, Download, ChevronDown, Save, Check, X,
+  ArrowLeft, Pencil, Copy, FileText, Download, ChevronDown, Save, Check, X, Code2,
   ExternalLink, Target, Hash, ListTree, ArrowUp, Shield, ImageIcon, Loader2, Wand2, AlertTriangle,
 } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
@@ -21,6 +21,7 @@ export default function SeoTextDetail({ item: initial }: { item: HistoryItem }) 
   const [dlOpen, setDlOpen] = useState(false);
   const [copied, setCopied] = useState("");
   const [outlineOpen, setOutlineOpen] = useState(false);
+  const [showHtml, setShowHtml] = useState(false);
   const topRef = useRef<HTMLDivElement>(null);
 
   const article: string = typeof item.data === "string" ? item.data : (item.data?.article || "");
@@ -34,6 +35,8 @@ export default function SeoTextDetail({ item: initial }: { item: HistoryItem }) 
   const delta = planWords ? Math.round(((factWords - planWords) / planWords) * 1000) / 10 : 0;
 
   function flash(k: string) { setCopied(k); setTimeout(() => setCopied(""), 1500); }
+  const copiedStyle = (active: boolean): React.CSSProperties => active
+    ? { borderColor: "var(--color-accent-green)", background: "rgba(52,199,89,0.12)", color: "var(--color-accent-green)" } : {};
   function copyAll() { navigator.clipboard.writeText(article).then(() => flash("all")); }
   function copyHeadings() { navigator.clipboard.writeText(artHeadings.map(h => `${h.level}: ${h.text}`).join("\n")).then(() => flash("hd")); }
   function copyForDocs() {
@@ -42,10 +45,11 @@ export default function SeoTextDetail({ item: initial }: { item: HistoryItem }) 
       (navigator.clipboard as any).write([new (window as any).ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([article], { type: "text/plain" }) })]).then(() => flash("docs"));
     } catch { navigator.clipboard.writeText(article).then(() => flash("docs")); }
   }
-  function download(kind: "docx" | "txt" | "md") {
+  function download(kind: "docx" | "html" | "txt" | "md") {
     const kw = (item.keyword || "text").replace(/\s+/g, "-").slice(0, 40);
     let content = article, mime = "text/markdown", ext = "md";
     if (kind === "txt") { mime = "text/plain"; ext = "txt"; }
+    if (kind === "html") { content = htmlDocument(item.keyword, markdownToHtml(article)); mime = "text/html"; ext = "html"; }
     if (kind === "docx") { content = htmlDocument(item.keyword, markdownToHtml(article)); mime = "application/msword"; ext = "doc"; }
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([content], { type: mime })); a.download = `${kw}.${ext}`; a.click(); setDlOpen(false);
   }
@@ -63,15 +67,16 @@ export default function SeoTextDetail({ item: initial }: { item: HistoryItem }) 
         <div style={{ flex: 1 }} />
         {!edit ? <button onClick={() => { setEditText(article); setEdit(true); }} style={btnGhost}><Pencil size={15} /> {t("seoEditBtn")}</button>
           : <button onClick={() => setEdit(false)} style={btnGhost}><X size={14} /> {t("seoCancelEdit")}</button>}
-        <button onClick={copyAll} style={btnGhost}>{copied === "all" ? <Check size={15} /> : <Copy size={15} />} {t("seoCopyShort")}</button>
-        <button onClick={copyForDocs} style={btnGhost}>{copied === "docs" ? <Check size={15} /> : <FileText size={15} />} {t("seoForGoogleDocs")}</button>
+        <button onClick={copyAll} style={{ ...btnGhost, ...copiedStyle(copied === "all") }}>{copied === "all" ? <Check size={15} /> : <Copy size={15} />} {copied === "all" ? t("seoCopied") : t("seoCopyShort")}</button>
+        <button onClick={copyForDocs} style={{ ...btnGhost, ...copiedStyle(copied === "docs") }}>{copied === "docs" ? <Check size={15} /> : <FileText size={15} />} {copied === "docs" ? t("seoCopied") : t("seoForGoogleDocs")}</button>
+        <button onClick={() => setShowHtml(true)} style={btnGhost}><Code2 size={15} /> {t("seoFormatHtml")}</button>
         <div style={{ position: "relative" }}>
           <button onClick={() => setDlOpen(o => !o)} style={btnGhost}><Download size={15} /> {t("seoDownload")} <ChevronDown size={13} /></button>
           {dlOpen && (
             <>
               <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={() => setDlOpen(false)} />
               <div style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 41, background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "8px", overflow: "hidden", minWidth: "140px", boxShadow: "0 8px 24px rgba(0,0,0,0.3)" }}>
-                {(["docx", "txt", "md"] as const).map(k => <button key={k} onClick={() => download(k)} style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 14px", fontSize: "13px", color: "var(--color-text-primary)", background: "transparent", border: "none", cursor: "pointer" }}>{k === "docx" ? ".docx (Word)" : `.${k}`}</button>)}
+                {(["docx", "html", "txt", "md"] as const).map(k => <button key={k} onClick={() => download(k)} style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 14px", fontSize: "13px", color: "var(--color-text-primary)", background: "transparent", border: "none", cursor: "pointer" }}>{k === "docx" ? ".docx (Word)" : k === "html" ? ".html (h1–h6)" : `.${k}`}</button>)}
               </div>
             </>
           )}
@@ -134,7 +139,7 @@ export default function SeoTextDetail({ item: initial }: { item: HistoryItem }) 
                     <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)" }}>{t("seoHeadingsLbl")}</span>
                     <span style={{ marginLeft: "auto", fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "10px", background: "var(--color-bg)", color: "var(--color-text-secondary)" }}>{artHeadings.length}</span>
                   </div>
-                  <button onClick={copyHeadings} style={{ ...btnGhost, width: "100%", justifyContent: "center", marginBottom: "10px" }}>{copied === "hd" ? <Check size={13} /> : <Copy size={13} />} {t("seoCopyAllHeadings")}</button>
+                  <button onClick={copyHeadings} style={{ ...btnGhost, width: "100%", justifyContent: "center", marginBottom: "10px", ...copiedStyle(copied === "hd") }}>{copied === "hd" ? <Check size={13} /> : <Copy size={13} />} {copied === "hd" ? t("seoCopied") : t("seoCopyAllHeadings")}</button>
                   <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "360px", overflow: "auto", borderTop: "1px solid var(--color-border)", paddingTop: "10px" }}>
                     {artHeadings.map((h, i) => (
                       <div key={i} style={{ display: "flex", gap: "8px", alignItems: "flex-start", paddingLeft: h.level === "H3" ? "14px" : h.level === "H4" ? "26px" : 0 }}>
@@ -166,7 +171,25 @@ export default function SeoTextDetail({ item: initial }: { item: HistoryItem }) 
         .seo-article p { font-size: 15px; line-height: 1.7; color: var(--color-text-primary); margin: 0 0 12px; }
         .seo-article ul, .seo-article ol { margin: 0 0 12px; padding-left: 22px; color: var(--color-text-primary); }
         .seo-article li { font-size: 15px; line-height: 1.7; margin-bottom: 4px; }
+        .seo-article table { width: 100%; border-collapse: collapse; margin: 0 0 16px; font-size: 14px; }
+        .seo-article th, .seo-article td { border: 1px solid var(--color-border); padding: 8px 11px; text-align: left; color: var(--color-text-primary); }
+        .seo-article th { background: var(--color-bg); font-weight: 700; }
       `}</style>
+
+      {showHtml && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", padding: "24px" }} onClick={() => setShowHtml(false)}>
+          <div className="panel" style={{ width: "820px", maxWidth: "95vw", maxHeight: "85vh", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+              <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", display: "flex", alignItems: "center", gap: "8px" }}><Code2 size={16} /> {t("seoFormatHtml")}</div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button onClick={() => navigator.clipboard.writeText(htmlDocument(item.keyword, markdownToHtml(article))).then(() => flash("html"))} style={{ ...btnGhost, ...copiedStyle(copied === "html") }}>{copied === "html" ? <Check size={14} /> : <Copy size={14} />} {copied === "html" ? t("seoCopied") : t("seoCopyShort")}</button>
+                <button onClick={() => setShowHtml(false)} style={{ ...btnGhost, padding: "8px" }}><X size={14} /></button>
+              </div>
+            </div>
+            <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: "12px", lineHeight: 1.55, color: "var(--color-text-primary)", margin: 0, fontFamily: "monospace", overflow: "auto" }}>{htmlDocument(item.keyword, markdownToHtml(article))}</pre>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -399,7 +422,7 @@ function Images({ item, setItem, outline, article, t, autoStart }: any) {
         <div style={{ borderRadius: "12px", overflow: "hidden", border: "1px solid var(--color-border)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "linear-gradient(90deg, var(--color-accent-purple), #ff2d92)" }}>
             <span style={{ fontSize: "14px", fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: "8px" }}><ImageIcon size={15} /> {t("seoImgHero")}</span>
-            <button onClick={() => copy(images.hero, "hero")} style={{ ...btnGhost, background: "rgba(255,255,255,0.2)", border: "none", color: "#fff" }}>{copied === "hero" ? <Check size={13} /> : <Copy size={13} />} {t("seoCopyShort")}</button>
+            <button onClick={() => copy(images.hero, "hero")} style={{ ...btnGhost, background: "rgba(255,255,255,0.2)", border: "none", color: "#fff" }}>{copied === "hero" ? <Check size={13} /> : <Copy size={13} />} {copied === "hero" ? t("seoCopied") : t("seoCopyShort")}</button>
           </div>
           <div style={{ padding: "14px 16px", fontSize: "13px", lineHeight: 1.6, color: "var(--color-text-primary)" }}>{images.hero}</div>
         </div>
@@ -411,7 +434,7 @@ function Images({ item, setItem, outline, article, t, autoStart }: any) {
               <span style={{ width: 22, height: 22, borderRadius: "50%", background: "rgba(191,90,242,0.14)", color: "var(--color-accent-purple)", fontSize: "11px", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{i + 1}</span>
               <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--color-text-primary)" }}>{s.heading}</span>
             </div>
-            <button onClick={() => copy(s.prompt, `s${i}`)} style={btnGhost}>{copied === `s${i}` ? <Check size={13} /> : <Copy size={13} />} {t("seoImgCopyPrompt")}</button>
+            <button onClick={() => copy(s.prompt, `s${i}`)} style={{ ...btnGhost, ...(copied === `s${i}` ? { borderColor: "var(--color-accent-green)", background: "rgba(52,199,89,0.12)", color: "var(--color-accent-green)" } : {}) }}>{copied === `s${i}` ? <Check size={13} /> : <Copy size={13} />} {copied === `s${i}` ? t("seoCopied") : t("seoImgCopyPrompt")}</button>
           </div>
           <div style={{ fontSize: "13px", lineHeight: 1.6, color: "var(--color-text-secondary)" }}>{s.prompt}</div>
         </div>

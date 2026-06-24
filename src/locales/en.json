@@ -1357,5 +1357,7 @@
   "seoCaProposed": "proposed",
   "seoCaCompetitorsCount": "competitors",
   "seoCaSelected": "Selected",
-  "seoCaCopySelected": "Copy selected"
+  "seoCaCopySelected": "Copy selected",
+  "seoFormatHtml": "Format as HTML",
+  "seoCopied": "Copied!"
 }

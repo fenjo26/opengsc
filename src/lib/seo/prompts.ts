@@ -45,7 +45,11 @@ export function buildOutlinePrompt(args: {
     ? `\n- ручные тексты конкурентов (скрейп не справился): ${JSON.stringify(args.manualTexts.map(m => ({ name: m.name, text: m.text.slice(0, 6000) })))}`
     : "";
 
+  const today = new Date().toISOString().slice(0, 10);
+  const year = today.slice(0, 4);
   return `${policyBlock}Ты — SEO-стратег и entity-аналитик. На основе анализа топ-конкурентов из выдачи построй ИСЧЕРПЫВАЮЩУЮ структуру статьи (outline) в EAV-модели (Entity-Attribute-Value), которая полнее и авторитетнее конкурентов и максимально цитируема в ИИ-поиске. Верни СТРОГИЙ JSON без преамбулы и без markdown-обёрток.
+
+АКТУАЛЬНОСТЬ: сегодня ${today}. Если в заголовках/тексте уместен год — используй ТЕКУЩИЙ (${year}); НИКОГДА не подставляй устаревшие годы (2023/2024) и не выдумывай год — лучше без года, чем неверный.
 
 ПРИНЦИПЫ:
 - Структура отвечает на реальные sub-intents пользователей; front-load ключевые факты (цена/время/расстояние) в первые секции.
@@ -160,6 +164,9 @@ export function buildTextPrompt(args: {
   sourceMode?: "off" | "facts" | "cited";
 }): string {
   const policyBlock = args.policy ? renderPolicy(args.policy) + "\n\n" : "";
+  const today = new Date().toISOString().slice(0, 10);
+  const year = today.slice(0, 4);
+  const dateLine = `Сегодня ${today}. Если нужен год — используй ТЕКУЩИЙ (${year}); никогда не пиши устаревшие годы (2023/2024) и не выдумывай год.\n`;
   const customLine = args.custom ? `Дополнительная инструкция автора (учесть обязательно): ${args.custom}\n` : "";
 
   // Real-source grounding (retrieval-augmented). Two modes:
@@ -180,7 +187,7 @@ export function buildTextPrompt(args: {
   if (args.promptType === "custom" && args.custom) {
     return `${policyBlock}Тон повествования: ${args.tone}
 Язык вывода: ${args.language}
-
+${dateLine}
 ГЛАВНАЯ ИНСТРУКЦИЯ АВТОРА:
 ${args.custom}
 ${sourcesBlock}
@@ -194,7 +201,7 @@ ${JSON.stringify(args.outlineJson)}`;
 
   return `${policyBlock}Тон повествования: ${args.tone}
 Язык вывода: ${args.language}
-${customLine}${sourcesBlock}
+${dateLine}${customLine}${sourcesBlock}
 Напиши статью строго по структуре ниже. Для каждой секции — текст в рамках указанного word_count, не раздувай. Используй summary, keywords, entities_to_cover и copywriter_notes как ориентир. Естественно вплетай сущности и ключи.
 
 ЖЁСТКИЕ ПРАВИЛА:

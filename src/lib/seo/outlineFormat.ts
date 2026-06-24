@@ -139,7 +139,20 @@ export function markdownToHtml(md: string): string {
   const lines = (md || "").split(/\r?\n/);
   let html = ""; let inUl = false; let inOl = false;
   const closeLists = () => { if (inUl) { html += "</ul>"; inUl = false; } if (inOl) { html += "</ol>"; inOl = false; } };
-  for (const raw of lines) {
+  const isTableRow = (s: string) => /^\s*\|.*\|\s*$/.test(s);
+  const isDivider = (s: string) => /^\s*\|?[\s:|-]+\|?\s*$/.test(s) && s.includes("-");
+  const cells = (s: string) => s.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    // GitHub-style table: header row + |---| divider + body rows.
+    if (isTableRow(raw) && isTableRow(lines[i + 1] || "") && isDivider(lines[i + 1])) {
+      closeLists();
+      const head = cells(raw);
+      let body = ""; let j = i + 2;
+      while (j < lines.length && isTableRow(lines[j])) { body += `<tr>${cells(lines[j]).map(c => `<td>${inline(esc(c))}</td>`).join("")}</tr>`; j++; }
+      html += `<table><thead><tr>${head.map(c => `<th>${inline(esc(c))}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table>`;
+      i = j - 1; continue;
+    }
     const h = raw.match(/^(#{1,6})\s+(.*)$/);
     if (h) { closeLists(); html += `<h${h[1].length}>${inline(esc(h[2]))}</h${h[1].length}>`; continue; }
     if (/^\s*[-*]\s+/.test(raw)) { if (!inUl) { closeLists(); html += "<ul>"; inUl = true; } html += `<li>${inline(esc(raw.replace(/^\s*[-*]\s+/, "")))}</li>`; continue; }

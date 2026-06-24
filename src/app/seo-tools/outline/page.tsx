@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Search, Loader2, Check, AlertTriangle, FileText, Wand2, Copy, Plus, X,
@@ -29,6 +30,7 @@ type ManualText = { name: string; text: string };
 
 export default function OutlinePage() {
   const { t } = useLanguage();
+  const router = useRouter();
   const [keyword, setKeyword] = useState("");
   const [country, setCountry] = useState("us");
   const [language, setLanguage] = useState("en");
@@ -183,7 +185,8 @@ export default function OutlinePage() {
       const data = await res.json();
       if (!res.ok) { setErr(data.error === "parse_failed" ? t("seoErrParseJson") : (data.error || t("seoErrGen"))); setLoading(""); return; }
       setOutline(data.outline);
-      addHistory({ type: "outline", keyword: data.outline?.meta?.keyword || keyword, data: data.outline });
+      const rec = addHistory({ type: "outline", keyword: data.outline?.meta?.keyword || keyword, data: data.outline });
+      router.push(`/seo-tools/history/${rec.id}`); // open the rich result page (H1, subtabs, outline sidebar)
     } catch (e: any) { setErr(String(e?.message ?? e)); }
     setLoading("");
   }
@@ -201,7 +204,8 @@ export default function OutlinePage() {
       const data = await res.json();
       if (!res.ok) { setErr(data.error || t("seoErrText")); setLoading(""); return; }
       setArticle(data.text);
-      addHistory({ type: "text", keyword: outline?.meta?.keyword || keyword, data: data.text });
+      const rec = addHistory({ type: "text", keyword: outline?.meta?.keyword || keyword, data: data.text });
+      router.push(`/seo-tools/history/${rec.id}`); // open the rich rendered-HTML text page (no raw markdown markers)
     } catch (e: any) { setErr(String(e?.message ?? e)); }
     setLoading("");
   }

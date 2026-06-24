@@ -657,8 +657,8 @@ function CopyBtn({ text, t, label }: { text: string; t: any; label?: string }) {
   const [done, setDone] = useState(false);
   return (
     <button onClick={() => navigator.clipboard.writeText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 1500); })}
-      style={{ display: "flex", alignItems: "center", gap: "7px", padding: "8px 14px", borderRadius: "9px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-secondary)", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
-      {done ? <Check size={15} /> : <Copy size={15} />} {label || t("seoCaCopy")}
+      style={{ display: "flex", alignItems: "center", gap: "7px", padding: "8px 14px", borderRadius: "9px", border: `1px solid ${done ? GREEN : "var(--color-border)"}`, background: done ? "rgba(52,199,89,0.12)" : "var(--color-bg)", color: done ? GREEN : "var(--color-text-secondary)", fontSize: "13px", fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>
+      {done ? <Check size={15} /> : <Copy size={15} />} {done ? t("seoCopied") : (label || t("seoCaCopy"))}
     </button>
   );
 }
