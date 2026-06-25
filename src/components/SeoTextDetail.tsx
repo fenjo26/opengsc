@@ -217,7 +217,9 @@ function FactCheck({ item, setItem, article, t, autoStart }: any) {
   const [allOpen, setAllOpen] = useState<boolean | null>(null);
   const report = item.meta?.factcheck;
   const hasSerp = typeof window !== "undefined" && !!getSerpCreds().apiKey;
-  const badFacts: string[] = (report?.sections || []).flatMap((sec: any) => (sec.facts || []).filter((f: any) => f.status !== "confirmed").map((f: any) => f.claim)).filter(Boolean);
+  const badFacts: { claim: string; status: string; note: string }[] = (report?.sections || [])
+    .flatMap((sec: any) => (sec.facts || []).filter((f: any) => f.status !== "confirmed").map((f: any) => ({ claim: f.claim, status: f.status, note: f.note || "" })))
+    .filter((f: any) => f.claim);
 
   async function fixText() {
     const ai = getSeoGenCreds();

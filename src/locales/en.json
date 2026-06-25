@@ -1241,7 +1241,7 @@
   "seoFcResult": "Check result",
   "seoFcFixBtn": "Fix unverified in the text",
   "seoFcFixedNote": "Text updated — open the Text tab to review and re-run the check.",
-  "seoFcFixHint": "Rewrites the article to remove, soften or flag [VERIFY] the claims that weren't confirmed by sources. Re-run the check afterwards.",
+  "seoFcFixHint": "Rewrites the article — corrects values from sources or generalizes unconfirmed claims. Ready to publish, no manual edits or markers. Re-run the check afterwards.",
   "seoFcConfirmedPct": "confirmed",
   "seoFcFacts": "facts",
   "seoFcSections": "sections",
