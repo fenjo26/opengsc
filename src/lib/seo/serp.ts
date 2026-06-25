@@ -182,14 +182,27 @@ export async function runSerp(
 }
 
 // ─── Cheap URL classifier (heuristics) ──────────────────────────────────────────
-export type SiteType = "monobrand" | "aggregator" | "forum_ugc" | "editorial";
+export type SiteType = "monobrand" | "aggregator" | "forum_ugc" | "editorial" | "official_store";
+export type SerpIntent = "buy" | "info";
 
-const AGGREGATOR_DOMAINS = ["rome2rio", "getyourguide", "tripadvisor", "booking", "expedia", "kayak", "holidaytaxis", "viator", "skyscanner", "yelp", "trustpilot"];
+const AGGREGATOR_DOMAINS = ["rome2rio", "getyourguide", "tripadvisor", "booking", "expedia", "kayak", "holidaytaxis", "viator", "skyscanner", "yelp", "trustpilot",
+  "amazon", "ebay", "aliexpress", "walmart", "skroutz", "ubuy", "etsy", "bestbuy", "newegg", "idealo", "pricerunner", "google.com/shopping"];
 const FORUM_DOMAINS = ["reddit", "quora", "facebook", "stackexchange", "stackoverflow", "tripadvisor"];
+const STORE_SIGNALS = ["/store", "/shop", "/buy", "/eshop", "/product", "/products", "/cart", "/checkout", "/p/", "official", "online-store"];
 
-export function heuristicSiteType(domain: string): SiteType | null {
+export function heuristicSiteType(domain: string, url?: string, title?: string): SiteType | null {
   const d = domain.toLowerCase();
+  const hay = `${url || ""} ${title || ""}`.toLowerCase();
   if (FORUM_DOMAINS.some((x) => d.includes(x))) return "forum_ugc";
   if (AGGREGATOR_DOMAINS.some((x) => d.includes(x))) return "aggregator";
+  // Official brand store: store-like URL/title on a non-marketplace domain.
+  if (STORE_SIGNALS.some((x) => hay.includes(x))) return "official_store";
   return null; // unknown → let LLM decide, or default editorial
+}
+
+// Buy vs informational intent from URL/title signals.
+export function heuristicIntent(url?: string, title?: string): SerpIntent {
+  const hay = `${url || ""} ${title || ""}`.toLowerCase();
+  if (/\b(buy|shop|store|price|cost|order|cart|checkout|eshop|deal|discount|coupon|for sale|product)\b|\/p\/|\/product/.test(hay)) return "buy";
+  return "info";
 }

@@ -13,6 +13,8 @@ import { takeView } from "@/lib/seo/history";
 import { startJob, importJob } from "@/lib/seo/jobs";
 
 const card = "panel";
+const SITE_TYPE_COLOR: Record<string, string> = { official_store: "#10A37F", aggregator: "#ff9f0a", forum_ugc: "#34c759", editorial: "#2997ff", monobrand: "#bf5af2" };
+const SITE_TYPE_KEY: Record<string, string> = { official_store: "seoStOfficial", aggregator: "seoStAggregator", forum_ugc: "seoStForum", editorial: "seoStEditorial", monobrand: "seoStMonobrand" };
 
 function host(u: string): string { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } }
 
@@ -214,7 +216,9 @@ export default function AnalysisPage() {
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <span className="pill" style={{ flexShrink: 0 }}>#{r.position || i + 1}</span>
-                        <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.title}</span>
+                        <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{r.title}</span>
+                        {r.intent && <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: "20px", flexShrink: 0, color: r.intent === "buy" ? "#10A37F" : "var(--color-text-secondary)", background: r.intent === "buy" ? "rgba(16,163,127,0.12)" : "var(--color-bg)" }}>{t(r.intent === "buy" ? "seoIntentBuy" : "seoIntentInfo")}</span>}
+                        {r.site_type && <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: "20px", flexShrink: 0, color: SITE_TYPE_COLOR[r.site_type] || "var(--color-text-secondary)", background: `${SITE_TYPE_COLOR[r.site_type] || "#888"}1a` }}>{t((SITE_TYPE_KEY[r.site_type] || "") as any) || r.site_type}</span>}
                       </div>
                       <div style={{ fontSize: "12px", color: "var(--color-accent-blue)", marginTop: "4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.url}</div>
                     </div>

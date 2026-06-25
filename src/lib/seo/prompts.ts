@@ -31,6 +31,8 @@ export function buildOutlinePrompt(args: {
   manualTexts?: { name: string; text: string }[];
   keywordsData?: { keyword: string; volume: number }[];
   pageGoal?: "informational" | "commercial" | "mixed";
+  narration?: "first" | "third";
+  customTemplate?: string;
 }): string {
   // Tone is rendered once: folded into the policy block (override) when a policy exists,
   // otherwise as a standalone line. Never both → no conflicting tone signals.
@@ -42,6 +44,12 @@ export function buildOutlinePrompt(args: {
   const relBlock = args.related?.length ? `\nСвязанные запросы: ${JSON.stringify(args.related)}` : "";
   const toneBlock = args.tone && !args.policy ? `\n- тон повествования: ${args.tone}` : "";
   const personaBlock = args.persona ? `\n- от лица: ${args.persona}` : "";
+  const narrationBlock = args.narration
+    ? `\n- лицо повествования: ${args.narration === "first" ? "ПЕРВОЕ лицо — экспертный «я»-голос (личный опыт, рекомендации от себя, «я проверял…»)" : "ТРЕТЬЕ лицо — корпоративный нейтральный голос (без «я», от лица компании)"}. Установи meta.narration = "${args.narration}".`
+    : "";
+  const customTplBlock = args.customTemplate?.trim()
+    ? `\n\nПОЛЬЗОВАТЕЛЬСКИЙ ШАБЛОН СТРУКТУРЫ (ОБЯЗАТЕЛЬНО следуй ему как каркасу H1/H2/H3 и сохрани заданные заголовки и их порядок; можешь добавлять H3 и детально заполнять секции по EAV, но не выкидывай заданные пункты):\n${args.customTemplate.trim().slice(0, 4000)}`
+    : "";
   const addKw = args.additionalKeywords?.trim() ? `\n- доп. ключевые слова (обязательно учесть): ${args.additionalKeywords}` : "";
   const twc = args.targetWordCount ? `\n- целевой объём статьи: ~${args.targetWordCount} слов (распредели по секциям, не раздувай)` : "";
   const manual = args.manualTexts?.length
@@ -87,12 +95,12 @@ export function buildOutlinePrompt(args: {
 
 ДАНО:
 - keyword: ${args.keyword}
-- язык/страна: ${args.language}/${args.country}${toneBlock}${personaBlock}${addKw}${twc}${paaBlock}${relBlock}
-- топ-конкуренты (типы + структура): ${JSON.stringify(args.competitors)}${manual}${kwData}
+- язык/страна: ${args.language}/${args.country}${toneBlock}${personaBlock}${narrationBlock}${addKw}${twc}${paaBlock}${relBlock}
+- топ-конкуренты (типы + структура): ${JSON.stringify(args.competitors)}${manual}${kwData}${customTplBlock}
 
 ВЕРНИ JSON строго по схеме (только JSON):
 {
-  "meta": { "keyword": "", "title_options": ["","",""], "description_options": ["",""], "target_word_count": 0, "dominant_intent": "", "tone": "", "persona": "" },
+  "meta": { "keyword": "", "title_options": ["","",""], "description_options": ["",""], "target_word_count": 0, "dominant_intent": "", "tone": "", "persona": "", "narration": "first|third" },
   "entities": [ { "name": "", "type": "Place|Service|Vehicle Type|Company|Transport Mode|Concept", "weight": 10, "attributes": { "Attr_Name": "Value" }, "relationship_triplets": ["Subject → predicate → Object [9]"] } ],
   "sub_intents": [ { "intent": "", "section": "H3 ...", "coverage": "как раскрыть", "word_count": "100+", "entities": [""] } ],
   "sections": [ {
@@ -193,6 +201,9 @@ export function buildTextPrompt(args: {
   // Tone folded into the policy block (single source) when a policy exists; otherwise a header line.
   const policyBlock = args.policy ? renderPolicy(args.policy, args.tone) + "\n\n" : "";
   const toneHeader = args.policy ? "" : `Тон повествования: ${args.tone}\n`;
+  const narr = (args.outlineJson as any)?.meta?.narration;
+  const narrLine = narr === "first" ? "Лицо: ПЕРВОЕ — экспертный «я»-голос, личный опыт.\n"
+    : narr === "third" ? "Лицо: ТРЕТЬЕ — корпоративный нейтральный голос, без «я».\n" : "";
   const today = new Date().toISOString().slice(0, 10);
   const year = today.slice(0, 4);
   const dateLine = `Сегодня ${today}. Если нужен год — используй ТЕКУЩИЙ (${year}); никогда не пиши устаревшие годы (2023/2024) и не выдумывай год.\n`;
@@ -214,7 +225,7 @@ export function buildTextPrompt(args: {
 
   // Custom prompt type: the author's instruction drives the writing; service template is minimal.
   if (args.promptType === "custom" && args.custom) {
-    return `${policyBlock}${toneHeader}Язык вывода: ${args.language}
+    return `${policyBlock}${toneHeader}${narrLine}Язык вывода: ${args.language}
 ${dateLine}
 ГЛАВНАЯ ИНСТРУКЦИЯ АВТОРА:
 ${args.custom}
@@ -227,7 +238,7 @@ ${sourcesBlock}
 ${JSON.stringify(args.outlineJson)}`;
   }
 
-  return `${policyBlock}${toneHeader}Язык вывода: ${args.language}
+  return `${policyBlock}${toneHeader}${narrLine}Язык вывода: ${args.language}
 ${dateLine}${customLine}${sourcesBlock}
 Напиши статью строго по структуре ниже. Для каждой секции — текст в рамках указанного word_count, не раздувай. Используй summary, keywords, entities_to_cover и copywriter_notes как ориентир. Естественно вплетай сущности и ключи.
 

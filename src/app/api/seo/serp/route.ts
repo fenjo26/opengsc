@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { runSerp, heuristicSiteType, SerpEngine } from "@/lib/seo/serp";
+import { runSerp, heuristicSiteType, heuristicIntent, SerpEngine } from "@/lib/seo/serp";
 
 // POST /api/seo/serp
 // body: { keyword, provider, apiKey, gl?, hl?, location?, num?, engine? }
@@ -27,10 +27,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: serp.error, results: [] }, { status: 502 });
   }
 
-  // Attach cheap heuristic site_type so the UI can show who's likely cited in AI.
+  // Attach cheap heuristic site_type + buy/info intent for the UI.
   const results = serp.results.map((r) => ({
     ...r,
-    site_type: heuristicSiteType(r.domain),
+    site_type: heuristicSiteType(r.domain, r.url, r.title),
+    intent: heuristicIntent(r.url, r.title),
   }));
 
   return NextResponse.json({ ...serp, results });

@@ -35,6 +35,8 @@ export async function genOutline(b: any): Promise<GenResult> {
     manualTexts: Array.isArray(b.manualTexts) ? b.manualTexts : undefined,
     keywordsData: Array.isArray(b.keywordsData) ? b.keywordsData : undefined,
     pageGoal: b.pageGoal === "commercial" || b.pageGoal === "informational" ? b.pageGoal : "mixed",
+    narration: b.narration === "first" || b.narration === "third" ? b.narration : undefined,
+    customTemplate: b.customTemplate ? String(b.customTemplate) : undefined,
   });
   const model = b.model ? String(b.model) : undefined;
 

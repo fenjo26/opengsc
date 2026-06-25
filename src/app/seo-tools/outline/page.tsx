@@ -13,6 +13,7 @@ import SeoRecentList from "@/components/SeoRecentList";
 import { getSeoGenCreds, getSerpCreds, getFirecrawlKey, getDataForSeoKey, loadPolicies, getActivePolicyName } from "@/lib/seo/keys";
 import { COUNTRIES, LANGUAGES } from "@/lib/seo/regions";
 import { TONES, toneToPrompt } from "@/lib/seo/tones";
+import { OUTLINE_TEMPLATES } from "@/lib/seo/templates";
 import { addHistory, takeView } from "@/lib/seo/history";
 import { startJob, importJob } from "@/lib/seo/jobs";
 
@@ -35,10 +36,13 @@ function goalFromTone(toneValue: string): "informational" | "commercial" | "mixe
 }
 
 const SITE_TYPE_COLOR: Record<string, string> = {
-  aggregator: "#ff9f0a", forum_ugc: "#34c759", editorial: "#2997ff", monobrand: "#bf5af2",
+  official_store: "#10A37F", aggregator: "#ff9f0a", forum_ugc: "#34c759", editorial: "#2997ff", monobrand: "#bf5af2",
+};
+const SITE_TYPE_KEY: Record<string, string> = {
+  official_store: "seoStOfficial", aggregator: "seoStAggregator", forum_ugc: "seoStForum", editorial: "seoStEditorial", monobrand: "seoStMonobrand",
 };
 
-type SerpItem = { position: number; url: string; title: string; snippet: string; domain: string; site_type: string | null };
+type SerpItem = { position: number; url: string; title: string; snippet: string; domain: string; site_type: string | null; intent?: string };
 type Scraped = { url: string; ok: boolean; via: string; title: string; metaDescription: string; headings: string[]; wordCount: number; hasPriceTable: boolean; hasFaq: boolean; error?: string };
 
 export default function OutlinePage() {
@@ -63,6 +67,8 @@ export default function OutlinePage() {
   const [tone, setTone] = useState("");        // "" = default from policy
   const [customTone, setCustomTone] = useState("");
   const [persona, setPersona] = useState("");
+  const [narration, setNarration] = useState<"" | "first" | "third">("");
+  const [customTemplate, setCustomTemplate] = useState("");
   const [addKeywords, setAddKeywords] = useState("");
   const [targetWords, setTargetWords] = useState("");
   const [manualUrl, setManualUrl] = useState("");
@@ -206,6 +212,8 @@ export default function OutlinePage() {
         additionalKeywords: addKeywords.split(/[\n,]+/).map(s => s.trim()).filter(Boolean).join(", "),
         targetWordCount: targetWords ? Number(targetWords) : undefined,
         keywordsData, pageGoal,
+        narration: narration || undefined,
+        customTemplate: customTemplate.trim() || undefined,
       });
       if (error || !jid) { setErr(error === "parse_failed" ? t("seoErrParseJson") : (error || t("seoErrGen"))); setLoading(""); return; }
       setJobId(jid); // background job started — render live progress; user can leave
@@ -333,11 +341,18 @@ export default function OutlinePage() {
                     <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.domain}</div>
                   </div>
                   {wc ? <span style={{ fontSize: "11px", color: "var(--color-text-tertiary)", flexShrink: 0 }}>{wc} {t("seoWords")}</span> : null}
+                  {s.intent && (
+                    <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "20px", flexShrink: 0,
+                      color: s.intent === "buy" ? "#10A37F" : "var(--color-text-secondary)",
+                      background: s.intent === "buy" ? "rgba(16,163,127,0.12)" : "var(--color-bg)" }}>
+                      {t(s.intent === "buy" ? "seoIntentBuy" : "seoIntentInfo")}
+                    </span>
+                  )}
                   {s.site_type && (
                     <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "20px", flexShrink: 0,
                       color: SITE_TYPE_COLOR[s.site_type] || "var(--color-text-secondary)",
                       background: `${SITE_TYPE_COLOR[s.site_type] || "#888"}1a` }}>
-                      {s.site_type}
+                      {t((SITE_TYPE_KEY[s.site_type] || "") as any) || s.site_type}
                     </span>
                   )}
                 </div>
@@ -400,6 +415,15 @@ export default function OutlinePage() {
               </div>
             )}
             <div style={{ marginTop: "12px" }}>
+              <Field l={t("seoCfgNarration")}>
+                <select className={inputStyle} value={narration} onChange={e => setNarration(e.target.value as any)}>
+                  <option value="">{t("seoNarrationDefault")}</option>
+                  <option value="first">{t("seoNarrationFirst")}</option>
+                  <option value="third">{t("seoNarrationThird")}</option>
+                </select>
+              </Field>
+            </div>
+            <div style={{ marginTop: "12px" }}>
               <Field l={t("seoCfgAddKeywords")}>
                 <textarea className={inputStyle} style={{ minHeight: "54px", resize: "vertical" }} value={addKeywords} onChange={e => setAddKeywords(e.target.value)} placeholder={t("seoCfgAddKeywordsPh")} />
               </Field>
@@ -423,6 +447,19 @@ export default function OutlinePage() {
                 <input className={inputStyle} style={{ flex: 1 }} value={manualUrl} onChange={e => setManualUrl(e.target.value)} onKeyDown={e => e.key === "Enter" && addCompetitorUrls()} placeholder="https://competitor.com/page" />
                 <button onClick={addCompetitorUrls} disabled={!manualUrl.trim()} style={{ ...btnGhost, opacity: manualUrl.trim() ? 1 : 0.5 }}><Plus size={13} /> {t("seoCfgAddCompUrlBtn")}</button>
               </div>
+            </div>
+
+            {/* custom structure template + ready-made presets (incl. iGaming) */}
+            <div style={{ marginTop: "14px" }}>
+              <span className="tool-field-label">{t("seoCfgCustomTemplate")} <span style={{ textTransform: "none", fontWeight: 400, color: "var(--color-text-tertiary)" }}>· {t("seoCfgOptional")}</span></span>
+              <div style={{ fontSize: "11px", color: "var(--color-text-tertiary)", marginBottom: "8px" }}>{t("seoCfgCustomTemplateSub")}</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "8px" }}>
+                {OUTLINE_TEMPLATES.map(tpl => (
+                  <button key={tpl.id} onClick={() => setCustomTemplate(tpl.body.replace(/\{year\}/g, String(new Date().getFullYear())))} style={{ ...btnGhost, padding: "6px 11px" }}>{t(tpl.labelKey as any)}</button>
+                ))}
+                {customTemplate && <button onClick={() => setCustomTemplate("")} style={{ ...btnGhost, padding: "6px 11px", color: "var(--color-accent-red)" }}><X size={12} /> {t("seoCfgClear")}</button>}
+              </div>
+              <textarea className={inputStyle} style={{ minHeight: "90px", resize: "vertical", fontFamily: "monospace", fontSize: "12px" }} value={customTemplate} onChange={e => setCustomTemplate(e.target.value)} placeholder={"H1: ...\nH2: ...\nH3: ..."} />
             </div>
 
             <button onClick={generate} disabled={loading === "outline"} style={{ ...btnDark, width: "100%", justifyContent: "center", marginTop: "16px", padding: "12px" }}>
