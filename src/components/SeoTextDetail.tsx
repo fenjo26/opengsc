@@ -213,6 +213,7 @@ function FactCheck({ item, setItem, article, t, autoStart }: any) {
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [err, setErr] = useState("");
   const [fixing, setFixing] = useState(false);
+  const [fixed, setFixed] = useState(false);
   const [allOpen, setAllOpen] = useState<boolean | null>(null);
   const report = item.meta?.factcheck;
   const hasSerp = typeof window !== "undefined" && !!getSerpCreds().apiKey;
@@ -220,7 +221,7 @@ function FactCheck({ item, setItem, article, t, autoStart }: any) {
 
   async function fixText() {
     const ai = getSeoGenCreds();
-    if (!ai.apiKey || !badFacts.length) return;
+    if (!ai.apiKey || !badFacts.length || fixing) return;
     setFixing(true); setErr("");
     try {
       const res = await fetch("/api/seo/factfix", {
@@ -228,8 +229,13 @@ function FactCheck({ item, setItem, article, t, autoStart }: any) {
         body: JSON.stringify({ article, claims: badFacts, keyword: item.keyword, aiProvider: ai.provider, aiApiKey: ai.apiKey, model: ai.model || undefined }),
       });
       const data = await res.json();
-      if (res.ok && data.text) { updateHistory(item.id, data.text); setItem((prev: any) => ({ ...prev, data: data.text })); }
-      else setErr(data.error || t("seoErrText"));
+      if (res.ok && data.text) {
+        // Apply the fixed text AND drop the now-stale fact-check report so the user re-checks.
+        updateHistory(item.id, data.text);
+        patchHistory(item.id, { meta: { factcheck: undefined } });
+        setItem((prev: any) => ({ ...prev, data: data.text, meta: { ...prev.meta, factcheck: undefined } }));
+        setFixed(true);
+      } else setErr(data.error || t("seoErrText"));
     } catch (e: any) { setErr(String(e?.message ?? e)); }
     setFixing(false);
   }
@@ -300,6 +306,11 @@ function FactCheck({ item, setItem, article, t, autoStart }: any) {
 
   if (!report && !running) return (
     <div style={{ textAlign: "center", padding: "30px 12px" }}>
+      {fixed && (
+        <div style={{ maxWidth: "520px", margin: "0 auto 14px", padding: "11px 14px", borderRadius: "10px", background: "rgba(52,199,89,0.1)", border: "1px solid rgba(52,199,89,0.3)", fontSize: "13px", color: "var(--color-accent-green)", display: "flex", alignItems: "center", gap: "8px", justifyContent: "center" }}>
+          <Check size={15} /> {t("seoFcFixedNote")}
+        </div>
+      )}
       <div style={{ fontSize: "12px", color: "var(--color-text-tertiary)", marginBottom: "12px", maxWidth: "520px", margin: "0 auto 12px" }}>{hasSerp ? t("seoFcRealNote") : t("seoFcNoSerpNote")}</div>
       {err && <div style={{ color: "var(--color-accent-red)", fontSize: "13px", marginBottom: "10px" }}>{err}</div>}
       <button onClick={run} style={btnPurple}><Shield size={15} /> {hasSerp ? t("seoFcRunReal") : t("seoFcRun")}</button>

@@ -32,7 +32,9 @@ ${claims.map((c, i) => `${i + 1}. ${c}`).join("\n")}
 ${article}`;
 
   const model = b.model ? String(b.model) : undefined;
-  const text = await fetchLLM(prompt, provider, apiKey, 16000, model);
+  let text = await fetchLLM(prompt, provider, apiKey, 16000, model);
   if (!text) return NextResponse.json({ error: "fix_failed" }, { status: 502 });
+  // Strip a possible ```markdown fence / leading preamble line the model may add.
+  text = text.trim().replace(/^```(?:markdown|md)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
   return NextResponse.json({ text });
 }
