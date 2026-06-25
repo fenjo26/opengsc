@@ -56,12 +56,13 @@ export async function genOutline(b: any): Promise<GenResult> {
   // SAME sources (fact-check then just confirms, instead of cleaning up). Kept compact for size.
   const carriedSources = competitors
     .filter((c) => c.text_sample && String(c.text_sample).trim())
+    .sort((a, b) => (b.site_type === "official_store" ? 1 : 0) - (a.site_type === "official_store" ? 1 : 0))
     .slice(0, 8)
     .map((c) => ({
-      title: c.title || c.url,
+      title: (c.site_type === "official_store" ? "[ОФИЦИАЛЬНЫЙ] " : "") + (c.title || c.url),
       url: c.url,
       domain: (c.url.match(/^https?:\/\/([^/]+)/)?.[1] || "").replace(/^www\./, ""),
-      snippet: String(c.text_sample).replace(/\s+/g, " ").trim().slice(0, 800),
+      snippet: String(c.text_sample).replace(/\s+/g, " ").trim().slice(0, 3500),
     }));
   if (carriedSources.length) (meta as any).sources = carriedSources;
   return { ok: true, data: outline };
@@ -87,7 +88,7 @@ export async function genText(b: any): Promise<GenResult> {
       try { scraped = await scrapeMany(top.map(r => r.url), b.firecrawlKey ? String(b.firecrawlKey) : undefined, 4); } catch {}
       sources = top.map(r => {
         const sc = scraped.find(s => s.url === r.url);
-        const ev = sc?.ok ? `${sc.metaDescription || ""} ${sc.textSample || ""}`.trim().slice(0, 1000) : "";
+        const ev = sc?.ok ? `${sc.metaDescription || ""} ${sc.textSample || ""}`.trim().slice(0, 4000) : "";
         return { title: r.title, url: r.url, domain: r.domain, snippet: ev || r.snippet };
       });
     } catch {}

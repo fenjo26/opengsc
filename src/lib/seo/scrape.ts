@@ -13,7 +13,7 @@ export interface ScrapedPage {
   wordCount: number;
   hasPriceTable: boolean;
   hasFaq: boolean;
-  textSample: string; // first ~1200 chars of body text (for the LLM)
+  textSample: string; // first ~6000 chars of body text (for the LLM grounding)
   error?: string;
 }
 
@@ -75,7 +75,7 @@ export function parseHtml(url: string, html: string): ScrapedPage {
     wordCount,
     hasPriceTable,
     hasFaq,
-    textSample: bodyText.slice(0, 1200),
+    textSample: bodyText.slice(0, 6000),
   };
 }
 
@@ -122,7 +122,7 @@ async function firecrawlFetch(url: string, apiKey: string): Promise<ScrapedPage>
     wordCount: md ? md.split(/\s+/).length : 0,
     hasPriceTable: /\|.*(price|cost|€|\$|£|руб)/i.test(md),
     hasFaq: /faq|frequently asked/i.test(md),
-    textSample: md.slice(0, 1200),
+    textSample: md.slice(0, 6000),
   };
   parsed.via = "firecrawl";
   parsed.title = parsed.title || meta.title || "";
