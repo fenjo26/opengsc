@@ -834,6 +834,7 @@
   "seoWords": "words",
   "seoTitleOptions": "Title options",
   "seoDescOptions": "Description options",
+  "seoSlugOptions": "URL slug options",
   "seoSubIntents": "Sub-intents (user questions)",
   "seoEntityChecklist": "Entity checklist",
   "seoSections": "Sections",

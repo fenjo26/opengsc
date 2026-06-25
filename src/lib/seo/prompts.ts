@@ -119,9 +119,15 @@ export function buildOutlinePrompt(args: {
 - язык/страна: ${args.language}/${args.country}${toneBlock}${personaBlock}${narrationBlock}${addKw}${twc}${paaBlock}${relBlock}
 - топ-конкуренты (типы + структура): ${JSON.stringify(args.competitors.map(({ text_sample, ...c }) => { void text_sample; return c; }))}${manual}${kwData}${customTplBlock}${factsBlock}
 
+МЕТА-ТЕГИ (title/description/slug) — по правилам Google и Bing, проработай ТЩАТЕЛЬНО (это готовые к публикации варианты):
+- title_options (3 шт.): 50–60 символов (под ~600px, иначе обрежется в выдаче). Главный ключ — в САМОМ НАЧАЛЕ. Если бренд известен — в конце через « | » или « - ». Формула: [Главный ключ] - [Вторичный ключ/УТП] | [Бренд]. Коммерческие — продающий хук (Buy/Best/от €X/Free shipping); информационные — «How to / Guide / Число + …»; числа и скобки повышают CTR. Bing любит точное вхождение ключа.
+- description_options (2 шт.): ~150–155 символов (влезает и в Google ≤160, и в Bing). Ценность с ключами + конкретная выгода/деталь + явный CTA для коммерции (Shop now / Book / Get a quote); для информационных — что внутри, без продаж. Формула: [Ценность с ключами]. [Выгода/деталь]. [CTA].
+- slug_options (2 шт.): 3–5 слов, ТОЛЬКО строчные латинские буквы и дефисы, БЕЗ стоп-слов (a, an, the, in, on, of, and, for…), без подчёркиваний, пробелов, года и спецсимволов. Не-латиницу транслитерируй. Примеры: "ergonomic-office-chairs", "start-vegetable-garden-beginners", "best-project-management-software".
+Текст title/description — на языке ${args.language}; slug — всегда латиницей. Всё — под главный ключ и dominant_intent.
+
 ВЕРНИ JSON строго по схеме (только JSON):
 {
-  "meta": { "keyword": "", "title_options": ["","",""], "description_options": ["",""], "target_word_count": 0, "dominant_intent": "", "tone": "", "persona": "", "narration": "first|third" },
+  "meta": { "keyword": "", "title_options": ["","",""], "description_options": ["",""], "slug_options": ["",""], "target_word_count": 0, "dominant_intent": "", "tone": "", "persona": "", "narration": "first|third" },
   "entities": [ { "name": "", "type": "Place|Service|Vehicle Type|Company|Transport Mode|Concept", "weight": 10, "attributes": { "Attr_Name": "Value" }, "relationship_triplets": ["Subject → predicate → Object [9]"] } ],
   "sub_intents": [ { "intent": "", "section": "H3 ...", "coverage": "как раскрыть", "word_count": "100+", "entities": [""] } ],
   "sections": [ {
@@ -232,6 +238,17 @@ export function buildTextPrompt(args: {
   const dateLine = `Сегодня ${today}. Если нужен год — используй ТЕКУЩИЙ (${year}); никогда не пиши устаревшие годы (2023/2024) и не выдумывай год.\n`;
   const customLine = args.custom ? `Дополнительная инструкция автора (учесть обязательно): ${args.custom}\n` : "";
 
+  // Carry the chosen meta tags (title/description/slug) from the outline into the article head,
+  // so the generated text ships with publish-ready SEO meta instead of dropping them.
+  const m = (args.outlineJson as any)?.meta || {};
+  const pick = (v: any) => Array.isArray(v) ? (v.find((x: any) => x && String(x).trim()) || "") : (v || "");
+  const metaTitle = pick(m.title_options) || pick(m.title);
+  const metaDesc = pick(m.description_options) || pick(m.description);
+  const metaSlug = pick(m.slug_options) || pick(m.slug);
+  const metaBlock = (metaTitle || metaDesc || metaSlug)
+    ? `\nМЕТА-ТЕГИ (вставь их В САМОЕ НАЧАЛО статьи отдельным блоком ДО заголовка H1, ровно в таком виде, заполнив значения):\n\`\`\`\nTitle: ${metaTitle}\nMeta Description: ${metaDesc}\nURL Slug: ${metaSlug}\n\`\`\`\nЗатем с новой строки начни саму статью с H1. Title должен быть 50–60 символов, Meta Description ~155, Slug — латиницей в нижнем регистре через дефисы. Если значение пустое — допиши подходящее по правилам.\n`
+    : "";
+
   // Real-source grounding (retrieval-augmented). Two modes:
   //  - facts: use real numbers but NEVER name/link competitors (for commercial/own-brand pages)
   //  - cited: use real numbers and add [text](url) links to sources (for informational/affiliate)
@@ -250,7 +267,7 @@ export function buildTextPrompt(args: {
   if (args.promptType === "custom" && args.custom) {
     return `${policyBlock}${toneHeader}${narrLine}${regionLine}Язык вывода: ${args.language}
 ${dateLine}${NO_FABRICATION}
-ГЛАВНАЯ ИНСТРУКЦИЯ АВТОРА:
+${metaBlock}ГЛАВНАЯ ИНСТРУКЦИЯ АВТОРА:
 ${args.custom}
 ${sourcesBlock}
 Напиши статью по структуре ниже, следуя инструкции автора выше. Соблюдай word_count секций.
@@ -262,7 +279,7 @@ ${JSON.stringify(args.outlineJson)}`;
   }
 
   return `${policyBlock}${toneHeader}${narrLine}${regionLine}Язык вывода: ${args.language}
-${dateLine}${customLine}${sourcesBlock}
+${dateLine}${customLine}${metaBlock}${sourcesBlock}
 Напиши статью строго по структуре ниже. Для каждой секции — текст в рамках указанного word_count, не раздувай. Используй summary, keywords, entities_to_cover и copywriter_notes как ориентир. Естественно вплетай сущности и ключи.
 
 ЖЁСТКИЕ ПРАВИЛА:

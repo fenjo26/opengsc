@@ -834,6 +834,7 @@
   "seoWords": "слів",
   "seoTitleOptions": "Варіанти Title",
   "seoDescOptions": "Варіанти Description",
+  "seoSlugOptions": "Варіанти URL-слага",
   "seoSubIntents": "Sub-intents (питання користувачів)",
   "seoEntityChecklist": "Entity-чекліст",
   "seoSections": "Секції",

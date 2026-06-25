@@ -40,6 +40,16 @@ export function outlineToMarkdown(o: any): string {
   if (!o) return "";
   const L: string[] = [];
   const title = o.meta?.title_options?.[0] || o.meta?.keyword || "Outline";
+  const mTitle = o.meta?.title_options?.[0];
+  const mDesc = o.meta?.description_options?.[0];
+  const mSlug = o.meta?.slug_options?.[0];
+  if (mTitle || mDesc || mSlug) {
+    L.push("**SEO meta**");
+    if (mTitle) L.push(`- **Title:** ${mTitle}`);
+    if (mDesc) L.push(`- **Meta Description:** ${mDesc}`);
+    if (mSlug) L.push(`- **URL Slug:** ${mSlug}`);
+    L.push("");
+  }
   L.push(`# ${title}\n`);
   (o.sections || []).forEach((sec: any) => {
     const hashes = sec.h_level === "H3" ? "###" : sec.h_level === "H4" ? "####" : "##";

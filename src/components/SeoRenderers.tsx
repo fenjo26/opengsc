@@ -22,6 +22,7 @@ export function OutlineStructure({ outline }: { outline: any }) {
     <div>
       {meta.title_options?.length > 0 && <Block title={t("seoTitleOptions")}>{meta.title_options.map((x: string, i: number) => <Pill key={i} text={x} />)}</Block>}
       {meta.description_options?.length > 0 && <Block title={t("seoDescOptions")}>{meta.description_options.map((x: string, i: number) => <Pill key={i} text={x} />)}</Block>}
+      {meta.slug_options?.length > 0 && <Block title={t("seoSlugOptions")}>{meta.slug_options.map((x: string, i: number) => <Pill key={i} text={x} />)}</Block>}
 
       {outline.sections?.length > 0 && (
         <div style={{ marginTop: "16px" }}>
