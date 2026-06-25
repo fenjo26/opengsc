@@ -31,6 +31,30 @@ function CardGrid({ children }: { children: React.ReactNode }) {
   return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>{children}</div>;
 }
 
+// Single-choice group with presets + an "Other" card that reveals a free-text field,
+// so any parameter can hold a custom value (matches the reference's flexibility).
+function ChoiceGroup({ value, presets, onChange, t }: { value: string; presets: string[][]; onChange: (v: string) => void; t: any }) {
+  const isCustom = !!value && !presets.some(p => p[0] === value);
+  const [open, setOpen] = useState(isCustom);
+  return (
+    <>
+      <CardGrid>
+        {presets.map(([v, l, ex]) => (
+          <OptionCard key={v} active={!open && value === v} title={t(l)} sub={ex ? t(ex) : undefined}
+            onClick={() => { setOpen(false); onChange(v); }} />
+        ))}
+        <OptionCard active={open} title={t("seoChoiceOther")} sub={t("seoChoiceOtherSub")}
+          onClick={() => { if (!isCustom) onChange(""); setOpen(true); }} />
+      </CardGrid>
+      {open && (
+        <input className="tool-input" style={{ marginTop: "10px" }} autoFocus
+          value={isCustom ? value : ""} placeholder={t("seoChoiceOtherPh")}
+          onChange={e => onChange(e.target.value)} />
+      )}
+    </>
+  );
+}
+
 // ─── Toggle row ─────────────────────────────────────────────────────────────────
 function ToggleRow({ on, onToggle, title, desc, disabled }: { on: boolean; onToggle: () => void; title: string; desc?: string; disabled?: boolean }) {
   return (
@@ -379,13 +403,13 @@ function FormattingStep({ draft, up, t }: any) {
   return (
     <div>
       <FieldLabel>{t("seoHeadingStyle")}</FieldLabel>
-      <CardGrid>{HS.map(([v, l, ex]) => <OptionCard key={v} active={s.headingStyle === v} title={t(l)} sub={t(ex)} onClick={() => setS("headingStyle", v)} />)}</CardGrid>
+      <ChoiceGroup value={s.headingStyle || ""} presets={HS} onChange={v => setS("headingStyle", v)} t={t} />
 
       <FieldLabel>{t("seoHeadingCase")}</FieldLabel>
-      <CardGrid>{HC.map(([v, l, ex]) => <OptionCard key={v} active={s.headingCapitalization === v} title={t(l)} sub={t(ex)} onClick={() => setS("headingCapitalization", v)} />)}</CardGrid>
+      <ChoiceGroup value={s.headingCapitalization || ""} presets={HC} onChange={v => setS("headingCapitalization", v)} t={t} />
 
       <FieldLabel>{t("seoParaLength")}</FieldLabel>
-      <CardGrid>{PL.map(([v, l, ex]) => <OptionCard key={v} active={s.paragraphLength === v} title={t(l)} sub={t(ex)} onClick={() => setS("paragraphLength", v)} />)}</CardGrid>
+      <ChoiceGroup value={s.paragraphLength || ""} presets={PL} onChange={v => setS("paragraphLength", v)} t={t} />
 
       <FieldLabel>{t("seoTextFormatting")}</FieldLabel>
       <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -417,7 +441,7 @@ function QualityStep({ draft, up, t }: any) {
       </div>
 
       <FieldLabel>{t("seoCitationStyle")}</FieldLabel>
-      <CardGrid>{CS.map(([v, l, ex]) => <OptionCard key={v} active={q.citationStyle === v} title={t(l)} sub={t(ex)} onClick={() => setQ("citationStyle", v)} />)}</CardGrid>
+      <ChoiceGroup value={q.citationStyle || ""} presets={CS} onChange={v => setQ("citationStyle", v)} t={t} />
 
       <div style={{ marginTop: "12px" }}>
         <ToggleRow on={!!q.requireSourceLinks} onToggle={() => setQ("requireSourceLinks", !q.requireSourceLinks)} title={t("seoRequireSources")} desc={t("seoRequireSourcesDesc")} />
