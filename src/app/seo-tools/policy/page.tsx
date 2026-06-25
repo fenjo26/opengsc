@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { EditorialPolicy, DEFAULT_POLICY, renderPolicy, toExportJson, normalizePolicy } from "@/lib/seo/policy";
-import { loadPolicies, savePolicies, getActivePolicyName, setActivePolicyName, getSeoGenCreds } from "@/lib/seo/keys";
+import { loadPolicies, savePolicies, getActivePolicyName, setActivePolicyName, getSeoGenCreds, getFirecrawlKey } from "@/lib/seo/keys";
 import { TONES } from "@/lib/seo/tones";
 
 const MAX_POLICIES = 10;
@@ -104,7 +104,6 @@ export default function PolicyPage() {
   const [showPreview, setShowPreview] = useState(false);
   const [showJson, setShowJson] = useState(false);
   const [genOpen, setGenOpen] = useState(false);
-  const [genNiche, setGenNiche] = useState("");
   const [genLoading, setGenLoading] = useState(false);
   const [genErr, setGenErr] = useState("");
   const [showHelp, setShowHelp] = useState(false);
@@ -142,21 +141,27 @@ export default function PolicyPage() {
     if (activeName === name) { setActivePolicyName(safe[0].name); setActiveName(safe[0].name); }
   }
 
-  async function generateWithAI() {
+  async function generateWithAI(form: { brandName: string; brandUrl: string; sourceUrls: string[]; brandDescription: string; competitorUrls: string[]; sampleText: string }) {
     setGenErr("");
     const { provider, apiKey, model } = getSeoGenCreds();
     if (!apiKey) { setGenErr(t("seoErrNoAiKey")); return; }
-    if (!genNiche.trim()) return;
+    if (!form.brandName.trim()) { setGenErr(t("seoGenAiBrandNameReq")); return; }
     setGenLoading(true);
     try {
       const res = await fetch("/api/seo/policy-draft", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ niche: genNiche, aiProvider: provider, aiApiKey: apiKey, model: model || undefined }),
+        body: JSON.stringify({
+          brandName: form.brandName, brandUrl: form.brandUrl, niche: form.brandName,
+          sourceUrls: form.sourceUrls, brandDescription: form.brandDescription,
+          competitorUrls: form.competitorUrls, sampleText: form.sampleText,
+          firecrawlKey: getFirecrawlKey() || undefined,
+          aiProvider: provider, aiApiKey: apiKey, model: model || undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) { setGenErr(data.error === "parse_failed" ? t("seoErrParseJsonShort") : (data.error || t("seoErrGen"))); setGenLoading(false); return; }
-      const p = normalizePolicy({ ...data.policy, name: data.policy?.name || genNiche.slice(0, 40), createdAt: Date.now() });
-      setGenLoading(false); setGenOpen(false); setGenNiche("");
+      const p = normalizePolicy({ ...data.policy, name: data.policy?.name || form.brandName.slice(0, 40), createdAt: Date.now() });
+      setGenLoading(false); setGenOpen(false);
       openEditor(p);
     } catch (e: any) { setGenErr(String(e?.message ?? e)); setGenLoading(false); }
   }
@@ -240,8 +245,8 @@ export default function PolicyPage() {
         ))}
 
         {genOpen && (
-          <GenModal niche={genNiche} setNiche={setGenNiche} loading={genLoading} err={genErr} t={t}
-            onClose={() => { setGenOpen(false); setGenNiche(""); }} onGenerate={generateWithAI} />
+          <GenModal loading={genLoading} err={genErr} t={t}
+            onClose={() => setGenOpen(false)} onGenerate={generateWithAI} />
         )}
       </div>
     );
@@ -491,19 +496,69 @@ function CreateCard({ icon, title, sub, onClick, disabled }: { icon: React.React
   );
 }
 
-function GenModal({ niche, setNiche, loading, err, t, onClose, onGenerate }: any) {
+function GenModal({ loading, err, t, onClose, onGenerate }: any) {
+  const [brandName, setBrandName] = useState("");
+  const [brandUrl, setBrandUrl] = useState("");
+  const [useUrls, setUseUrls] = useState(false);
+  const [sourceUrls, setSourceUrls] = useState("");
+  const [useDesc, setUseDesc] = useState(false);
+  const [brandDescription, setBrandDescription] = useState("");
+  const [useComp, setUseComp] = useState(false);
+  const [competitorUrls, setCompetitorUrls] = useState("");
+  const [useSample, setUseSample] = useState(false);
+  const [sampleText, setSampleText] = useState("");
+
+  const toLines = (s: string) => s.split(/[\n,]+/).map(x => x.trim()).filter(Boolean);
+  const submit = () => onGenerate({
+    brandName, brandUrl,
+    sourceUrls: useUrls ? toLines(sourceUrls) : [],
+    brandDescription: useDesc ? brandDescription : "",
+    competitorUrls: useComp ? toLines(competitorUrls) : [],
+    sampleText: useSample ? sampleText : "",
+  });
+
+  const lbl: React.CSSProperties = { fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)", display: "block", marginBottom: "6px" };
+  const Check = ({ on, onToggle, label }: { on: boolean; onToggle: () => void; label: string }) => (
+    <label style={{ display: "flex", alignItems: "center", gap: "9px", fontSize: "13px", color: "var(--color-text-primary)", cursor: "pointer", padding: "4px 0" }}>
+      <input type="checkbox" checked={on} onChange={onToggle} /> {label}
+    </label>
+  );
+  const groupBox: React.CSSProperties = { border: "1px solid var(--color-border)", borderRadius: "10px", padding: "12px 14px" };
+
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
-      <div className="panel" style={{ width: "440px", maxWidth: "92vw" }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
-          <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", display: "flex", alignItems: "center", gap: "8px" }}><Sparkles size={16} color="var(--color-accent-purple)" /> {t("seoGenAiTitle")}</div>
+    <div style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", padding: "24px" }} onClick={onClose}>
+      <div className="panel" style={{ width: "560px", maxWidth: "94vw", maxHeight: "88vh", overflow: "auto" }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "4px" }}>
+          <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--color-text-primary)", display: "flex", alignItems: "center", gap: "8px" }}><Sparkles size={17} color="var(--color-accent-purple)" /> {t("seoGenAiTitle")}</div>
           <button onClick={onClose} style={{ ...btnGhost, padding: "6px" }}><X size={14} /></button>
         </div>
-        <textarea className="tool-input" style={{ minHeight: "80px", resize: "vertical", marginBottom: "10px" }} placeholder={t("seoGenAiNichePh")} value={niche} onChange={e => setNiche(e.target.value)} />
+        <div style={{ fontSize: "13px", color: "var(--color-text-secondary)", marginBottom: "16px" }}>{t("seoGenAiSub")}</div>
+
+        <label style={lbl}>{t("seoGenAiBrandName")} *</label>
+        <input className="tool-input" style={{ marginBottom: "12px" }} value={brandName} onChange={e => setBrandName(e.target.value)} placeholder={t("seoGenAiBrandNamePh")} autoFocus />
+        <label style={lbl}>{t("seoGenAiBrandUrl")}</label>
+        <input className="tool-input" style={{ marginBottom: "14px" }} value={brandUrl} onChange={e => setBrandUrl(e.target.value)} placeholder="https://yourbrand.com" />
+
+        <div style={{ ...groupBox, marginBottom: "12px" }}>
+          <div className="tool-section-label" style={{ marginBottom: "6px" }}>{t("seoGenAiSources")}</div>
+          <Check on={useUrls} onToggle={() => setUseUrls(v => !v)} label={t("seoGenAiAddUrls")} />
+          {useUrls && <textarea className="tool-input" style={{ minHeight: "56px", resize: "vertical", margin: "6px 0 4px" }} value={sourceUrls} onChange={e => setSourceUrls(e.target.value)} placeholder={t("seoGenAiUrlsPh")} />}
+          <Check on={useDesc} onToggle={() => setUseDesc(v => !v)} label={t("seoGenAiAddDesc")} />
+          {useDesc && <textarea className="tool-input" style={{ minHeight: "64px", resize: "vertical", marginTop: "6px" }} value={brandDescription} onChange={e => setBrandDescription(e.target.value)} placeholder={t("seoGenAiDescPh")} />}
+        </div>
+
+        <div style={{ ...groupBox, marginBottom: "14px" }}>
+          <div className="tool-section-label" style={{ marginBottom: "6px" }}>{t("seoGenAiStyleSources")}</div>
+          <Check on={useComp} onToggle={() => setUseComp(v => !v)} label={t("seoGenAiAnalyzeComp")} />
+          {useComp && <textarea className="tool-input" style={{ minHeight: "56px", resize: "vertical", margin: "6px 0 4px" }} value={competitorUrls} onChange={e => setCompetitorUrls(e.target.value)} placeholder={t("seoGenAiCompPh")} />}
+          <Check on={useSample} onToggle={() => setUseSample(v => !v)} label={t("seoGenAiAddSample")} />
+          {useSample && <textarea className="tool-input" style={{ minHeight: "80px", resize: "vertical", marginTop: "6px" }} value={sampleText} onChange={e => setSampleText(e.target.value)} placeholder={t("seoGenAiSamplePh")} />}
+        </div>
+
         {err && <div style={{ fontSize: "12px", color: "var(--color-accent-red)", marginBottom: "10px" }}>{err}</div>}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
           <button onClick={onClose} style={btnGhost}>{t("seoCancel")}</button>
-          <button onClick={onGenerate} disabled={loading || !niche.trim()} style={{ ...btnPurple, opacity: loading || !niche.trim() ? 0.6 : 1 }}>
+          <button onClick={submit} disabled={loading || !brandName.trim()} style={{ ...btnPurple, opacity: loading || !brandName.trim() ? 0.6 : 1 }}>
             {loading ? <><Loader2 size={14} className="spin" /> {t("seoGenAiLoading")}</> : <><Sparkles size={14} /> {t("seoGenAiBtn")}</>}
           </button>
         </div>

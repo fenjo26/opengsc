@@ -2,36 +2,65 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { fetchLLM } from "@/lib/llm";
+import { scrapeMany } from "@/lib/seo/scrape";
 import { extractJson } from "@/lib/seo/prompts";
 
-// POST /api/seo/policy-draft — AI-drafts an editorial policy from a niche/domain.
-// body: { niche, domain?, language?, aiProvider, aiApiKey, model? }
+// POST /api/seo/policy-draft — AI-drafts an editorial policy, grounded in brand pages,
+// competitor pages and a sample text (all optional).
+// body: { brandName?, brandUrl?, niche?, language?, sourceUrls?[], brandDescription?,
+//         competitorUrls?[], sampleText?, firecrawlKey?, aiProvider, aiApiKey, model? }
+async function scrapeText(urls: string[], firecrawlKey?: string): Promise<string> {
+  const list = (urls || []).map(u => u.trim()).filter(Boolean).slice(0, 5);
+  if (!list.length) return "";
+  let pages: any[] = [];
+  try { pages = await scrapeMany(list, firecrawlKey, 4); } catch { return ""; }
+  return pages.filter(p => p?.ok)
+    .map(p => `[${p.url}] ${p.title || ""} — ${`${p.metaDescription || ""} ${p.textSample || ""}`.trim().slice(0, 1500)}`)
+    .join("\n\n");
+}
+
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
-  if (!(session?.user as any)?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!(session?.user as any)?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const b = await req.json();
+  const brandName = String(b.brandName ?? "").trim();
   const niche = String(b.niche ?? "").trim();
-  if (!niche) return NextResponse.json({ error: "no_niche" }, { status: 400 });
+  if (!brandName && !niche) return NextResponse.json({ error: "no_brand" }, { status: 400 });
 
   const provider = String(b.aiProvider ?? "anthropic");
   const apiKey = String(b.aiApiKey ?? "");
   if (!apiKey) return NextResponse.json({ error: "no_ai_key" }, { status: 400 });
 
-  const prompt = `Ты — SEO-редактор. Составь черновик редакционной политики для ниши/проекта ниже. Верни СТРОГИЙ JSON по схеме, без преамбулы и markdown-обёрток.
+  const fc = b.firecrawlKey ? String(b.firecrawlKey) : undefined;
+  const brandPages = await scrapeText(Array.isArray(b.sourceUrls) ? b.sourceUrls : [], fc);
+  const competitorPages = await scrapeText(Array.isArray(b.competitorUrls) ? b.competitorUrls : [], fc);
+  const manualDesc = String(b.brandDescription ?? "").trim();
+  const sampleText = String(b.sampleText ?? "").trim();
 
-Ниша/проект: ${niche}${b.domain ? `\nДомен: ${b.domain}` : ""}${b.language ? `\nЯзык контента: ${b.language}` : ""}
+  const ctx = [
+    brandName ? `Бренд: ${brandName}` : "",
+    b.brandUrl ? `Сайт: ${b.brandUrl}` : "",
+    niche ? `Ниша/проект: ${niche}` : "",
+    b.language ? `Язык контента: ${b.language}` : "",
+    manualDesc ? `Описание бренда (от пользователя): ${manualDesc}` : "",
+    brandPages ? `СКРЕЙП СТРАНИЦ БРЕНДА (используй для description/values/audience):\n${brandPages}` : "",
+    competitorPages ? `СКРЕЙП КОНКУРЕНТОВ (используй для вывода тона/структуры/стиля):\n${competitorPages}` : "",
+    sampleText ? `ОБРАЗЕЦ ТЕКСТА (выведи из него тон, голос, длину абзацев, форматирование):\n${sampleText.slice(0, 4000)}` : "",
+  ].filter(Boolean).join("\n\n");
 
-ВАЖНО: НЕ выдумывай лицензии/регалии — в compliance_requirements обязательно укажи правило ставить плейсхолдер под реальные данные.
+  const prompt = `Ты — SEO-редактор. На основе данных ниже составь ПОДРОБНЫЙ черновик редакционной политики бренда. Заполни поля конкретикой, выведенной из материалов (описание и ценности — из страниц бренда; тон, голос, структуру, форматирование — из конкурентов и образца текста). Где данных нет — дай разумные значения по нише. Верни СТРОГИЙ JSON по схеме, без преамбулы и markdown-обёрток.
 
-Схема JSON:
+${ctx}
+
+ВАЖНО: НЕ выдумывай лицензии/регалии — в complianceRequirements обязательно укажи правило ставить плейсхолдер под реальные данные.
+
+Схема JSON (верни ровно эти ключи):
 {
-  "name": "короткое имя политики",
-  "brand": { "name": "", "url": "", "description": "чем занимается бренд", "values": "ценности через запятую", "competitors": ["конкурент1", "конкурент2"] },
-  "audience": { "customerProfile": "кто читает — потребности и контекст", "expertiseLevel": "beginner|intermediate|expert", "industryNiche": "ниша" },
-  "voice": { "authorPersona": "от чьего лица пишем", "toneOfVoice": "conversational|neutral|business|official", "formalityLevel": 50 },
+  "name": "короткое имя политики (можно = бренду)",
+  "brand": { "name": "", "url": "", "description": "чем занимается бренд, 2-4 предложения", "values": "ценности через запятую", "competitors": ["конкурент1", "конкурент2"] },
+  "audience": { "customerProfile": "кто читает — потребности и контекст, развёрнуто", "expertiseLevel": "beginner|intermediate|expert", "industryNiche": "ниша" },
+  "voice": { "authorPersona": "от чьего лица пишем", "toneOfVoice": "conversational|neutral|business|official|expert|professional|friendly|analytical|practical", "formalityLevel": 50 },
   "structure": {
     "headingStyle": "questions|statements|how-to|mixed",
     "headingCapitalization": "sentence|title|upper",
@@ -41,22 +70,22 @@ export async function POST(req: Request) {
   "quality": {
     "citationStyle": "inline|footnotes|none",
     "requireSourceLinks": true,
-    "eeatRequirements": "как демонстрировать опыт/экспертизу",
+    "eeatRequirements": "как демонстрировать опыт/экспертизу/авторитетность",
     "factCheckingNotes": "требования к проверке фактов"
   },
   "restrictions": {
     "wordsToAvoid": "превосходные степени и пустые эпитеты через запятую",
-    "topicsToAvoid": "",
-    "complianceRequirements": "правило: не указывать несуществующие лицензии — плейсхолдер под ручное заполнение"
+    "topicsToAvoid": "запретные темы через запятую",
+    "complianceRequirements": "правило: не указывать несуществующие лицензии — плейсхолдер под ручное заполнение; + отраслевой комплаенс если уместен"
   },
   "variables": {}
 }`;
 
   const model = b.model ? String(b.model) : undefined;
-  let raw = await fetchLLM(prompt, provider, apiKey, 2000, model);
+  let raw = await fetchLLM(prompt, provider, apiKey, 3000, model);
   let policy = extractJson(raw);
   if (!policy) {
-    raw = await fetchLLM(prompt + "\n\nВерни ТОЛЬКО валидный JSON.", provider, apiKey, 2000, model);
+    raw = await fetchLLM(prompt + "\n\nВерни ТОЛЬКО валидный JSON.", provider, apiKey, 3000, model);
     policy = extractJson(raw);
   }
   if (!policy) return NextResponse.json({ error: "parse_failed", raw }, { status: 502 });
