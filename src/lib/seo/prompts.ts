@@ -3,6 +3,18 @@
 
 import { renderPolicy, EditorialPolicy } from "./policy";
 
+// Local currency hint by country (so prices match the target region, not USD by default).
+const EUR = ["gr", "de", "fr", "it", "es", "pt", "nl", "be", "at", "ie", "fi", "sk", "si", "lt", "lv", "ee", "cy", "mt", "lu", "hr"];
+export function currencyHint(country?: string): string {
+  const c = (country || "").toLowerCase();
+  if (EUR.includes(c)) return "EUR (€)";
+  const map: Record<string, string> = { gb: "GBP (£)", us: "USD ($)", ca: "CAD ($)", au: "AUD ($)", nz: "NZD ($)", ch: "CHF", se: "SEK", no: "NOK", dk: "DKK", pl: "PLN (zł)", cz: "CZK", hu: "HUF", ro: "RON", bg: "BGN", ua: "UAH (₴)", ru: "RUB (₽)", tr: "TRY (₺)", jp: "JPY (¥)", in: "INR (₹)", br: "BRL (R$)", mx: "MXN ($)" };
+  return map[c] || "местная валюта региона";
+}
+
+// Cross-cutting anti-fabrication rule injected into both outline and text prompts.
+const NO_FABRICATION = `АНТИ-ВЫДУМКА (КРИТИЧНО): НЕ придумывай факты, которых может не существовать — несуществующие модели/версии/варианты товара (напр. «OLED-версия», если такой нет), технические характеристики (RAM, разрешение, чипы), цены, даты выхода, MSRP, названия игр/аксессуаров, ритейлеров. Бери ТОЛЬКО общеизвестные подтверждённые факты или данные из источников/конкурентов. Спорную или непроверяемую конкретику обобщай («доступны разные комплекты», «уточняйте характеристики у продавца») ИЛИ ставь плейсхолдер [ПРОВЕРИТЬ: ...]. Лучше меньше конкретики, чем выдуманная. Особенно осторожно с новинками, по которым у тебя может не быть точных данных.`;
+
 export interface CompetitorInput {
   position: number;
   url: string;
@@ -79,6 +91,8 @@ export function buildOutlinePrompt(args: {
 - Веса [10] — самые важные сущности темы, [5-7] — поддерживающие/географические.
 - Для коммерческих тем — нейтральное сравнение ВСЕХ вариантов (включая те, что автор не продаёт).
 - НЕ выдумывай лицензии/регалии/отзывы. Помечай секции needs_real_experience=true, где уместен реальный личный опыт (не выдуманный).
+- ${NO_FABRICATION}
+- РЕГИОН: пиши под регион «${args.country}»: цены/суммы в валюте региона — ${currencyHint(args.country)} (НЕ в USD по умолчанию); ритейлеры и реалии — релевантные региону (для Греции/ЕС — местные магазины и маркетплейсы, без Walmart и подобных, которых там нет).
 
 ТРЕБОВАНИЯ К ДЕТАЛИЗАЦИИ (ЖЁСТКО, иначе аутлайн бесполезен — по нему пишут идеальную статью):
 - ГЛУБИНА И ВЛОЖЕННОСТЬ (КРИТИЧНО): почти каждый содержательный H2 ОБЯЗАН иметь 2-4 вложенных H3. H3 — это ОТДЕЛЬНЫЙ элемент массива sections с "h_level":"H3", идущий сразу ПОСЛЕ своего H2. Крупные/коммерческие H2 (сравнение вариантов, цены, бронирование, услуга/автопарк, безопасность) — минимум 3 H3 каждый. У H2 word_count_self делай маленьким (30-60 слов вступления), основной объём — в H3. НЕ делай плоский список из одних H2.
@@ -204,6 +218,8 @@ export function buildTextPrompt(args: {
   const narr = (args.outlineJson as any)?.meta?.narration;
   const narrLine = narr === "first" ? "Лицо: ПЕРВОЕ — экспертный «я»-голос, личный опыт.\n"
     : narr === "third" ? "Лицо: ТРЕТЬЕ — корпоративный нейтральный голос, без «я».\n" : "";
+  const country = (args.outlineJson as any)?.meta?.country;
+  const regionLine = country ? `Регион: ${country}. Цены/суммы — в валюте региона (${currencyHint(country)}), НЕ в USD по умолчанию; ритейлеры и реалии — релевантные региону (без магазинов, которых там нет).\n` : "";
   const today = new Date().toISOString().slice(0, 10);
   const year = today.slice(0, 4);
   const dateLine = `Сегодня ${today}. Если нужен год — используй ТЕКУЩИЙ (${year}); никогда не пиши устаревшие годы (2023/2024) и не выдумывай год.\n`;
@@ -225,8 +241,8 @@ export function buildTextPrompt(args: {
 
   // Custom prompt type: the author's instruction drives the writing; service template is minimal.
   if (args.promptType === "custom" && args.custom) {
-    return `${policyBlock}${toneHeader}${narrLine}Язык вывода: ${args.language}
-${dateLine}
+    return `${policyBlock}${toneHeader}${narrLine}${regionLine}Язык вывода: ${args.language}
+${dateLine}${NO_FABRICATION}
 ГЛАВНАЯ ИНСТРУКЦИЯ АВТОРА:
 ${args.custom}
 ${sourcesBlock}
@@ -238,11 +254,13 @@ ${sourcesBlock}
 ${JSON.stringify(args.outlineJson)}`;
   }
 
-  return `${policyBlock}${toneHeader}${narrLine}Язык вывода: ${args.language}
+  return `${policyBlock}${toneHeader}${narrLine}${regionLine}Язык вывода: ${args.language}
 ${dateLine}${customLine}${sourcesBlock}
 Напиши статью строго по структуре ниже. Для каждой секции — текст в рамках указанного word_count, не раздувай. Используй summary, keywords, entities_to_cover и copywriter_notes как ориентир. Естественно вплетай сущности и ключи.
 
 ЖЁСТКИЕ ПРАВИЛА:
+- ${NO_FABRICATION}
+- НЕ добавляй характеристики/модели/цены/даты, которых нет в структуре И не подтверждены источниками. Если в структуре есть сомнительная конкретика (например конкретная модель/спека/цена) и её нет в источниках — обобщи или опусти, НЕ детализируй выдуманным (не строй таблицы сравнения на выдуманных данных).
 - Где НЕТ реальных данных из источников — НЕ выдумывай лицензии, сертификаты, регалии, отзывы, цифры. Ставь плейсхолдер вида [ЗАПОЛНИТЬ ВРУЧНУЮ: ...].
 - Секции с needs_real_experience=true: НЕ сочиняй личный опыт. Оставь [ВСТАВЬ РЕАЛЬНЫЙ ОПЫТ].
 - Соблюдай ограничения из политики (banned_words, banned_topics, compliance).

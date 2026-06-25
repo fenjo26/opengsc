@@ -47,6 +47,11 @@ export async function genOutline(b: any): Promise<GenResult> {
     outline = extractJson(raw);
   }
   if (!outline) return { ok: false, error: "parse_failed" };
+  // Deterministically stamp region/voice into meta so the text step inherits them reliably.
+  const meta = ((outline as any).meta ||= {});
+  meta.country = String(b.country ?? "us");
+  meta.language = String(b.language ?? "en");
+  if (b.narration === "first" || b.narration === "third") meta.narration = b.narration;
   return { ok: true, data: outline };
 }
 
