@@ -347,6 +347,18 @@ function FactCheck({ item, setItem, article, t, autoStart }: any) {
           </div>
           {badFacts.length > 0 && (
             <div style={{ marginBottom: "14px", padding: "12px 14px", borderRadius: "10px", background: "rgba(255,159,10,0.06)", border: "1px solid rgba(255,159,10,0.25)" }}>
+              <div className="tool-section-label" style={{ marginBottom: "10px" }}>{t("seoFcIssuesTitle")} ({badFacts.length})</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "9px", marginBottom: "12px" }}>
+                {badFacts.map((f, i) => (
+                  <div key={i} style={{ display: "flex", gap: "8px", alignItems: "flex-start", fontSize: "12.5px", lineHeight: 1.45 }}>
+                    <span style={{ flexShrink: 0, marginTop: "2px", fontSize: "10px", fontWeight: 700, padding: "2px 7px", borderRadius: "20px", color: statusColor(f.status), background: `${statusColor(f.status)}1a`, whiteSpace: "nowrap" }}>{statusLabel(f.status, t)}</span>
+                    <div>
+                      <span style={{ color: "var(--color-text-primary)" }}>{f.claim}</span>
+                      {f.note && <span style={{ color: "var(--color-text-secondary)" }}> — {f.note}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
               <button onClick={fixText} disabled={fixing} style={{ ...btnPurple, opacity: fixing ? 0.6 : 1 }}>
                 {fixing ? <Loader2 size={15} className="spin" /> : <Wand2 size={15} />} {t("seoFcFixBtn")} ({badFacts.length})
               </button>
