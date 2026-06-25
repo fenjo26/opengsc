@@ -1239,6 +1239,8 @@
   "seoTabFactCheck": "Fact-check",
   "seoTabImages": "Images",
   "seoFcResult": "Check result",
+  "seoFcFixBtn": "Fix unverified in the text",
+  "seoFcFixHint": "Rewrites the article to remove, soften or flag [VERIFY] the claims that weren't confirmed by sources. Re-run the check afterwards.",
   "seoFcConfirmedPct": "confirmed",
   "seoFcFacts": "facts",
   "seoFcSections": "sections",

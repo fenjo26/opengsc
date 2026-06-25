@@ -25,6 +25,7 @@ export interface CompetitorInput {
   word_count: number;
   has_price_table: boolean;
   has_faq: boolean;
+  text_sample?: string;   // real scraped page text → grounds the outline in facts
 }
 
 // ─── Outline generation prompt (rich, EAV-style — spec §4 + reference parity) ─────
@@ -66,6 +67,12 @@ export function buildOutlinePrompt(args: {
   const twc = args.targetWordCount ? `\n- целевой объём статьи: ~${args.targetWordCount} слов (распредели по секциям, не раздувай)` : "";
   const manual = args.manualTexts?.length
     ? `\n- ручные тексты конкурентов (скрейп не справился): ${JSON.stringify(args.manualTexts.map(m => ({ name: m.name, text: m.text.slice(0, 6000) })))}`
+    : "";
+  // Real scraped competitor content → the ONLY source the model may use for hard specifics.
+  const compFacts = args.competitors.filter(c => c.text_sample && c.text_sample.trim().length > 80).slice(0, 8)
+    .map((c, i) => `[${i + 1}] ${c.url}\n${(c.text_sample || "").replace(/\s+/g, " ").trim().slice(0, 1000)}`).join("\n\n");
+  const factsBlock = compFacts
+    ? `\n\nРЕАЛЬНЫЙ КОНТЕНТ КОНКУРЕНТОВ ИЗ ТОПА ВЫДАЧИ (единственный допустимый источник конкретики): используй ЭТИ тексты как опору для всех конкретных фактов — модели/версии товара, характеристики, цены, даты, названия. Если факта здесь НЕТ — НЕ выдумывай его (обобщай или ставь [ПРОВЕРИТЬ]). Цены приводи в валюте региона. НЕ копируй текст дословно — извлекай факты.\n${compFacts}`
     : "";
 
   const today = new Date().toISOString().slice(0, 10);
@@ -110,7 +117,7 @@ export function buildOutlinePrompt(args: {
 ДАНО:
 - keyword: ${args.keyword}
 - язык/страна: ${args.language}/${args.country}${toneBlock}${personaBlock}${narrationBlock}${addKw}${twc}${paaBlock}${relBlock}
-- топ-конкуренты (типы + структура): ${JSON.stringify(args.competitors)}${manual}${kwData}${customTplBlock}
+- топ-конкуренты (типы + структура): ${JSON.stringify(args.competitors.map(({ text_sample, ...c }) => { void text_sample; return c; }))}${manual}${kwData}${customTplBlock}${factsBlock}
 
 ВЕРНИ JSON строго по схеме (только JSON):
 {

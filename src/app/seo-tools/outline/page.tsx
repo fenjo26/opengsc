@@ -43,7 +43,7 @@ const SITE_TYPE_KEY: Record<string, string> = {
 };
 
 type SerpItem = { position: number; url: string; title: string; snippet: string; domain: string; site_type: string | null; intent?: string };
-type Scraped = { url: string; ok: boolean; via: string; title: string; metaDescription: string; headings: string[]; wordCount: number; hasPriceTable: boolean; hasFaq: boolean; error?: string };
+type Scraped = { url: string; ok: boolean; via: string; title: string; metaDescription: string; textSample?: string; headings: string[]; wordCount: number; hasPriceTable: boolean; hasFaq: boolean; error?: string };
 
 export default function OutlinePage() {
   const { t } = useLanguage();
@@ -196,9 +196,10 @@ export default function OutlinePage() {
       const competitors = serp.filter(s => selected.has(s.url)).map(s => {
         const p = cache[s.url];
         return {
-          position: s.position, url: s.url, site_type: s.site_type || undefined, intent: undefined,
+          position: s.position, url: s.url, site_type: s.site_type || undefined, intent: s.intent,
           title: p?.title || s.title, headings: p?.headings || [],
           word_count: p?.wordCount || 0, has_price_table: !!p?.hasPriceTable, has_faq: !!p?.hasFaq,
+          text_sample: p?.textSample || undefined,
         };
       });
       const resolvedTone = resolveTone();

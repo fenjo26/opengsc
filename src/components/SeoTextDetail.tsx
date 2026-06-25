@@ -212,9 +212,27 @@ function FactCheck({ item, setItem, article, t, autoStart }: any) {
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [err, setErr] = useState("");
+  const [fixing, setFixing] = useState(false);
   const [allOpen, setAllOpen] = useState<boolean | null>(null);
   const report = item.meta?.factcheck;
   const hasSerp = typeof window !== "undefined" && !!getSerpCreds().apiKey;
+  const badFacts: string[] = (report?.sections || []).flatMap((sec: any) => (sec.facts || []).filter((f: any) => f.status !== "confirmed").map((f: any) => f.claim)).filter(Boolean);
+
+  async function fixText() {
+    const ai = getSeoGenCreds();
+    if (!ai.apiKey || !badFacts.length) return;
+    setFixing(true); setErr("");
+    try {
+      const res = await fetch("/api/seo/factfix", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ article, claims: badFacts, keyword: item.keyword, aiProvider: ai.provider, aiApiKey: ai.apiKey, model: ai.model || undefined }),
+      });
+      const data = await res.json();
+      if (res.ok && data.text) { updateHistory(item.id, data.text); setItem((prev: any) => ({ ...prev, data: data.text })); }
+      else setErr(data.error || t("seoErrText"));
+    } catch (e: any) { setErr(String(e?.message ?? e)); }
+    setFixing(false);
+  }
 
   useEffect(() => {
     if (autoStart && getAutoFactcheck() && !report && !running && getSeoGenCreds().apiKey) run();
@@ -314,6 +332,14 @@ function FactCheck({ item, setItem, article, t, autoStart }: any) {
             <Stat n={s.partial || 0} label={t("seoFcPartial")} color="var(--color-accent-orange)" />
             <Stat n={s.unconfirmed || 0} label={t("seoFcUnconfirmed")} color="var(--color-accent-red)" />
           </div>
+          {badFacts.length > 0 && (
+            <div style={{ marginBottom: "14px", padding: "12px 14px", borderRadius: "10px", background: "rgba(255,159,10,0.06)", border: "1px solid rgba(255,159,10,0.25)" }}>
+              <button onClick={fixText} disabled={fixing} style={{ ...btnPurple, opacity: fixing ? 0.6 : 1 }}>
+                {fixing ? <Loader2 size={15} className="spin" /> : <Wand2 size={15} />} {t("seoFcFixBtn")} ({badFacts.length})
+              </button>
+              <div style={{ fontSize: "11px", color: "var(--color-text-tertiary)", marginTop: "8px" }}>{t("seoFcFixHint")}</div>
+            </div>
+          )}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginBottom: "10px", fontSize: "12px" }}>
             <button onClick={() => setAllOpen(true)} style={{ background: "none", border: "none", color: "var(--color-accent-blue)", cursor: "pointer" }}>{t("seoExpandAll")}</button>
             <span style={{ color: "var(--color-border)" }}>·</span>
