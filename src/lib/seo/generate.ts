@@ -52,6 +52,18 @@ export async function genOutline(b: any): Promise<GenResult> {
   meta.country = String(b.country ?? "us");
   meta.language = String(b.language ?? "en");
   if (b.narration === "first" || b.narration === "third") meta.narration = b.narration;
+  // Persist the real competitor facts that grounded the outline, so the TEXT step is built on the
+  // SAME sources (fact-check then just confirms, instead of cleaning up). Kept compact for size.
+  const carriedSources = competitors
+    .filter((c) => c.text_sample && String(c.text_sample).trim())
+    .slice(0, 8)
+    .map((c) => ({
+      title: c.title || c.url,
+      url: c.url,
+      domain: (c.url.match(/^https?:\/\/([^/]+)/)?.[1] || "").replace(/^www\./, ""),
+      snippet: String(c.text_sample).replace(/\s+/g, " ").trim().slice(0, 800),
+    }));
+  if (carriedSources.length) (meta as any).sources = carriedSources;
   return { ok: true, data: outline };
 }
 
@@ -66,6 +78,7 @@ export async function genText(b: any): Promise<GenResult> {
   const sourceMode = (b.sourceMode === "facts" || b.sourceMode === "cited") ? b.sourceMode : "off";
 
   let sources: { title: string; snippet: string; url: string; domain: string }[] = [];
+  let effMode: "off" | "facts" | "cited" = sourceMode;
   if (sourceMode !== "off" && b.serpKey && keyword) {
     try {
       const serp = await runSerp(String(b.serpProvider || "serper"), String(b.serpKey), keyword, { gl: b.gl, hl: b.hl, num: 10, engine: "google" });
@@ -79,6 +92,12 @@ export async function genText(b: any): Promise<GenResult> {
       });
     } catch {}
   }
+  // Fallback: if no live sources were gathered, ground the text on the competitor facts that the
+  // outline was built on (carried in meta.sources). This is the default path — no extra SERP/key.
+  if (!sources.length) {
+    const carried = Array.isArray(b.outline?.meta?.sources) ? b.outline.meta.sources : [];
+    if (carried.length) { sources = carried; effMode = "facts"; }
+  }
 
   const prompt = buildTextPrompt({
     outlineJson: b.outline,
@@ -88,7 +107,7 @@ export async function genText(b: any): Promise<GenResult> {
     custom: b.custom ? String(b.custom) : undefined,
     promptType: b.promptType === "custom" ? "custom" : "service",
     sources,
-    sourceMode,
+    sourceMode: effMode,
   });
   const model = b.model ? String(b.model) : undefined;
 
@@ -99,7 +118,7 @@ export async function genText(b: any): Promise<GenResult> {
     ...String(b.policy?.restrictions?.wordsToAvoid ?? "").split(","),
     ...String(b.policy?.restrictions?.topicsToAvoid ?? "").split(","),
   ];
-  text = enforceLinkPolicy(text, banned, sourceMode);
+  text = enforceLinkPolicy(text, banned, effMode);
 
   let redacted = 0;
   if (b.hardRedact) { const r = redactBannedWords(text, banned); text = r.text; redacted = r.count; }
