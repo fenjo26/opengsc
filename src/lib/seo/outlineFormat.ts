@@ -65,6 +65,74 @@ export function outlineToMarkdown(o: any): string {
     o.faq.forEach((f: any, i: number) => L.push(`${i + 1}. ${f.question}`));
     L.push("");
   }
+
+  // ─── Entity Analysis report (so the exported .md matches the in-app "Entity analysis" tab) ──
+  const attrsStr = (a: any) => a ? Object.entries(a).map(([k, v]) => `${k}: ${v}`).join("; ") : "";
+  if (o.sub_intents?.length) {
+    L.push("## Sub-Intent Coverage");
+    o.sub_intents.forEach((si: any, i: number) => {
+      L.push(`${i + 1}. **${si.intent || ""}**${si.section ? ` → ${si.section}` : ""}${si.word_count ? ` (${si.word_count})` : ""}`);
+      if (si.coverage) L.push(`   ${si.coverage}`);
+      if (si.entities?.length) L.push(`   Entities: ${si.entities.join(", ")}`);
+    });
+    L.push("");
+  }
+  const ea = o.entity_analysis;
+  if (ea) {
+    L.push("## Entity Analysis");
+    const cs = ea.content_strategy;
+    if (cs) {
+      const blk = (title: string, arr?: any[]) => { if (arr?.length) { L.push(`### ${title}`); arr.forEach((x: any) => L.push(`- ${typeof x === "string" ? x : JSON.stringify(x)}`)); L.push(""); } };
+      blk("Content Structure Advantages", cs.structure_advantages);
+      blk("Entity-Based Advantages", cs.entity_advantages);
+      blk("Content Structure Superiority", cs.structure_superiority);
+      blk("Authority Signal Enhancement", cs.authority_signals);
+    }
+    const pe = ea.primary_entity;
+    if (pe?.name) {
+      L.push("### Primary Entity Framework", `**${pe.name}**`);
+      if (pe.attributes) L.push(`- Attributes: ${attrsStr(pe.attributes)}`);
+      (pe.relationship_triplets || []).forEach((tr: string) => L.push(`- ${tr}`));
+      if (pe.authority_validation) L.push(`- Authority: ${pe.authority_validation}`);
+      L.push("");
+    }
+    if (ea.supporting_entities?.length) {
+      L.push("### Supporting Entity Network");
+      ea.supporting_entities.forEach((se: any) => {
+        L.push(`**${se.name}**`);
+        if (se.attributes) L.push(`- Attributes: ${attrsStr(se.attributes)}`);
+        if (se.relationship_to_primary) L.push(`- Relationship: ${se.relationship_to_primary}`);
+        if (se.content_integration) L.push(`- Integration: ${se.content_integration}`);
+        L.push("");
+      });
+    }
+    const ks = ea.keyword_strategy;
+    if (ks) {
+      L.push("### Keyword Strategy");
+      const kb = (title: string, arr?: any[]) => { if (arr?.length) { L.push(`**${title}:**`); arr.forEach((x: any) => L.push(`- ${x.keyword || x}${x.usage ? ` — ${x.usage}` : ""}`)); } };
+      kb("Primary", ks.primary); kb("LSI", ks.lsi); kb("Long-tail", ks.long_tail);
+      L.push("");
+    }
+    if (ea.visual_elements?.length) {
+      L.push("### EAV-Driven Visual Elements");
+      ea.visual_elements.forEach((v: any) => {
+        L.push(`**${v.name || ""}**`);
+        if (v.purpose) L.push(`- Purpose: ${v.purpose}`);
+        if (v.eav_data) L.push(`- EAV data: ${v.eav_data}`);
+        if (v.prompt) L.push(`- Prompt: ${v.prompt}`);
+        L.push("");
+      });
+    }
+  }
+  if (o.entities?.length) {
+    L.push("### Comprehensive Entity List", "| Entity | Type | Weight | Attributes | Relationship triplets |", "| --- | --- | --- | --- | --- |");
+    o.entities.forEach((e: any) => {
+      const trip = (e.relationship_triplets || []).join("<br>");
+      L.push(`| ${e.name || ""} | ${e.type || ""} | ${e.weight ?? ""} | ${attrsStr(e.attributes)} | ${trip} |`);
+    });
+    L.push("");
+  }
+
   return L.join("\n");
 }
 
