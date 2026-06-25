@@ -17,6 +17,17 @@ export async function POST(req: Request) {
   if (!article.trim()) return NextResponse.json({ error: "no_article" }, { status: 400 });
   if (!claims.length) return NextResponse.json({ text: article }); // nothing to fix
 
+  // Split off a leading meta block (everything before the first markdown heading, if it looks like
+  // Title/Meta Description/URL Slug). Fact-fix must never touch or drop it, so we keep it aside and
+  // re-attach it verbatim afterwards.
+  let metaHead = "";
+  let body = article;
+  const firstHeading = article.search(/^#{1,6}\s/m);
+  if (firstHeading > 0) {
+    const pre = article.slice(0, firstHeading);
+    if (/title\s*:|seo meta|url slug/i.test(pre)) { metaHead = pre.replace(/\s+$/, ""); body = article.slice(firstHeading); }
+  }
+
   const provider = String(b.aiProvider ?? "anthropic");
   const apiKey = String(b.aiApiKey ?? "");
   if (!apiKey) return NextResponse.json({ error: "no_ai_key" }, { status: 400 });
@@ -29,19 +40,21 @@ export async function POST(req: Request) {
 3. Если подтвердить нечем — ПЕРЕФОРМУЛИРУЙ обобщённо, БЕЗ конкретной цифры/модели/даты (например «уточняйте актуальную цену в официальном магазине», «доступны разные комплекты»). Лучше убрать конкретику, чем оставить выдуманную.
 ЗАПРЕЩЕНО: оставлять маркеры [ПРОВЕРИТЬ], плейсхолдеры, выдуманные числа/модели, или просьбы к читателю «проверить самому». Текст должен читаться как финальный.
 - Таблицы/сравнения на выдуманных данных: исправь по источнику или убери непроверенные строки/столбцы.
-- НЕ трогай подтверждённые и общеизвестные части. НЕ добавляй новых фактов. Сохрани структуру, ВСЕ заголовки (#/##/###), списки, таблицы и форматирование Markdown. Сохрани язык оригинала.
+ТОЧЕЧНОСТЬ (ВАЖНО): меняй ТОЛЬКО предложения/строки, где есть проблемное утверждение. ВСЁ остальное — заголовки, абзацы, списки, таблицы, порядок секций — копируй ДОСЛОВНО, не перефразируй и не сокращай. НЕ удаляй секции и НЕ ужимай текст: объём итога должен остаться примерно прежним (в пределах ±5%). НЕ добавляй новых фактов. Сохрани ВСЕ заголовки (#/##/###) и их уровни, форматирование Markdown и язык оригинала.
 Верни ТОЛЬКО готовый Markdown статьи, без преамбулы.
 
 ПРОБЛЕМНЫЕ УТВЕРЖДЕНИЯ (claim — note):
 ${claims.map((c, i) => `${i + 1}. ${c.claim}${c.note ? ` — note: ${c.note}` : ""}`).join("\n")}
 
 СТАТЬЯ:
-${article}`;
+${body}`;
 
   const model = b.model ? String(b.model) : undefined;
   let text = await fetchLLM(prompt, provider, apiKey, 16000, model);
   if (!text) return NextResponse.json({ error: "fix_failed" }, { status: 502 });
   // Strip a possible ```markdown fence / leading preamble line the model may add.
   text = text.trim().replace(/^```(?:markdown|md)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+  // Re-attach the untouched meta block (Title/Description/Slug) that we held aside.
+  if (metaHead) text = `${metaHead}\n\n${text}`;
   return NextResponse.json({ text });
 }
