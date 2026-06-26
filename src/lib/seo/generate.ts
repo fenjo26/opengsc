@@ -6,7 +6,7 @@ import { runSerp } from "@/lib/seo/serp";
 import { scrapeMany } from "@/lib/seo/scrape";
 import {
   buildOutlinePrompt, buildTextPrompt, buildAnalysisPrompt, buildFactScrubPrompt, buildSourceExtractPrompt,
-  enforceLinkPolicy, redactBannedWords, extractJson, CompetitorInput,
+  buildAutoFactCleanPrompt, enforceLinkPolicy, redactBannedWords, extractJson, CompetitorInput,
 } from "@/lib/seo/prompts";
 
 export type GenResult = { ok: true; data: any } | { ok: false; error: string };
@@ -147,6 +147,19 @@ export async function genOutline(b: any): Promise<GenResult> {
       snippet: String(c.text_sample).replace(/\s+/g, " ").trim().slice(0, c.site_type === "official_store" ? 3500 : 2500),
     }));
   if (carriedSources.length) (meta as any).sources = carriedSources;
+  // Consolidated FACTS BANK from the map stage — the article is written from it AND the auto
+  // fact-clean later verifies against it (so fact-check confirms instead of re-searching).
+  const factsBank = competitors
+    .filter((c) => c.extracted && String(c.extracted).trim())
+    .sort((a, b) => (b.site_type === "official_store" ? 1 : 0) - (a.site_type === "official_store" ? 1 : 0))
+    .slice(0, 8)
+    .map((c) => ({
+      source: c.url,
+      domain: (c.url.match(/^https?:\/\/([^/]+)/)?.[1] || "").replace(/^www\./, ""),
+      official: c.site_type === "official_store",
+      facts: String(c.extracted).trim().slice(0, 1600),
+    }));
+  if (factsBank.length) (meta as any).facts_bank = factsBank;
   return { ok: true, data: outline };
 }
 
@@ -175,19 +188,25 @@ export async function genText(b: any): Promise<GenResult> {
       });
     } catch {}
   }
-  // Fallback: if no live sources were gathered, ground the text on the competitor facts that the
-  // outline was built on (carried in meta.sources). This is the default path — no extra SERP/key.
+  // Fallback: if no live sources were gathered, ground the text on the facts the outline was built
+  // on. Prefer the consolidated facts bank (clean per-source facts); else the raw carried sources.
   if (!sources.length) {
-    const carried = Array.isArray(b.outline?.meta?.sources) ? b.outline.meta.sources : [];
-    if (carried.length) { sources = carried; effMode = "facts"; }
+    const bank = Array.isArray(b.outline?.meta?.facts_bank) ? b.outline.meta.facts_bank : [];
+    if (bank.length) {
+      sources = bank.map((x: any) => ({ title: (x.official ? "[ОФИЦИАЛЬНЫЙ] " : "") + (x.domain || x.source), url: x.source, domain: x.domain || "", snippet: x.facts }));
+      effMode = "facts";
+    } else {
+      const carried = Array.isArray(b.outline?.meta?.sources) ? b.outline.meta.sources : [];
+      if (carried.length) { sources = carried; effMode = "facts"; }
+    }
   }
 
   // Slim the outline the writer actually needs: keep meta + sections + faq + price table; drop the
   // heavy analysis blocks (entity_analysis/sub_intents/entities/…) and the carried sources from meta
   // (they're already fed via the sources block) so we don't bloat/duplicate the prompt → no timeouts.
   const full = (b.outline || {}) as any;
-  const { sources: _carried, ...metaSlim } = (full.meta || {});
-  void _carried;
+  const { sources: _carried, facts_bank: _bank, ...metaSlim } = (full.meta || {});
+  void _carried; void _bank;
   const slimOutline = {
     meta: metaSlim,
     sections: full.sections,
@@ -221,7 +240,24 @@ export async function genText(b: any): Promise<GenResult> {
 
   text = stripForeignScripts(text, String(b.language ?? "en"));
 
-  return { ok: true, data: { text, usedSources: sources.length, redacted } };
+  // AUTO fact-clean: verify the finished article against the facts bank and fix contradictions /
+  // fabrications / number mismatches in one pass — so the article ships clean (fact-check then just
+  // confirms). Best-effort: if it fails, keep the original text. Toggle off with autoFactCheck:false.
+  let autoCleaned = false;
+  const bank = Array.isArray(b.outline?.meta?.facts_bank) ? b.outline.meta.facts_bank : [];
+  if (b.autoFactCheck !== false && bank.length && text) {
+    try {
+      const bankText = bank.map((x: any, i: number) => `[${i + 1}]${x.official ? " (ОФИЦИАЛЬНЫЙ)" : ""} ${x.domain || x.source}\n${x.facts}`).join("\n\n");
+      let cleaned = await fetchLLM(buildAutoFactCleanPrompt({ article: text, factsBank: bankText, language: String(b.language ?? "en") }), provider, apiKey, 8000, model);
+      if (cleaned && cleaned.trim().length > text.length * 0.6) {
+        cleaned = cleaned.trim().replace(/^```(?:markdown|md)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+        text = stripForeignScripts(cleaned, String(b.language ?? "en"));
+        autoCleaned = true;
+      }
+    } catch { /* keep original text */ }
+  }
+
+  return { ok: true, data: { text, usedSources: sources.length, redacted, autoCleaned } };
 }
 
 // Safety net: models occasionally leak characters from another writing system into the article
