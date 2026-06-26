@@ -5,11 +5,28 @@ import { fetchLLM } from "@/lib/llm";
 import { runSerp } from "@/lib/seo/serp";
 import { scrapeMany } from "@/lib/seo/scrape";
 import {
-  buildOutlinePrompt, buildTextPrompt, buildAnalysisPrompt,
+  buildOutlinePrompt, buildTextPrompt, buildAnalysisPrompt, buildFactScrubPrompt,
   enforceLinkPolicy, redactBannedWords, extractJson, CompetitorInput,
 } from "@/lib/seo/prompts";
 
 export type GenResult = { ok: true; data: any } | { ok: false; error: string };
+
+// Apply find→replace corrections over an object's STRING VALUES only (keys/structure untouched).
+// Safe against JSON corruption because we never touch keys and rebuild the object in place.
+function applyCorrections(obj: any, corrections: { find: string; replace: string }[]): any {
+  if (typeof obj === "string") {
+    let s = obj;
+    for (const c of corrections) if (c.find) s = s.split(c.find).join(c.replace);
+    return s;
+  }
+  if (Array.isArray(obj)) return obj.map((x) => applyCorrections(x, corrections));
+  if (obj && typeof obj === "object") {
+    const o: any = {};
+    for (const k of Object.keys(obj)) o[k] = applyCorrections(obj[k], corrections);
+    return o;
+  }
+  return obj;
+}
 
 // ─── Outline (structure) ─────────────────────────────────────────────────────────
 export async function genOutline(b: any): Promise<GenResult> {
@@ -47,6 +64,26 @@ export async function genOutline(b: any): Promise<GenResult> {
     outline = extractJson(raw);
   }
   if (!outline) return { ok: false, error: "parse_failed" };
+
+  // Knowledge-based fact scrub: actively correct wrong/fabricated specifics baked into the outline
+  // (e.g. "8-inch" → "7.9-inch", invented colors → generalized) BEFORE the text inherits them.
+  if (b.factScrub !== false) {
+    try {
+      const scrubPrompt = buildFactScrubPrompt({ outline, keyword, country: String(b.country ?? "us") });
+      const scrubRaw = await fetchLLM(scrubPrompt, provider, apiKey, 4000, model);
+      const parsed: any = extractJson(scrubRaw);
+      const corrections = Array.isArray(parsed?.corrections)
+        ? parsed.corrections
+            .filter((c: any) => c && typeof c.find === "string" && c.find.trim() && typeof c.replace === "string" && c.find !== c.replace)
+            .slice(0, 40)
+        : [];
+      if (corrections.length) {
+        outline = applyCorrections(outline, corrections);
+        (outline as any)._scrub = { applied: corrections.length };
+      }
+    } catch { /* scrub is best-effort; never block outline on it */ }
+  }
+
   // Deterministically stamp region/voice into meta so the text step inherits them reliably.
   const meta = ((outline as any).meta ||= {});
   meta.country = String(b.country ?? "us");

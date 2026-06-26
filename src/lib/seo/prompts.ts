@@ -169,6 +169,30 @@ export function buildOutlinePrompt(args: {
 }`;
 }
 
+// ─── Outline fact-scrub: correct baked-in wrong/fabricated specifics before the text is written ──
+// Runs right after outline generation. Uses the model's reliable knowledge to fix concrete values
+// (wrong screen size, fabricated colors, wrong price/date/edition/game names). Returns find→replace
+// pairs that are applied over the outline's string VALUES only (structure/keys/entities untouched).
+export function buildFactScrubPrompt(args: { outline: any; keyword: string; country?: string }): string {
+  return `Ты — фактчекер-редактор с надёжными знаниями о предмете. Ниже JSON-структура статьи (outline) по теме "${args.keyword}"${args.country ? `, регион ${args.country}` : ""}. Найди КОНКРЕТНЫЕ фактические значения, которые ВЫГЛЯДЯТ ОШИБОЧНЫМИ или ВЫДУМАННЫМИ: неверные характеристики (диагональ экрана, объём памяти, чип, разрешение, частота), неверные/выдуманные цены и MSRP, неверные даты, неточные названия моделей/изданий/игр, выдуманные цвета/комплектации/SKU.
+
+Для каждой такой ошибки верни пару find→replace:
+- "find": ТОЧНАЯ подстрока, как она буквально встречается в значениях JSON (например "8-inch LCD").
+- "replace": исправленное РЕАЛЬНОЕ значение, если ты в нём уверен (например "7.9-inch LCD"); ЛИБО обобщённая формулировка без выдуманной конкретики, если точного значения не знаешь (например для выдуманных цветов — "various Joy-Con 2 color options").
+
+ПРАВИЛА:
+- Меняй ТОЛЬКО явно ошибочное/выдуманное. Достоверно верные значения НЕ трогай.
+- НЕ меняй структуру, ключи, заголовки секций, имена сущностей — только фактические ЗНАЧЕНИЯ внутри строк.
+- "find" должен встречаться в JSON буквально; не выдумывай несуществующих подстрок.
+- Будь осторожен: лучше обобщить сомнительное, чем заменить на другое сомнительное.
+- Если явных ошибок нет — верни пустой список.
+
+Верни СТРОГИЙ JSON без обёрток: { "corrections": [ { "find": "", "replace": "" } ] }
+
+OUTLINE JSON:
+${JSON.stringify(args.outline).slice(0, 18000)}`;
+}
+
 // ─── Content Analysis (comprehensive, EAV) — drives Dashboard / Guideline / Gaps / Constructor ──
 // Compares the target page against scraped top competitors and returns a rich JSON spec.
 export function buildAnalysisPrompt(args: {
