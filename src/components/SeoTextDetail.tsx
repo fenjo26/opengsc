@@ -475,15 +475,21 @@ function Images({ item, setItem, outline, article, t, autoStart }: any) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-      {images.hero && (
-        <div style={{ borderRadius: "12px", overflow: "hidden", border: "1px solid var(--color-border)" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "linear-gradient(90deg, var(--color-accent-purple), #ff2d92)" }}>
-            <span style={{ fontSize: "14px", fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: "8px" }}><ImageIcon size={15} /> {t("seoImgHero")}</span>
-            <button onClick={() => copy(images.hero, "hero")} style={{ ...btnGhost, background: "rgba(255,255,255,0.2)", border: "none", color: "#fff" }}>{copied === "hero" ? <Check size={13} /> : <Copy size={13} />} {copied === "hero" ? t("seoCopied") : t("seoCopyShort")}</button>
+      {images.hero && (() => {
+        const hp = typeof images.hero === "string" ? images.hero : images.hero?.prompt;
+        const ha = typeof images.hero === "object" ? images.hero?.alt : "";
+        const ht = typeof images.hero === "object" ? images.hero?.title : "";
+        return (
+          <div style={{ borderRadius: "12px", overflow: "hidden", border: "1px solid var(--color-border)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "linear-gradient(90deg, var(--color-accent-purple), #ff2d92)" }}>
+              <span style={{ fontSize: "14px", fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: "8px" }}><ImageIcon size={15} /> {t("seoImgHero")}</span>
+              <button onClick={() => copy(hp, "hero")} style={{ ...btnGhost, background: "rgba(255,255,255,0.2)", border: "none", color: "#fff" }}>{copied === "hero" ? <Check size={13} /> : <Copy size={13} />} {copied === "hero" ? t("seoCopied") : t("seoCopyShort")}</button>
+            </div>
+            <div style={{ padding: "14px 16px", fontSize: "13px", lineHeight: 1.6, color: "var(--color-text-primary)" }}>{hp}</div>
+            {(ha || ht) && <ImgSeoMeta alt={ha} title={ht} />}
           </div>
-          <div style={{ padding: "14px 16px", fontSize: "13px", lineHeight: 1.6, color: "var(--color-text-primary)" }}>{images.hero}</div>
-        </div>
-      )}
+        );
+      })()}
       {(images.sections || []).map((s: any, i: number) => (
         <div key={i} style={{ border: "1px solid var(--color-border)", borderRadius: "10px", padding: "14px 16px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", marginBottom: "8px" }}>
@@ -494,12 +500,21 @@ function Images({ item, setItem, outline, article, t, autoStart }: any) {
             <button onClick={() => copy(s.prompt, `s${i}`)} style={{ ...btnGhost, ...(copied === `s${i}` ? { borderColor: "var(--color-accent-green)", background: "rgba(52,199,89,0.12)", color: "var(--color-accent-green)" } : {}) }}>{copied === `s${i}` ? <Check size={13} /> : <Copy size={13} />} {copied === `s${i}` ? t("seoCopied") : t("seoImgCopyPrompt")}</button>
           </div>
           <div style={{ fontSize: "13px", lineHeight: 1.6, color: "var(--color-text-secondary)" }}>{s.prompt}</div>
+          {(s.alt || s.title) && <ImgSeoMeta alt={s.alt} title={s.title} />}
         </div>
       ))}
     </div>
   );
 }
 
+function ImgSeoMeta({ alt, title }: { alt?: string; title?: string }) {
+  return (
+    <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px dashed var(--color-border)", display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px" }}>
+      {alt && <div style={{ color: "var(--color-text-secondary)" }}><b style={{ color: "var(--color-text-tertiary)" }}>alt:</b> {alt}</div>}
+      {title && <div style={{ color: "var(--color-text-secondary)" }}><b style={{ color: "var(--color-text-tertiary)" }}>title:</b> {title}</div>}
+    </div>
+  );
+}
 function Row({ icon, label, value }: { icon: React.ReactNode; label: string; value?: string }) {
   if (!value) return null;
   return <div style={{ display: "flex", gap: "9px" }}><span style={{ color: "var(--color-text-tertiary)", marginTop: "1px", flexShrink: 0 }}>{icon}</span><div><div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{label}</div><div style={{ fontSize: "14px", fontWeight: 600, color: "var(--color-text-primary)" }}>{value}</div></div></div>;
