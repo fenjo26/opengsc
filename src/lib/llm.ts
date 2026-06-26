@@ -7,13 +7,17 @@ export async function fetchLLM(
   maxTokens = 1024,
   modelOverride?: string,
 ): Promise<string | null> {
+  // Hard timeout so a stuck/over-long generation fails in minutes instead of hanging forever.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 200_000);
+  const sig = ctrl.signal;
   try {
     let text = '';
     if (provider === 'anthropic' || provider === 'zai') {
       const baseUrl = provider === 'zai' ? 'https://api.z.ai/api/anthropic' : 'https://api.anthropic.com';
       const model = modelOverride ?? (provider === 'zai' ? 'glm-4.5-air' : 'claude-haiku-4-5-20251001');
       const res = await fetch(`${baseUrl}/v1/messages`, {
-        method: 'POST',
+        method: 'POST', signal: sig,
         headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
         body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
       });
@@ -22,7 +26,7 @@ export async function fetchLLM(
       text = data.content?.[0]?.text ?? '';
     } else if (provider === 'openai') {
       const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
+        method: 'POST', signal: sig,
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: modelOverride ?? 'gpt-4o-mini', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
       });
@@ -32,7 +36,7 @@ export async function fetchLLM(
     } else if (provider === 'gemini') {
       const gModel = modelOverride ?? 'gemini-1.5-flash';
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${gModel}:generateContent?key=${apiKey}`, {
-        method: 'POST',
+        method: 'POST', signal: sig,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
       });
@@ -41,7 +45,7 @@ export async function fetchLLM(
       text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
     } else if (provider === 'openrouter') {
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
+        method: 'POST', signal: sig,
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: modelOverride ?? 'anthropic/claude-3.5-haiku', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
       });
@@ -51,7 +55,9 @@ export async function fetchLLM(
     }
     return text;
   } catch (e) {
-    console.error('[LLM] fetchLLM error:', e);
+    console.error('[LLM] fetchLLM error:', (e as any)?.name === 'AbortError' ? 'timeout' : e);
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
