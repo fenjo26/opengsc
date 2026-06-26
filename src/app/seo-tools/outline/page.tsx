@@ -220,6 +220,7 @@ export default function OutlinePage() {
       });
       if (error || !jid) { setErr(error === "parse_failed" ? t("seoErrParseJson") : (error || t("seoErrGen"))); setLoading(""); return; }
       setJobId(jid); // background job started — render live progress; user can leave
+      if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e: any) { setErr(String(e?.message ?? e)); }
     setLoading("");
   }
@@ -251,7 +252,7 @@ export default function OutlinePage() {
       {/* progress */}
       <Stepper step={stepNum} t={t} />
 
-      {(noSerpKey || noAiKey) && (
+      {!jobId && (noSerpKey || noAiKey) && (
         <div className={card} style={{ borderColor: "rgba(255,159,10,0.35)", background: "rgba(255,159,10,0.06)", display: "flex", gap: "10px", alignItems: "flex-start" }}>
           <AlertTriangle size={18} color="var(--color-accent-orange)" style={{ flexShrink: 0, marginTop: "1px" }} />
           <div style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>
@@ -261,7 +262,8 @@ export default function OutlinePage() {
         </div>
       )}
 
-      {/* Step 1: params */}
+      {/* Step 1: params (hidden while a job runs) */}
+      {!jobId && (
       <div className={card}>
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: "12px", marginBottom: "12px" }}>
           <Field l={t("seoKeyword")}>
@@ -297,6 +299,7 @@ export default function OutlinePage() {
           </button>
         </div>
       </div>
+      )}
 
       {err && (
         <div className={card} style={{ borderColor: "rgba(255,69,58,0.35)", background: "rgba(255,69,58,0.06)", color: "var(--color-accent-red)", fontSize: "13px", display: "flex", gap: "8px", alignItems: "center" }}>
@@ -310,11 +313,12 @@ export default function OutlinePage() {
           keyword={keyword}
           onDone={async (job) => { const rec = await importJob(job); setJobId(null); if (rec) router.push(`/seo-tools/history/${rec.id}`); }}
           onError={(m) => { setErr(m === "parse_failed" ? t("seoErrParseJson") : m); setJobId(null); }}
+          onCancel={() => setJobId(null)}
         />
       )}
 
-      {/* Step 2: competitors + config */}
-      {serp.length > 0 && (
+      {/* Step 2: competitors + config (hidden while a job runs) */}
+      {!jobId && serp.length > 0 && (
         <div className={card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
             <h3 style={{ fontSize: "14px", fontWeight: 700, margin: 0, color: "var(--color-text-primary)" }}>

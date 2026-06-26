@@ -135,6 +135,7 @@ export default function AnalysisPage() {
       if (error || !jid) { setErr(error === "parse_failed" ? t("seoErrParseJsonShort") : (error || t("seoErrAnalysis"))); stopTimer(); setBusy(false); return; }
       stopTimer(); setBusy(false); setStage("");
       setAnJobId(jid); // background job — live progress takes over; user can leave
+      if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     } catch (e: any) { setErr(String(e?.message ?? e)); }
     stopTimer(); setBusy(false); setStage("");
@@ -252,6 +253,7 @@ export default function AnalysisPage() {
           keyword={keyword}
           onDone={async (job) => { const rec = await importJob(job); setAnJobId(null); if (rec) setReport(rec.data); }}
           onError={(m) => { setErr(m === "parse_failed" ? t("seoErrParseJsonShort") : m); setAnJobId(null); }}
+          onCancel={() => { setAnJobId(null); setStep(1); }}
         />
       )}
       {step === 3 && !anJobId && (

@@ -88,6 +88,7 @@ export default function TextGenPage() {
     setLoading(false);
     if (error || !jid) { setErr(error || t("seoErrText")); return; }
     setJobKeyword(outline.keyword); setJobId(jid); // background job — render live progress; user can leave
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   const selectStyle: React.CSSProperties = { width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "13px", outline: "none", boxSizing: "border-box" };
@@ -101,13 +102,24 @@ export default function TextGenPage() {
         </div>
       </div>
 
-      {!ai.apiKey && (
+      {jobId && (
+        <SeoJobProgress
+          jobId={jobId}
+          keyword={jobKeyword}
+          onDone={async (job) => { const rec = await importJob(job); setJobId(null); setHistory(loadHistory()); if (rec) router.push(`/seo-tools/history/${rec.id}`); }}
+          onError={(m) => { setErr(m); setJobId(null); }}
+          onCancel={() => setJobId(null)}
+        />
+      )}
+
+      {!jobId && !ai.apiKey && (
         <div className={card} style={{ borderColor: "rgba(255,159,10,0.35)", background: "rgba(255,159,10,0.06)", display: "flex", gap: "10px", alignItems: "center", fontSize: "13px", color: "var(--color-text-secondary)" }}>
           <AlertTriangle size={18} color="var(--color-accent-orange)" /> {t("seoNeedKeysPrefix")} <b>{t("seoAiProviderLabel")}</b>. <Link href="/settings" style={{ color: "var(--color-accent-blue)" }}>{t("seoSettingsShort")}</Link>
         </div>
       )}
 
-      {/* Settings */}
+      {/* Settings (hidden while a job runs) */}
+      {!jobId && (
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", alignItems: "start" }}>
         {/* left */}
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -190,6 +202,7 @@ export default function TextGenPage() {
           </div>
         </div>
       </div>
+      )}
 
       {err && <div className={card} style={{ borderColor: "rgba(255,69,58,0.35)", background: "rgba(255,69,58,0.06)", color: "var(--color-accent-red)", fontSize: "13px", display: "flex", gap: "8px", alignItems: "center" }}><AlertTriangle size={16} /> {err}</div>}
 
@@ -199,14 +212,6 @@ export default function TextGenPage() {
         </button>
       )}
 
-      {jobId && (
-        <SeoJobProgress
-          jobId={jobId}
-          keyword={jobKeyword}
-          onDone={async (job) => { const rec = await importJob(job); setJobId(null); setHistory(loadHistory()); if (rec) router.push(`/seo-tools/history/${rec.id}`); }}
-          onError={(m) => { setErr(m); setJobId(null); }}
-        />
-      )}
 
       {/* History */}
       <div className={card}>

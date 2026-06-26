@@ -4,15 +4,17 @@
 // "you can minimize this page" note — the task keeps running server-side and lands in History.
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2, AlertTriangle, Info } from "lucide-react";
+import Link from "next/link";
+import { Loader2, AlertTriangle, Info, ChevronLeft, History } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { getJob, SeoJobRec } from "@/lib/seo/jobs";
 
-export default function SeoJobProgress({ jobId, keyword, onDone, onError }: {
+export default function SeoJobProgress({ jobId, keyword, onDone, onError, onCancel }: {
   jobId: string;
   keyword?: string;
   onDone: (job: SeoJobRec) => void;
   onError?: (msg: string) => void;
+  onCancel?: () => void;
 }) {
   const { t } = useLanguage();
   const [elapsed, setElapsed] = useState(0);
@@ -49,15 +51,17 @@ export default function SeoJobProgress({ jobId, keyword, onDone, onError }: {
   }
 
   return (
-    <div className="panel">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
-        <h3 style={{ fontSize: "17px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0, display: "flex", alignItems: "center", gap: "10px" }}>
-          <Loader2 size={18} className="spin" /> {t("seoJobRunning")}
+    <div className="panel" style={{ borderColor: "rgba(124,77,255,0.35)", background: "rgba(124,77,255,0.04)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+        <h3 style={{ fontSize: "18px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0, display: "flex", alignItems: "center", gap: "10px" }}>
+          <Loader2 size={19} className="spin" color="var(--color-accent-purple)" /> {t("seoJobStarted")}
         </h3>
         <span className="pill">processing</span>
       </div>
-      {keyword && <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "12px" }}>{t("seoCaKeyword")}: {keyword}</div>}
-      <div style={{ height: "10px", borderRadius: "6px", background: "var(--color-bg)", overflow: "hidden", marginBottom: "8px" }}>
+      <div style={{ fontSize: "13px", color: "var(--color-text-secondary)", marginBottom: "14px" }}>
+        {t("seoJobStartedSub")}{keyword ? ` — «${keyword}»` : ""}
+      </div>
+      <div style={{ height: "12px", borderRadius: "6px", background: "var(--color-bg)", overflow: "hidden", marginBottom: "8px" }}>
         <div style={{ width: `${progress}%`, height: "100%", background: "var(--color-accent-purple)", transition: "width 0.6s" }} />
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "var(--color-text-secondary)" }}>
@@ -66,6 +70,16 @@ export default function SeoJobProgress({ jobId, keyword, onDone, onError }: {
       </div>
       <div style={{ marginTop: "16px", padding: "13px 15px", borderRadius: "10px", background: "rgba(41,151,255,0.06)", border: "1px solid rgba(41,151,255,0.25)", fontSize: "13px", color: "var(--color-text-secondary)", display: "flex", gap: "9px", alignItems: "flex-start" }}>
         <Info size={16} color="var(--color-accent-blue)" style={{ flexShrink: 0, marginTop: "1px" }} /> {t("seoJobMinimizeNote")}
+      </div>
+      <div style={{ display: "flex", gap: "10px", marginTop: "14px", flexWrap: "wrap" }}>
+        <Link href="/seo-tools/history" style={{ display: "inline-flex", alignItems: "center", gap: "7px", padding: "9px 14px", borderRadius: "9px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-primary)", fontSize: "13px", fontWeight: 600, textDecoration: "none" }}>
+          <History size={15} /> {t("seoJobOpenHistory")}
+        </Link>
+        {onCancel && (
+          <button onClick={onCancel} style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "9px 14px", borderRadius: "9px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", fontSize: "13px", cursor: "pointer" }}>
+            <ChevronLeft size={15} /> {t("seoJobBackToForm")}
+          </button>
+        )}
       </div>
     </div>
   );

@@ -1430,5 +1430,9 @@
   "seoFormatHtml": "Format as HTML",
   "seoCopied": "Copied!",
   "seoJobRunning": "Generating…",
-  "seoJobMinimizeNote": "You can minimize this page — the task keeps running and will appear in History when it's done."
+  "seoJobMinimizeNote": "You can minimize this page — the task keeps running and will appear in History when it's done.",
+  "seoJobStarted": "Generation started",
+  "seoJobStartedSub": "Your task is running in the background. No need to click again.",
+  "seoJobOpenHistory": "Open in History",
+  "seoJobBackToForm": "Change parameters"
 }
