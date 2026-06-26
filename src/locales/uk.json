@@ -1147,6 +1147,7 @@
   "seoHistFilterTexts": "Тексти",
   "seoHistFilterAnalyses": "Аналізи",
   "seoHistEmpty": "Поки немає задач — згенеруйте структуру або запустіть аналіз.",
+  "seoHistClearFailed": "Очистити невдалі",
   "seoBadgeOutline": "Структура",
   "seoBadgeText": "Текст",
   "seoBadgeAnalysis": "Аналіз",

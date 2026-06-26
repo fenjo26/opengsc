@@ -52,6 +52,15 @@ export async function deleteJob(id: string): Promise<void> {
   try { await fetch(`/api/seo/jobs/${id}`, { method: "DELETE" }); } catch {}
 }
 
+// Bulk-remove failed jobs (server-side). Returns how many were deleted.
+export async function clearFailedJobs(): Promise<number> {
+  try {
+    const res = await fetch("/api/seo/jobs?failed=1", { method: "DELETE" });
+    if (!res.ok) return 0;
+    return (await res.json()).deleted ?? 0;
+  } catch { return 0; }
+}
+
 function safeParse(s?: string | null): any { if (!s) return undefined; try { return JSON.parse(s); } catch { return undefined; } }
 
 // Map a completed job's result into a local History item, then drop the server copy.

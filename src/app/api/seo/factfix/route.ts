@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { fetchLLM } from "@/lib/llm";
+import { stripForeignScripts } from "@/lib/seo/generate";
 
 // POST /api/seo/factfix — rewrite an article to remove/soften/flag unverified claims
 // found by fact-check. body: { article, claims[], keyword?, aiProvider, aiApiKey, model? }
@@ -58,6 +59,7 @@ ${body}`;
   if (!text) return NextResponse.json({ error: "fix_failed" }, { status: 502 });
   // Strip a possible ```markdown fence / leading preamble line the model may add.
   text = text.trim().replace(/^```(?:markdown|md)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+  text = stripForeignScripts(text, String(b.language ?? "en"));
   // Re-attach the untouched meta block (Title/Description/Slug) that we held aside.
   if (metaHead) text = `${metaHead}\n\n${text}`;
   return NextResponse.json({ text });

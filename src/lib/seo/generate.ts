@@ -219,7 +219,22 @@ export async function genText(b: any): Promise<GenResult> {
   let redacted = 0;
   if (b.hardRedact) { const r = redactBannedWords(text, banned); text = r.text; redacted = r.count; }
 
+  text = stripForeignScripts(text, String(b.language ?? "en"));
+
   return { ok: true, data: { text, usedSources: sources.length, redacted } };
+}
+
+// Safety net: models occasionally leak characters from another writing system into the article
+// (e.g. a stray Chinese token in an English text). Strip CJK/kana/hangul runs when the target
+// language doesn't use them, then tidy the spacing/punctuation left behind.
+export function stripForeignScripts(text: string, language: string): string {
+  if (/^(zh|ja|ko)/i.test(language || "")) return text; // target language legitimately uses these
+  if (!/[぀-ヿ㐀-䶿一-鿿豈-﫿가-힯]/.test(text)) return text;
+  return text
+    .replace(/[぀-ヿ㐀-䶿一-鿿豈-﫿가-힯]+/g, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/ +([,.:;!?])/g, "$1")
+    .replace(/([:：])\s+([.,;!?])/g, "$2");
 }
 
 // ─── Content analysis ──────────────────────────────────────────────────────────────

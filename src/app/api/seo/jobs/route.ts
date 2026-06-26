@@ -50,9 +50,28 @@ export async function GET() {
   const userId = (session?.user as any)?.id;
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
+    // Auto-fail jobs stuck in "processing" beyond the max generation window (server may have
+    // restarted mid-run, or the detached task died) so they don't spin forever in History.
+    const cutoff = new Date(Date.now() - 20 * 60 * 1000);
+    try { await jobs().updateMany({ where: { userId, status: "processing", updatedAt: { lt: cutoff } }, data: { status: "error", error: "stale_timeout" } }); } catch {}
     const list = await jobs().findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: 50 });
     return NextResponse.json({ jobs: list });
   } catch {
     return NextResponse.json({ jobs: [] }); // table not migrated yet → empty, no crash
+  }
+}
+
+// DELETE /api/seo/jobs?failed=1 — bulk-remove the user's failed jobs so the list stays clean.
+export async function DELETE(req: Request) {
+  const session = await getServerSession(authOptions);
+  const userId = (session?.user as any)?.id;
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const failed = new URL(req.url).searchParams.get("failed");
+  if (!failed) return NextResponse.json({ error: "bad_request" }, { status: 400 });
+  try {
+    const r = await jobs().deleteMany({ where: { userId, status: "error" } });
+    return NextResponse.json({ deleted: r?.count ?? 0 });
+  } catch {
+    return NextResponse.json({ deleted: 0 });
   }
 }

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Search, Eye, Trash2, FileText, ScrollText, BarChart3, Loader2, AlertTriangle, X } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { loadHistory, removeHistory, clearHistory, HistoryItem, HistoryType } from "@/lib/seo/history";
-import { listJobs, importJob, deleteJob, SeoJobRec } from "@/lib/seo/jobs";
+import { listJobs, importJob, deleteJob, clearFailedJobs, SeoJobRec } from "@/lib/seo/jobs";
 
 const TYPE_META: Record<HistoryType, { labelKey: string; color: string; icon: any }> = {
   outline: { labelKey: "seoBadgeOutline", color: "#2997ff", icon: FileText },
@@ -44,6 +44,8 @@ export default function HistoryPage() {
   }, []);
 
   async function dismissJob(id: string) { await deleteJob(id); setJobs(j => j.filter(x => x.id !== id)); }
+  async function clearFailed() { await clearFailedJobs(); setJobs(j => j.filter(x => x.status !== "error")); }
+  const failedCount = useMemo(() => jobs.filter(j => j.status === "error").length, [jobs]);
 
   const counts = useMemo(() => ({
     all: items.length + jobs.length,
@@ -92,9 +94,16 @@ export default function HistoryPage() {
       <div className="panel">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "14px", flexWrap: "wrap" }}>
           <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>{t("seoHistoryAll")}</h3>
-          <div style={{ position: "relative", flex: 1, maxWidth: "320px", minWidth: "180px" }}>
-            <Search size={14} style={{ position: "absolute", left: "11px", top: "50%", transform: "translateY(-50%)", color: "var(--color-text-tertiary)" }} />
-            <input className="tool-input" style={{ paddingLeft: "32px" }} value={q} onChange={e => setQ(e.target.value)} placeholder={t("seoHistorySearch")} />
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, justifyContent: "flex-end", flexWrap: "wrap" }}>
+            {failedCount > 0 && (
+              <button onClick={clearFailed} style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "7px 12px", borderRadius: "8px", border: "1px solid rgba(255,69,58,0.3)", background: "rgba(255,69,58,0.06)", color: "var(--color-accent-red)", fontSize: "12px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                <Trash2 size={13} /> {t("seoHistClearFailed")} ({failedCount})
+              </button>
+            )}
+            <div style={{ position: "relative", maxWidth: "320px", minWidth: "180px", flex: 1 }}>
+              <Search size={14} style={{ position: "absolute", left: "11px", top: "50%", transform: "translateY(-50%)", color: "var(--color-text-tertiary)" }} />
+              <input className="tool-input" style={{ paddingLeft: "32px" }} value={q} onChange={e => setQ(e.target.value)} placeholder={t("seoHistorySearch")} />
+            </div>
           </div>
         </div>
 
