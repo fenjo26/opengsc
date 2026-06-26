@@ -94,12 +94,12 @@ export async function genOutline(b: any): Promise<GenResult> {
   const carriedSources = competitors
     .filter((c) => c.text_sample && String(c.text_sample).trim())
     .sort((a, b) => (b.site_type === "official_store" ? 1 : 0) - (a.site_type === "official_store" ? 1 : 0))
-    .slice(0, 8)
+    .slice(0, 6)
     .map((c) => ({
       title: (c.site_type === "official_store" ? "[ОФИЦИАЛЬНЫЙ] " : "") + (c.title || c.url),
       url: c.url,
       domain: (c.url.match(/^https?:\/\/([^/]+)/)?.[1] || "").replace(/^www\./, ""),
-      snippet: String(c.text_sample).replace(/\s+/g, " ").trim().slice(0, 3500),
+      snippet: String(c.text_sample).replace(/\s+/g, " ").trim().slice(0, c.site_type === "official_store" ? 3500 : 2500),
     }));
   if (carriedSources.length) (meta as any).sources = carriedSources;
   return { ok: true, data: outline };

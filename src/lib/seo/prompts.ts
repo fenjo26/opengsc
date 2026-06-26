@@ -69,12 +69,14 @@ export function buildOutlinePrompt(args: {
     ? `\n- ручные тексты конкурентов (скрейп не справился): ${JSON.stringify(args.manualTexts.map(m => ({ name: m.name, text: m.text.slice(0, 6000) })))}`
     : "";
   // Real scraped competitor content → primary grounding for hard specifics. Official/brand sources first.
+  // Keep the outline input bounded (official source first, deeper; others trimmed) so the model
+  // doesn't blow the token budget and truncate the JSON. Full-depth text still flows to the TEXT step.
   const compRanked = args.competitors
     .filter(c => c.text_sample && c.text_sample.trim().length > 80)
     .sort((a, b) => (b.site_type === "official_store" ? 1 : 0) - (a.site_type === "official_store" ? 1 : 0))
-    .slice(0, 8);
+    .slice(0, 6);
   const compFacts = compRanked
-    .map((c, i) => `[${i + 1}]${c.site_type === "official_store" ? " (ОФИЦИАЛЬНЫЙ ИСТОЧНИК — высший приоритет)" : ""} ${c.url}\n${(c.text_sample || "").replace(/\s+/g, " ").trim().slice(0, 4000)}`).join("\n\n");
+    .map((c, i) => `[${i + 1}]${c.site_type === "official_store" ? " (ОФИЦИАЛЬНЫЙ ИСТОЧНИК — высший приоритет)" : ""} ${c.url}\n${(c.text_sample || "").replace(/\s+/g, " ").trim().slice(0, c.site_type === "official_store" ? 3500 : 2000)}`).join("\n\n");
   const factsBlock = compFacts
     ? `\n\nРЕАЛЬНЫЙ КОНТЕНТ КОНКУРЕНТОВ/ИСТОЧНИКОВ ИЗ ТОПА ВЫДАЧИ (главная опора для конкретики): извлекай отсюда ВСЕ конкретные значения — точные цены/суммы, названия моделей/версий/изданий, характеристики, объёмы памяти, даты, имена игр/товаров/ритейлеров. Если есть «(ОФИЦИАЛЬНЫЙ ИСТОЧНИК)» — доверяй ему в первую очередь. ПРАВИЛО: бери конкретику отсюда ИЛИ из достоверных общеизвестных фактов, в которых уверен; если значения нет ни тут, ни в надёжных знаниях — обобщи (диапазон/ориентир) и пометь копирайтеру «уточнить из источников», но НЕ подставляй выдуманное число и НЕ вставляй токен в заголовки/summary. Названия (игр/моделей) бери ТОЧНЫЕ. Цены — в валюте региона. Текст не копируй дословно — извлекай факты.\n${compFacts}`
     : `\n\nЗАЗЕМЛЕНИЕ (текстов конкурентов нет): подтверждённого источника конкретики нет. Можешь опираться на достоверные общеизвестные факты о предмете (реальные характеристики, точные названия), но НЕ выдумывай неуверенных цен/спеков/дат/изданий — такие места держи качественными (диапазон/ориентир) и помечай «уточнить из источников при написании». Структуру, сущности и ключи раскрывай полноценно — ограничение касается ТОЛЬКО придуманной неуверенной конкретики.`;
@@ -396,15 +398,41 @@ export function redactBannedWords(text: string, bannedTokens: string[]): { text:
 // Strips ```json fences and grabs the outermost {...} before JSON.parse.
 export function extractJson<T = any>(raw: string | null): T | null {
   if (!raw) return null;
-  let s = raw.trim();
-  s = s.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+  let s = raw.trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
   const first = s.indexOf("{");
+  if (first === -1) return null;
+  s = s.slice(first);
+  // 1) Straight parse of the largest {...} slice (works for complete output).
   const last = s.lastIndexOf("}");
-  if (first === -1 || last === -1 || last < first) return null;
-  const candidate = s.slice(first, last + 1);
-  try {
-    return JSON.parse(candidate) as T;
-  } catch {
-    return null;
+  if (last > 0) { try { return JSON.parse(s.slice(0, last + 1)) as T; } catch { /* fall through */ } }
+  // 2) Salvage TRUNCATED output (hit token limit mid-JSON): cut at the last fully-closed
+  //    container and re-close the still-open parents, so we recover a valid partial outline.
+  const repaired = repairTruncatedJson(s);
+  if (repaired) { try { return JSON.parse(repaired) as T; } catch { /* give up */ } }
+  return null;
+}
+
+// Cut a truncated JSON string at the last position where a nested object/array fully closed,
+// then append the closers for whatever containers were still open there. Ignores brackets/quotes
+// inside strings. Always yields syntactically valid JSON (losing only the incomplete tail).
+function repairTruncatedJson(s: string): string | null {
+  const stack: string[] = [];
+  let inStr = false, esc = false, cut = -1;
+  let cutStack: string[] = [];
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === "\\") esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') inStr = true;
+    else if (ch === "{" || ch === "[") stack.push(ch === "{" ? "}" : "]");
+    else if (ch === "}" || ch === "]") { stack.pop(); cut = i; cutStack = stack.slice(); }
   }
+  if (cut === -1) return null;
+  let out = s.slice(0, cut + 1).replace(/,\s*$/, "");
+  for (let i = cutStack.length - 1; i >= 0; i--) out += cutStack[i];
+  return out;
 }
