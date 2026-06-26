@@ -223,6 +223,7 @@ export async function genText(b: any): Promise<GenResult> {
     promptType: b.promptType === "custom" ? "custom" : "service",
     sources,
     sourceMode: effMode,
+    includeToc: b.includeToc === true,
   });
   const model = b.model ? String(b.model) : undefined;
 

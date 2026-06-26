@@ -1217,6 +1217,8 @@
   "seoRecentTitle": "Нещодавні",
   "seoRecentAll": "Всі в Історії",
   "seoAddCustomInstruction": "Додати користувацьку інструкцію",
+  "seoIncludeToc": "Додати зміст",
+  "seoIncludeTocHint": "Вставить блок-зміст із посиланнями (як <div>, не заголовком) після H1. Зручно для довгих статей.",
   "seoCustomInstructionPh": "Що додати від себе в генерацію…",
   "seoTextHistory": "Історія генерації тексту",
   "seoTextFilterAll": "Усі",

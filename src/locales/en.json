@@ -1217,6 +1217,8 @@
   "seoRecentTitle": "Recent",
   "seoRecentAll": "All in History",
   "seoAddCustomInstruction": "Add custom instruction",
+  "seoIncludeToc": "Add table of contents",
+  "seoIncludeTocHint": "Inserts a linked contents block (as a <div>, not a heading) after H1. Best for long articles.",
   "seoCustomInstructionPh": "Anything to add to the generation from your side…",
   "seoTextHistory": "Text generation history",
   "seoTextFilterAll": "All",

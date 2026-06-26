@@ -1217,6 +1217,8 @@
   "seoRecentTitle": "Недавние",
   "seoRecentAll": "Все в Истории",
   "seoAddCustomInstruction": "Добавить пользовательскую инструкцию",
+  "seoIncludeToc": "Добавить оглавление",
+  "seoIncludeTocHint": "Вставит блок-оглавление со ссылками (как <div>, не заголовком) после H1. Удобно для длинных статей.",
   "seoCustomInstructionPh": "Что добавить от себя в генерацию…",
   "seoTextHistory": "История генерации текста",
   "seoTextFilterAll": "Все",

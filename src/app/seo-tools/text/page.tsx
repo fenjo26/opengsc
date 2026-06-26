@@ -27,6 +27,7 @@ export default function TextGenPage() {
   const [search, setSearch] = useState("");
   const [useCustom, setUseCustom] = useState(false);
   const [custom, setCustom] = useState("");
+  const [includeToc, setIncludeToc] = useState(false);
   const [loading, setLoading] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobKeyword, setJobKeyword] = useState("");
@@ -80,7 +81,7 @@ export default function TextGenPage() {
     setLoading(true); setErr("");
     const { jobId: jid, error } = await startJob("text", {
       outline: outline.data, keyword: outline.keyword, policy, language, tone: resolvedTone || undefined,
-      custom: useCustom && custom.trim() ? custom : undefined, promptType,
+      custom: useCustom && custom.trim() ? custom : undefined, promptType, includeToc,
       sourceMode, serpProvider: getSerpCreds().provider, serpKey: getSerpCreds().apiKey || undefined,
       firecrawlKey: getFirecrawlKey() || undefined, scrapeCount: getFactSourceCount(), hardRedact: getHardRedact(),
       aiProvider: provider, aiApiKey: apiKey, model: model || undefined,
@@ -199,6 +200,10 @@ export default function TextGenPage() {
               <input type="checkbox" checked={useCustom} onChange={e => setUseCustom(e.target.checked)} /> {t("seoAddCustomInstruction")}
             </label>
             {useCustom && <textarea className="tool-input" style={{ marginTop: "10px", minHeight: "70px", resize: "vertical" }} value={custom} onChange={e => setCustom(e.target.value)} placeholder={t("seoCustomInstructionPh")} />}
+            <label style={{ display: "flex", alignItems: "center", gap: "9px", fontSize: "13px", color: "var(--color-text-primary)", cursor: "pointer", marginTop: "14px", paddingTop: "14px", borderTop: "1px solid var(--color-border)" }}>
+              <input type="checkbox" checked={includeToc} onChange={e => setIncludeToc(e.target.checked)} /> {t("seoIncludeToc")}
+            </label>
+            <div style={{ fontSize: "11px", color: "var(--color-text-tertiary)", marginTop: "4px", paddingLeft: "27px" }}>{t("seoIncludeTocHint")}</div>
           </div>
         </div>
       </div>

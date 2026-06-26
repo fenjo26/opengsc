@@ -231,6 +231,8 @@ export function markdownToHtml(md: string): string {
       html += `<table><thead><tr>${head.map(c => `<th>${inline(esc(c))}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table>`;
       i = j - 1; continue;
     }
+    // Raw HTML block lines (e.g. the optional <div class="toc"> table of contents) — pass through.
+    if (/^\s*<\/?[a-zA-Z][^>]*>/.test(raw)) { closeLists(); html += raw; continue; }
     const h = raw.match(/^(#{1,6})\s+(.*)$/);
     if (h) { closeLists(); html += `<h${h[1].length}>${inline(esc(h[2]))}</h${h[1].length}>`; continue; }
     if (/^\s*[-*]\s+/.test(raw)) { if (!inUl) { closeLists(); html += "<ul>"; inUl = true; } html += `<li>${inline(esc(raw.replace(/^\s*[-*]\s+/, "")))}</li>`; continue; }
