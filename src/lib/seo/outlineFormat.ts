@@ -15,7 +15,7 @@ const entName = (e: any) => typeof e === "string" ? e : `${e.name}${e.weight != 
 export function outlineHeadings(o: any): Heading[] {
   if (!o) return [];
   const list: Heading[] = [];
-  const title = o.meta?.title_options?.[0] || o.meta?.keyword;
+  const title = o.meta?.h1 || o.meta?.title_options?.[0] || o.meta?.keyword;
   if (title) list.push({ level: "H1", text: title });
   (o.sections || []).forEach((s: any) => { if (s.heading) list.push({ level: s.h_level || "H2", text: s.heading }); });
   return list;
@@ -39,7 +39,7 @@ export function outlineSummary(o: any) {
 export function outlineToMarkdown(o: any): string {
   if (!o) return "";
   const L: string[] = [];
-  const title = o.meta?.title_options?.[0] || o.meta?.keyword || "Outline";
+  const title = o.meta?.h1 || o.meta?.title_options?.[0] || o.meta?.keyword || "Outline";
   const mTitle = o.meta?.title_options?.[0];
   const mDesc = o.meta?.description_options?.[0];
   const mSlug = o.meta?.slug_options?.[0];
@@ -150,7 +150,7 @@ export function outlineToHtml(o: any): string {
   if (!o) return "";
   const esc = (s: string) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const P: string[] = [];
-  const title = o.meta?.title_options?.[0] || o.meta?.keyword || "Outline";
+  const title = o.meta?.h1 || o.meta?.title_options?.[0] || o.meta?.keyword || "Outline";
   P.push(`<h1>${esc(title)}</h1>`);
   (o.sections || []).forEach((sec: any) => {
     const tag = (sec.h_level || "H2").toLowerCase();
