@@ -182,8 +182,21 @@ export async function genText(b: any): Promise<GenResult> {
     if (carried.length) { sources = carried; effMode = "facts"; }
   }
 
+  // Slim the outline the writer actually needs: keep meta + sections + faq + price table; drop the
+  // heavy analysis blocks (entity_analysis/sub_intents/entities/…) and the carried sources from meta
+  // (they're already fed via the sources block) so we don't bloat/duplicate the prompt → no timeouts.
+  const full = (b.outline || {}) as any;
+  const { sources: _carried, ...metaSlim } = (full.meta || {});
+  void _carried;
+  const slimOutline = {
+    meta: metaSlim,
+    sections: full.sections,
+    faq: full.faq,
+    price_table_template: full.price_table_template,
+  };
+
   const prompt = buildTextPrompt({
-    outlineJson: b.outline,
+    outlineJson: slimOutline,
     policy: b.policy,
     tone: String(b.tone ?? "neutral, expert"),
     language: String(b.language ?? "ru"),

@@ -9,7 +9,7 @@ export async function fetchLLM(
 ): Promise<string | null> {
   // Hard timeout so a stuck/over-long generation fails in minutes instead of hanging forever.
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 200_000);
+  const timer = setTimeout(() => ctrl.abort(), 280_000);
   const sig = ctrl.signal;
   try {
     let text = '';
