@@ -26,6 +26,18 @@ export interface CompetitorInput {
   has_price_table: boolean;
   has_faq: boolean;
   text_sample?: string;   // real scraped page text → grounds the outline in facts
+  extracted?: string;     // compact per-source facts from the map stage (specs/prices/entities)
+}
+
+// ─── Map stage: extract compact facts from ONE source (run per competitor, in parallel) ──────────
+export function buildSourceExtractPrompt(args: { url: string; title: string; text: string; keyword: string; country?: string }): string {
+  return `Ты — экстрактор фактов. Из текста ОДНОГО источника по теме "${args.keyword}"${args.country ? `, регион ${args.country}` : ""} вытащи ТОЛЬКО реально присутствующие в тексте факты — НИЧЕГО не выдумывай и не достраивай. Верни СТРОГИЙ компактный JSON без обёрток:
+{ "specs": { "Атрибут": "значение" }, "prices": ["цена + что это"], "key_facts": ["краткий факт"], "entities": ["сущность"], "headings_covered": ["тема/подзаголовок страницы"] }
+ПРАВИЛА: значения бери дословно из текста; если чего-то нет — пустой массив/объект. Максимум ~12 фактов и ~12 сущностей. Цены — как в тексте (валюту не меняй). Спеки — характеристики товара (экран, память, чип и т.п.) ровно как написано.
+
+ИСТОЧНИК: ${args.title} (${args.url})
+ТЕКСТ:
+${(args.text || "").slice(0, 6000)}`;
 }
 
 // ─── Outline generation prompt (rich, EAV-style — spec §4 + reference parity) ─────
@@ -71,12 +83,18 @@ export function buildOutlinePrompt(args: {
   // Real scraped competitor content → primary grounding for hard specifics. Official/brand sources first.
   // Keep the outline input bounded (official source first, deeper; others trimmed) so the model
   // doesn't blow the token budget and truncate the JSON. Full-depth text still flows to the TEXT step.
+  // Prefer the compact per-source extraction (map stage); fall back to raw text if not extracted.
   const compRanked = args.competitors
-    .filter(c => c.text_sample && c.text_sample.trim().length > 80)
+    .filter(c => (c.extracted && c.extracted.trim()) || (c.text_sample && c.text_sample.trim().length > 80))
     .sort((a, b) => (b.site_type === "official_store" ? 1 : 0) - (a.site_type === "official_store" ? 1 : 0))
-    .slice(0, 6);
+    .slice(0, 8);
   const compFacts = compRanked
-    .map((c, i) => `[${i + 1}]${c.site_type === "official_store" ? " (ОФИЦИАЛЬНЫЙ ИСТОЧНИК — высший приоритет)" : ""} ${c.url}\n${(c.text_sample || "").replace(/\s+/g, " ").trim().slice(0, c.site_type === "official_store" ? 3500 : 2000)}`).join("\n\n");
+    .map((c, i) => {
+      const body = c.extracted?.trim()
+        ? c.extracted.trim().slice(0, 1600)
+        : (c.text_sample || "").replace(/\s+/g, " ").trim().slice(0, c.site_type === "official_store" ? 3500 : 2000);
+      return `[${i + 1}]${c.site_type === "official_store" ? " (ОФИЦИАЛЬНЫЙ ИСТОЧНИК — высший приоритет)" : ""} ${c.url}\n${body}`;
+    }).join("\n\n");
   const factsBlock = compFacts
     ? `\n\nРЕАЛЬНЫЙ КОНТЕНТ КОНКУРЕНТОВ/ИСТОЧНИКОВ ИЗ ТОПА ВЫДАЧИ (главная опора для конкретики): извлекай отсюда ВСЕ конкретные значения — точные цены/суммы, названия моделей/версий/изданий, характеристики, объёмы памяти, даты, имена игр/товаров/ритейлеров. Если есть «(ОФИЦИАЛЬНЫЙ ИСТОЧНИК)» — доверяй ему в первую очередь. ПРАВИЛО: бери конкретику отсюда ИЛИ из достоверных общеизвестных фактов, в которых уверен; если значения нет ни тут, ни в надёжных знаниях — обобщи (диапазон/ориентир) и пометь копирайтеру «уточнить из источников», но НЕ подставляй выдуманное число и НЕ вставляй токен в заголовки/summary. Названия (игр/моделей) бери ТОЧНЫЕ. Цены — в валюте региона. Текст не копируй дословно — извлекай факты.\n${compFacts}`
     : `\n\nЗАЗЕМЛЕНИЕ (текстов конкурентов нет): подтверждённого источника конкретики нет. Можешь опираться на достоверные общеизвестные факты о предмете (реальные характеристики, точные названия), но НЕ выдумывай неуверенных цен/спеков/дат/изданий — такие места держи качественными (диапазон/ориентир) и помечай «уточнить из источников при написании». Структуру, сущности и ключи раскрывай полноценно — ограничение касается ТОЛЬКО придуманной неуверенной конкретики.`;

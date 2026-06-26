@@ -5,11 +5,48 @@ import { fetchLLM } from "@/lib/llm";
 import { runSerp } from "@/lib/seo/serp";
 import { scrapeMany } from "@/lib/seo/scrape";
 import {
-  buildOutlinePrompt, buildTextPrompt, buildAnalysisPrompt, buildFactScrubPrompt,
+  buildOutlinePrompt, buildTextPrompt, buildAnalysisPrompt, buildFactScrubPrompt, buildSourceExtractPrompt,
   enforceLinkPolicy, redactBannedWords, extractJson, CompetitorInput,
 } from "@/lib/seo/prompts";
 
 export type GenResult = { ok: true; data: any } | { ok: false; error: string };
+
+// Run async tasks with bounded concurrency (avoid hammering the provider with 20 parallel calls).
+async function runPool<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let i = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (i < items.length) { const idx = i++; await fn(items[idx]); }
+  });
+  await Promise.all(workers);
+}
+
+// Render a compact per-source facts object (from the map stage) into a short text block.
+function renderExtract(j: any): string {
+  const lines: string[] = [];
+  if (j?.specs && typeof j.specs === "object" && !Array.isArray(j.specs)) {
+    const s = Object.entries(j.specs).map(([k, v]) => `${k}=${v}`).join("; ");
+    if (s) lines.push(`Спеки: ${s}`);
+  }
+  if (Array.isArray(j?.prices) && j.prices.length) lines.push(`Цены: ${j.prices.slice(0, 10).join("; ")}`);
+  if (Array.isArray(j?.key_facts) && j.key_facts.length) lines.push(`Факты: ${j.key_facts.slice(0, 12).join("; ")}`);
+  if (Array.isArray(j?.entities) && j.entities.length) lines.push(`Сущности: ${j.entities.slice(0, 12).join(", ")}`);
+  if (Array.isArray(j?.headings_covered) && j.headings_covered.length) lines.push(`Темы: ${j.headings_covered.slice(0, 12).join("; ")}`);
+  return lines.join("\n").slice(0, 1600);
+}
+
+// MAP stage: extract compact facts from each source separately (small, reliable, parallel calls),
+// so the REDUCE stage (outline) builds from clean per-source facts instead of raw 20-page HTML.
+async function mapExtractFacts(competitors: CompetitorInput[], keyword: string, country: string, provider: string, apiKey: string, model?: string): Promise<void> {
+  const targets = competitors.filter((c) => c.text_sample && String(c.text_sample).trim().length > 80).slice(0, 12);
+  await runPool(targets, 4, async (c) => {
+    try {
+      const raw = await fetchLLM(buildSourceExtractPrompt({ url: c.url, title: c.title || c.url, text: String(c.text_sample), keyword, country }), provider, apiKey, 1200, model);
+      const j = extractJson(raw);
+      const rendered = j ? renderExtract(j) : "";
+      if (rendered) c.extracted = rendered;
+    } catch { /* per-source extraction is best-effort */ }
+  });
+}
 
 // Apply find→replace corrections over an object's STRING VALUES only (keys/structure untouched).
 // Safe against JSON corruption because we never touch keys and rebuild the object in place.
@@ -37,6 +74,13 @@ export async function genOutline(b: any): Promise<GenResult> {
   if (!apiKey) return { ok: false, error: "no_ai_key" };
 
   const competitors: CompetitorInput[] = Array.isArray(b.competitors) ? b.competitors : [];
+  const model = b.model ? String(b.model) : undefined;
+
+  // MAP stage: extract compact facts per source (parallel) before assembling the outline.
+  if (b.mapExtract !== false && competitors.length) {
+    try { await mapExtractFacts(competitors, keyword, String(b.country ?? "us"), provider, apiKey, model); } catch { /* fall back to raw text grounding */ }
+  }
+
   const prompt = buildOutlinePrompt({
     keyword,
     language: String(b.language ?? "en"),
@@ -55,7 +99,6 @@ export async function genOutline(b: any): Promise<GenResult> {
     narration: b.narration === "first" || b.narration === "third" ? b.narration : undefined,
     customTemplate: b.customTemplate ? String(b.customTemplate) : undefined,
   });
-  const model = b.model ? String(b.model) : undefined;
 
   let raw = await fetchLLM(prompt, provider, apiKey, 16000, model);
   let outline = extractJson(raw);
