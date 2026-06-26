@@ -58,6 +58,7 @@ export function buildOutlinePrompt(args: {
   pageGoal?: "informational" | "commercial" | "mixed";
   narration?: "first" | "third";
   customTemplate?: string;
+  structureRules?: string;
 }): string {
   // Tone is rendered once: folded into the policy block (override) when a policy exists,
   // otherwise as a standalone line. Never both → no conflicting tone signals.
@@ -73,7 +74,10 @@ export function buildOutlinePrompt(args: {
     ? `\n- лицо повествования: ${args.narration === "first" ? "ПЕРВОЕ лицо — экспертный «я»-голос (личный опыт, рекомендации от себя, «я проверял…»)" : "ТРЕТЬЕ лицо — корпоративный нейтральный голос (без «я», от лица компании)"}. Установи meta.narration = "${args.narration}".`
     : "";
   const customTplBlock = args.customTemplate?.trim()
-    ? `\n\nПОЛЬЗОВАТЕЛЬСКИЙ ШАБЛОН СТРУКТУРЫ (ОБЯЗАТЕЛЬНО следуй ему как каркасу H1/H2/H3 и сохрани заданные заголовки и их порядок; можешь добавлять H3 и детально заполнять секции по EAV, но не выкидывай заданные пункты):\n${args.customTemplate.trim().slice(0, 4000)}`
+    ? `\n\nПОЛЬЗОВАТЕЛЬСКИЙ ШАБЛОН СТРУКТУРЫ (ВЫСШИЙ ПРИОРИТЕТ — следуй ему ДОСЛОВНО как каркасу): используй ИМЕННО эти заголовки H1/H2/H3, в ТОМ ЖЕ порядке и с той же формулировкой. НЕ переименовывай, не выкидывай и не переставляй заданные пункты. Добавлять свои H2/H3 можно ТОЛЬКО если их не хватает для полноты, и только между заданными, не нарушая порядок. Детально заполняй секции по EAV.\n${args.customTemplate.trim().slice(0, 4000)}`
+    : "";
+  const structRulesBlock = args.structureRules?.trim()
+    ? `\n\nПРАВИЛА СТРУКТУРЫ ОТ ПОЛЬЗОВАТЕЛЯ (учитывай ОБЯЗАТЕЛЬНО при построении секций — это указания, как организовать статью): ${args.structureRules.trim().slice(0, 1500)}`
     : "";
   const addKw = args.additionalKeywords?.trim() ? `\n- доп. ключевые слова (обязательно учесть): ${args.additionalKeywords}` : "";
   const twc = args.targetWordCount ? `\n- целевой объём статьи: ~${args.targetWordCount} слов (распредели по секциям, не раздувай)` : "";
@@ -141,7 +145,7 @@ export function buildOutlinePrompt(args: {
 ДАНО:
 - keyword: ${args.keyword}
 - язык/страна: ${args.language}/${args.country}${toneBlock}${personaBlock}${narrationBlock}${addKw}${twc}${paaBlock}${relBlock}
-- топ-конкуренты (типы + структура): ${JSON.stringify(args.competitors.map(({ text_sample, ...c }) => { void text_sample; return c; }))}${manual}${kwData}${customTplBlock}${factsBlock}
+- топ-конкуренты (типы + структура): ${JSON.stringify(args.competitors.map(({ text_sample, ...c }) => { void text_sample; return c; }))}${manual}${kwData}${customTplBlock}${structRulesBlock}${factsBlock}
 
 МЕТА-ТЕГИ (title/description/slug) — по правилам Google и Bing, проработай ТЩАТЕЛЬНО (это готовые к публикации варианты):
 - title_options (3 шт.): 50–60 символов (под ~600px, иначе обрежется в выдаче). Главный ключ — в САМОМ НАЧАЛЕ. Если бренд известен — в конце через « | » или « - ». Формула: [Главный ключ] - [Вторичный ключ/УТП] | [Бренд]. Коммерческие — продающий хук (Buy/Best/от €X/Free shipping); информационные — «How to / Guide / Число + …»; числа и скобки повышают CTR. Bing любит точное вхождение ключа.
@@ -281,6 +285,8 @@ export function buildTextPrompt(args: {
     : narr === "third" ? "Лицо: ТРЕТЬЕ — корпоративный нейтральный голос, без «я».\n" : "";
   const country = (args.outlineJson as any)?.meta?.country;
   const regionLine = country ? `Регион: ${country}. Цены/суммы — в валюте региона (${currencyHint(country)}), НЕ в USD по умолчанию; ритейлеры и реалии — релевантные региону (без магазинов, которых там нет).\n` : "";
+  const sRules = (args.outlineJson as any)?.meta?.structureRules;
+  const structRulesLine = sRules ? `Правила структуры от пользователя (соблюдай): ${String(sRules).slice(0, 1500)}\n` : "";
   const today = new Date().toISOString().slice(0, 10);
   const year = today.slice(0, 4);
   const dateLine = `Сегодня ${today}. Если нужен год — используй ТЕКУЩИЙ (${year}); никогда не пиши устаревшие годы (2023/2024) и не выдумывай год.\n`;
@@ -313,7 +319,7 @@ export function buildTextPrompt(args: {
 
   // Custom prompt type: the author's instruction drives the writing; service template is minimal.
   if (args.promptType === "custom" && args.custom) {
-    return `${policyBlock}${toneHeader}${narrLine}${regionLine}Язык вывода: ${args.language}
+    return `${policyBlock}${toneHeader}${narrLine}${regionLine}${structRulesLine}Язык вывода: ${args.language}
 ${dateLine}${NO_FABRICATION}
 ${metaBlock}ГЛАВНАЯ ИНСТРУКЦИЯ АВТОРА:
 ${args.custom}
@@ -326,7 +332,7 @@ ${sourcesBlock}
 ${JSON.stringify(args.outlineJson)}`;
   }
 
-  return `${policyBlock}${toneHeader}${narrLine}${regionLine}Язык вывода: ${args.language}
+  return `${policyBlock}${toneHeader}${narrLine}${regionLine}${structRulesLine}Язык вывода: ${args.language}
 ${dateLine}${customLine}${metaBlock}${sourcesBlock}
 Напиши статью строго по структуре ниже. Для каждой секции — текст в рамках указанного word_count, не раздувай. Используй summary, keywords, entities_to_cover и copywriter_notes как ориентир. Естественно вплетай сущности и ключи.
 

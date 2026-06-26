@@ -98,6 +98,7 @@ export async function genOutline(b: any): Promise<GenResult> {
     pageGoal: b.pageGoal === "commercial" || b.pageGoal === "informational" ? b.pageGoal : "mixed",
     narration: b.narration === "first" || b.narration === "third" ? b.narration : undefined,
     customTemplate: b.customTemplate ? String(b.customTemplate) : undefined,
+    structureRules: b.structureRules ? String(b.structureRules) : undefined,
   });
 
   let raw = await fetchLLM(prompt, provider, apiKey, 16000, model);
@@ -132,6 +133,7 @@ export async function genOutline(b: any): Promise<GenResult> {
   meta.country = String(b.country ?? "us");
   meta.language = String(b.language ?? "en");
   if (b.narration === "first" || b.narration === "third") meta.narration = b.narration;
+  if (b.structureRules && String(b.structureRules).trim()) meta.structureRules = String(b.structureRules).trim();
   // Persist the real competitor facts that grounded the outline, so the TEXT step is built on the
   // SAME sources (fact-check then just confirms, instead of cleaning up). Kept compact for size.
   const carriedSources = competitors

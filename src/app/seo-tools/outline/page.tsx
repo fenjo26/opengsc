@@ -69,6 +69,7 @@ export default function OutlinePage() {
   const [persona, setPersona] = useState("");
   const [narration, setNarration] = useState<"" | "first" | "third">("");
   const [customTemplate, setCustomTemplate] = useState("");
+  const [structureRules, setStructureRules] = useState("");
   const [addKeywords, setAddKeywords] = useState("");
   const [targetWords, setTargetWords] = useState("");
   const [manualUrl, setManualUrl] = useState("");
@@ -215,6 +216,7 @@ export default function OutlinePage() {
         keywordsData, pageGoal,
         narration: narration || undefined,
         customTemplate: customTemplate.trim() || undefined,
+        structureRules: structureRules.trim() || undefined,
       });
       if (error || !jid) { setErr(error === "parse_failed" ? t("seoErrParseJson") : (error || t("seoErrGen"))); setLoading(""); return; }
       setJobId(jid); // background job started — render live progress; user can leave
@@ -461,6 +463,13 @@ export default function OutlinePage() {
                 {customTemplate && <button onClick={() => setCustomTemplate("")} style={{ ...btnGhost, padding: "6px 11px", color: "var(--color-accent-red)" }}><X size={12} /> {t("seoCfgClear")}</button>}
               </div>
               <textarea className={inputStyle} style={{ minHeight: "90px", resize: "vertical", fontFamily: "monospace", fontSize: "12px" }} value={customTemplate} onChange={e => setCustomTemplate(e.target.value)} placeholder={"H1: ...\nH2: ...\nH3: ..."} />
+            </div>
+
+            {/* free-form structure rules (e.g. "FAQ at the end", "price table in pricing", "more H3") */}
+            <div style={{ marginTop: "14px" }}>
+              <span className="tool-field-label">{t("seoCfgStructureRules")} <span style={{ textTransform: "none", fontWeight: 400, color: "var(--color-text-tertiary)" }}>· {t("seoCfgOptional")}</span></span>
+              <div style={{ fontSize: "11px", color: "var(--color-text-tertiary)", marginBottom: "8px" }}>{t("seoCfgStructureRulesSub")}</div>
+              <textarea className={inputStyle} style={{ minHeight: "70px", resize: "vertical", fontSize: "13px" }} value={structureRules} onChange={e => setStructureRules(e.target.value)} placeholder={t("seoCfgStructureRulesPh")} />
             </div>
 
             <button onClick={generate} disabled={loading === "outline"} style={{ ...btnDark, width: "100%", justifyContent: "center", marginTop: "16px", padding: "12px" }}>
