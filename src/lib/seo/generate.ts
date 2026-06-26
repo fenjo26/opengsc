@@ -226,7 +226,7 @@ export async function genText(b: any): Promise<GenResult> {
   });
   const model = b.model ? String(b.model) : undefined;
 
-  let text = await fetchLLM(prompt, provider, apiKey, 8000, model);
+  let text = await fetchLLM(prompt, provider, apiKey, 12000, model);
   if (!text) return { ok: false, error: "generation_failed" };
 
   const banned = [
@@ -248,8 +248,8 @@ export async function genText(b: any): Promise<GenResult> {
   if (b.autoFactCheck !== false && bank.length && text) {
     try {
       const bankText = bank.map((x: any, i: number) => `[${i + 1}]${x.official ? " (ОФИЦИАЛЬНЫЙ)" : ""} ${x.domain || x.source}\n${x.facts}`).join("\n\n");
-      let cleaned = await fetchLLM(buildAutoFactCleanPrompt({ article: text, factsBank: bankText, language: String(b.language ?? "en") }), provider, apiKey, 8000, model);
-      if (cleaned && cleaned.trim().length > text.length * 0.6) {
+      let cleaned = await fetchLLM(buildAutoFactCleanPrompt({ article: text, factsBank: bankText, language: String(b.language ?? "en") }), provider, apiKey, 12000, model);
+      if (cleaned && cleaned.trim().length > text.length * 0.85) {
         cleaned = cleaned.trim().replace(/^```(?:markdown|md)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
         text = stripForeignScripts(cleaned, String(b.language ?? "en"));
         autoCleaned = true;
