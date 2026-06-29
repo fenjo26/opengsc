@@ -1,10 +1,11 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { FileText, Search, ScrollText, Sparkles, History, PenLine, Quote, SlidersHorizontal } from "lucide-react";
+import { FileText, Search, ScrollText, Sparkles, History, PenLine, Quote, SlidersHorizontal, Globe } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 const TABS = [
+  { href: "/seo-tools/geo", key: "geoTabGeo" as const, icon: Globe },
   { href: "/seo-tools/outline", key: "seoTabOutline" as const, icon: FileText },
   { href: "/seo-tools/text", key: "seoTabText" as const, icon: PenLine },
   { href: "/seo-tools/analysis", key: "seoTabAnalysis" as const, icon: Search },

@@ -57,6 +57,9 @@ model User {
 
   // SEO Tools background generation jobs
   seoJobs             SeoJob[]
+
+  // GEO Audits (how AI search engines perceive the brand/niche)
+  geoAudits           GeoAudit[]
 }
 
 model VerificationToken {
@@ -328,6 +331,27 @@ model SeoJob {
   result    String?  // JSON string of the result (outline object / { text, ... } / report)
   error     String?
   meta      String?  // JSON string (tone, promptType, outlineId, factcheck/images flags…)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, createdAt])
+}
+
+// ─── GEO Audit — how AI search engines (e.g. ChatGPT web search) perceive a niche ──
+// A single run = one keyword/query analyzed with an agentic web-search model. We persist
+// the raw search trace (batches, opened pages, citations) plus the derived analytics
+// (brand leaderboard, trust signals, inclusion patterns) as one JSON `report`.
+model GeoAudit {
+  id        String   @id @default(cuid())
+  userId    String
+  query     String   @default("")  // the keyword / search query that was audited
+  language  String   @default("en")
+  country   String   @default("us")
+  model     String   @default("")  // engine model used (e.g. "gpt-5")
+  status    String   @default("processing") // "processing" | "completed" | "error"
+  report    String?  // JSON string: full audit report (metrics + analytics + raw answer)
+  error     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
