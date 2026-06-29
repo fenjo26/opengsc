@@ -258,12 +258,32 @@ export async function genText(b: any): Promise<GenResult> {
     } catch { /* keep original text */ }
   }
 
+  // Guarantee the SEO meta block is present (deterministic — don't trust the model to emit it).
+  text = ensureMetaBlock(text, b.outline?.meta);
+
   return { ok: true, data: { text, usedSources: sources.length, redacted, autoCleaned } };
 }
 
 // Safety net: models occasionally leak characters from another writing system into the article
 // (e.g. a stray Chinese token in an English text). Strip CJK/kana/hangul runs when the target
 // language doesn't use them, then tidy the spacing/punctuation left behind.
+// Guarantee the SEO meta block (Title/Description/Slug) sits at the very top of the article.
+// The model is asked to emit it, but doesn't always comply — so we add it deterministically from
+// the outline meta if it's missing (the data is known, no need to trust the LLM for this).
+export function ensureMetaBlock(text: string, meta: any): string {
+  if (!text) return text;
+  const firstHeading = text.search(/^#{1,6}\s/m);
+  const head = firstHeading > 0 ? text.slice(0, firstHeading) : (firstHeading === 0 ? "" : text);
+  if (/(^|\n)\s*(```)?\s*title\s*:/i.test(head)) return text; // already has a meta block
+  const pick = (v: any) => Array.isArray(v) ? (v.find((x: any) => x && String(x).trim()) || "") : (v || "");
+  const title = pick(meta?.title_options) || pick(meta?.title);
+  const desc = pick(meta?.description_options) || pick(meta?.description);
+  const slug = pick(meta?.slug_options) || pick(meta?.slug);
+  if (!title && !desc && !slug) return text;
+  const block = "```\nTitle: " + title + "\nMeta Description: " + desc + "\nURL Slug: " + slug + "\n```";
+  return block + "\n\n" + text.replace(/^\s+/, "");
+}
+
 export function stripForeignScripts(text: string, language: string): string {
   if (/^(zh|ja|ko)/i.test(language || "")) return text; // target language legitimately uses these
   if (!/[぀-ヿ㐀-䶿一-鿿豈-﫿가-힯]/.test(text)) return text;
