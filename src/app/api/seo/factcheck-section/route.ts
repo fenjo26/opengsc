@@ -49,9 +49,10 @@ export async function POST(req: Request) {
   // 2) LLM verifies the section's claims against the numbered sources
   const prompt = buildFactCheckSectionPrompt({ heading, text, keyword: String(b.keyword ?? ""), sources });
   const model = b.model ? String(b.model) : undefined;
-  let raw = await fetchLLM(prompt, aiProvider, aiKey, 3000, model);
+  const baseUrl = b.aiBaseUrl ? String(b.aiBaseUrl) : undefined;
+  let raw = await fetchLLM(prompt, aiProvider, aiKey, 3000, model, baseUrl);
   let parsed = extractJson<any>(raw);
-  if (!parsed) { raw = await fetchLLM(prompt + "\n\nВерни ТОЛЬКО валидный JSON.", aiProvider, aiKey, 3000, model); parsed = extractJson<any>(raw); }
+  if (!parsed) { raw = await fetchLLM(prompt + "\n\nВерни ТОЛЬКО валидный JSON.", aiProvider, aiKey, 3000, model, baseUrl); parsed = extractJson<any>(raw); }
   if (!parsed) return NextResponse.json({ error: "parse_failed", heading, sources }, { status: 502 });
 
   return NextResponse.json({ heading, status: parsed.status ?? "partial", facts: parsed.facts ?? [], sources });

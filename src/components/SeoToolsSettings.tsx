@@ -207,6 +207,90 @@ function FactCheckSettings() {
   );
 }
 
+// Custom OpenAI-compatible provider (e.g. kie.ai): base URL + key + default model.
+function CustomProviderCard() {
+  const { t } = useLanguage();
+  const [baseUrl, setBaseUrl] = useState("");
+  const [key, setKey] = useState("");
+  const [model, setModel] = useState("");
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    setBaseUrl(localStorage.getItem("aiBaseUrl_custom") || "");
+    setKey(localStorage.getItem("aiKey_custom") || "");
+    setModel(localStorage.getItem("aiModel_custom") || "");
+  }, []);
+  const save = () => {
+    localStorage.setItem("aiBaseUrl_custom", baseUrl.trim());
+    localStorage.setItem("aiKey_custom", key.trim());
+    localStorage.setItem("aiModel_custom", model.trim());
+    setSaved(true); setTimeout(() => setSaved(false), 1500);
+  };
+  const inp: React.CSSProperties = { width: "100%", padding: "9px 11px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-primary)", fontSize: "13px", outline: "none", boxSizing: "border-box", fontFamily: "monospace" };
+  return (
+    <div style={{ marginBottom: "18px", paddingBottom: "16px", borderBottom: "1px solid var(--color-border)" }}>
+      <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "4px" }}>🔌 {t("seoCustomProviderTitle")}</div>
+      <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", margin: "0 0 10px" }}>{t("seoCustomProviderSub")}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        <input style={inp} placeholder="https://api.kie.ai/v1" value={baseUrl} onChange={e => setBaseUrl(e.target.value)} />
+        <input style={inp} type="password" placeholder={t("seoCustomKeyPh")} value={key} onChange={e => setKey(e.target.value)} />
+        <input style={inp} placeholder={t("seoCustomModelPh")} value={model} onChange={e => setModel(e.target.value)} />
+        <button onClick={save} style={{ alignSelf: "flex-start", padding: "8px 16px", borderRadius: "8px", border: "none", background: saved ? "rgba(16,185,129,0.2)" : "var(--color-accent-blue)", color: saved ? "#10B981" : "#fff", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>{saved ? `✓ ${t("seoModelSaved")}` : t("seoSave")}</button>
+      </div>
+    </div>
+  );
+}
+
+// Per-task default provider/model — set once, applied on every generation of that task type.
+function PerTaskProviders() {
+  const { t } = useLanguage();
+  const tasks: { id: string; label: string }[] = [
+    { id: "outline", label: t("seoTaskOutline") },
+    { id: "text", label: t("seoTaskText") },
+    { id: "analysis", label: t("seoTaskAnalysis") },
+    { id: "policy", label: t("seoTaskPolicy") },
+  ];
+  const [vals, setVals] = useState<Record<string, { provider: string; model: string }>>({});
+  const [opts, setOpts] = useState<string[]>([]);
+  useEffect(() => {
+    const configured = getConfiguredProviders().map(p => p.id);
+    const custom = (localStorage.getItem("aiKey_custom") || "") && (localStorage.getItem("aiBaseUrl_custom") || "");
+    setOpts([...configured, ...(custom ? ["custom"] : [])].filter((v, i, a) => a.indexOf(v) === i));
+    const v: Record<string, { provider: string; model: string }> = {};
+    for (const tk of ["outline", "text", "analysis", "policy"]) {
+      v[tk] = { provider: localStorage.getItem(`seoTaskProvider_${tk}`) || "", model: localStorage.getItem(`seoTaskModel_${tk}`) || "" };
+    }
+    setVals(v);
+  }, []);
+  const setTask = (id: string, patch: Partial<{ provider: string; model: string }>) => {
+    setVals(prev => {
+      const next = { ...prev, [id]: { ...prev[id], ...patch } };
+      const cur = next[id];
+      if (cur.provider) localStorage.setItem(`seoTaskProvider_${id}`, cur.provider); else localStorage.removeItem(`seoTaskProvider_${id}`);
+      if (cur.model.trim()) localStorage.setItem(`seoTaskModel_${id}`, cur.model.trim()); else localStorage.removeItem(`seoTaskModel_${id}`);
+      return next;
+    });
+  };
+  const sel: React.CSSProperties = { padding: "7px 9px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-primary)", fontSize: "12px", outline: "none" };
+  return (
+    <div style={{ marginBottom: "18px", paddingBottom: "16px", borderBottom: "1px solid var(--color-border)" }}>
+      <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "4px" }}>🎛 {t("seoPerTaskTitle")}</div>
+      <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", margin: "0 0 10px" }}>{t("seoPerTaskSub")}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        {tasks.map(tk => (
+          <div key={tk.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", alignItems: "center" }}>
+            <span style={{ fontSize: "12px", color: "var(--color-text-primary)", fontWeight: 600 }}>{tk.label}</span>
+            <select style={sel} value={vals[tk.id]?.provider || ""} onChange={e => setTask(tk.id, { provider: e.target.value })}>
+              <option value="">{t("seoTaskDefaultProvider")}</option>
+              {opts.map(o => <option key={o} value={o}>{AI_PROVIDER_NAMES[o] || o}</option>)}
+            </select>
+            <input style={{ ...sel, fontFamily: "monospace" }} placeholder={t("seoTaskModelPh")} value={vals[tk.id]?.model || ""} onChange={e => setTask(tk.id, { model: e.target.value })} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function SeoToolsSettings() {
   const { t } = useLanguage();
   const [active, setActive] = useState("serper");
@@ -222,6 +306,8 @@ export default function SeoToolsSettings() {
       <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: "0 0 16px" }}>{t("seoSetSub")}</p>
 
       <ModelSelector />
+      <CustomProviderCard />
+      <PerTaskProviders />
       <FactCheckSettings />
 
       <div style={{ marginBottom: "14px" }}>

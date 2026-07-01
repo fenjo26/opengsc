@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { EditorialPolicy, DEFAULT_POLICY, renderPolicy, toExportJson, normalizePolicy } from "@/lib/seo/policy";
-import { loadPolicies, savePolicies, getActivePolicyName, setActivePolicyName, getSeoGenCreds, getFirecrawlKey } from "@/lib/seo/keys";
+import { loadPolicies, savePolicies, getActivePolicyName, setActivePolicyName, getTaskCreds, getFirecrawlKey } from "@/lib/seo/keys";
 import { TONES } from "@/lib/seo/tones";
 
 const MAX_POLICIES = 10;
@@ -143,7 +143,7 @@ export default function PolicyPage() {
 
   async function generateWithAI(form: { brandName: string; brandUrl: string; sourceUrls: string[]; brandDescription: string; competitorUrls: string[]; sampleText: string }) {
     setGenErr("");
-    const { provider, apiKey, model } = getSeoGenCreds();
+    const { provider, apiKey, model, baseUrl } = getTaskCreds("policy");
     if (!apiKey) { setGenErr(t("seoErrNoAiKey")); return; }
     if (!form.brandName.trim()) { setGenErr(t("seoGenAiBrandNameReq")); return; }
     setGenLoading(true);
@@ -155,7 +155,7 @@ export default function PolicyPage() {
           sourceUrls: form.sourceUrls, brandDescription: form.brandDescription,
           competitorUrls: form.competitorUrls, sampleText: form.sampleText,
           firecrawlKey: getFirecrawlKey() || undefined,
-          aiProvider: provider, aiApiKey: apiKey, model: model || undefined,
+          aiProvider: provider, aiApiKey: apiKey, model: model || undefined, aiBaseUrl: baseUrl || undefined,
         }),
       });
       const data = await res.json();

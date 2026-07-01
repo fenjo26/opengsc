@@ -82,10 +82,11 @@ ${ctx}
 }`;
 
   const model = b.model ? String(b.model) : undefined;
-  let raw = await fetchLLM(prompt, provider, apiKey, 3000, model);
+  const baseUrl = b.aiBaseUrl ? String(b.aiBaseUrl) : undefined;
+  let raw = await fetchLLM(prompt, provider, apiKey, 3000, model, baseUrl);
   let policy = extractJson(raw);
   if (!policy) {
-    raw = await fetchLLM(prompt + "\n\nВерни ТОЛЬКО валидный JSON.", provider, apiKey, 3000, model);
+    raw = await fetchLLM(prompt + "\n\nВерни ТОЛЬКО валидный JSON.", provider, apiKey, 3000, model, baseUrl);
     policy = extractJson(raw);
   }
   if (!policy) return NextResponse.json({ error: "parse_failed", raw }, { status: 502 });

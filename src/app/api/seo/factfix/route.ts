@@ -56,7 +56,8 @@ ${claims.map((c, i) => `${i + 1}. ${c.claim}${c.note ? ` — note: ${c.note}` : 
 ${body}`;
 
   const model = b.model ? String(b.model) : undefined;
-  let text = await fetchLLM(prompt, provider, apiKey, 16000, model);
+  const baseUrl = b.aiBaseUrl ? String(b.aiBaseUrl) : undefined;
+  let text = await fetchLLM(prompt, provider, apiKey, 16000, model, baseUrl);
   if (!text) return NextResponse.json({ error: "fix_failed" }, { status: 502 });
   // Strip a possible ```markdown fence / leading preamble line the model may add.
   text = text.trim().replace(/^```(?:markdown|md)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();

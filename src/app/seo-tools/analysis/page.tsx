@@ -7,7 +7,7 @@ import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import SeoContentAnalysis from "@/components/SeoContentAnalysis";
 import SeoJobProgress from "@/components/SeoJobProgress";
 import SeoRecentList from "@/components/SeoRecentList";
-import { getSeoGenCreds, getSerpCreds, getFirecrawlKey, loadPolicies, getActivePolicyName } from "@/lib/seo/keys";
+import { getSeoGenCreds, getTaskCreds, getSerpCreds, getFirecrawlKey, loadPolicies, getActivePolicyName } from "@/lib/seo/keys";
 import { COUNTRIES, LANGUAGES } from "@/lib/seo/regions";
 import { takeView } from "@/lib/seo/history";
 import { startJob, importJob } from "@/lib/seo/jobs";
@@ -101,7 +101,7 @@ export default function AnalysisPage() {
   async function runAnalysis() {
     setErr("");
     if (!targetUrl.trim()) { setErr(t("seoCaErrNoTarget")); return; }
-    const { provider: ap, apiKey: ak, model: am } = getSeoGenCreds();
+    const { provider: ap, apiKey: ak, model: am, baseUrl: abu } = getTaskCreds("analysis");
     if (!ak) { setErr(t("seoErrNoAiKey")); return; }
 
     const manualUrls = manual.split(/\n/).map(s => s.trim()).filter(Boolean).slice(0, 5);
@@ -131,7 +131,7 @@ export default function AnalysisPage() {
 
       setStage(t("seoStageGap"));
       const policy = loadPolicies().find(p => p.name === getActivePolicyName());
-      const { jobId: jid, error } = await startJob("analysis", { keyword, targetPage, competitors, language, country, policy, aiProvider: ap, aiApiKey: ak, model: am || undefined });
+      const { jobId: jid, error } = await startJob("analysis", { keyword, targetPage, competitors, language, country, policy, aiProvider: ap, aiApiKey: ak, model: am || undefined, aiBaseUrl: abu || undefined });
       if (error || !jid) { setErr(error === "parse_failed" ? t("seoErrParseJsonShort") : (error || t("seoErrAnalysis"))); stopTimer(); setBusy(false); return; }
       stopTimer(); setBusy(false); setStage("");
       setAnJobId(jid); // background job — live progress takes over; user can leave

@@ -36,11 +36,11 @@ function renderExtract(j: any): string {
 
 // MAP stage: extract compact facts from each source separately (small, reliable, parallel calls),
 // so the REDUCE stage (outline) builds from clean per-source facts instead of raw 20-page HTML.
-async function mapExtractFacts(competitors: CompetitorInput[], keyword: string, country: string, provider: string, apiKey: string, model?: string): Promise<void> {
+async function mapExtractFacts(competitors: CompetitorInput[], keyword: string, country: string, provider: string, apiKey: string, model?: string, baseUrl?: string): Promise<void> {
   const targets = competitors.filter((c) => c.text_sample && String(c.text_sample).trim().length > 80).slice(0, 12);
   await runPool(targets, 4, async (c) => {
     try {
-      const raw = await fetchLLM(buildSourceExtractPrompt({ url: c.url, title: c.title || c.url, text: String(c.text_sample), keyword, country }), provider, apiKey, 1200, model);
+      const raw = await fetchLLM(buildSourceExtractPrompt({ url: c.url, title: c.title || c.url, text: String(c.text_sample), keyword, country }), provider, apiKey, 1200, model, baseUrl);
       const j = extractJson(raw);
       const rendered = j ? renderExtract(j) : "";
       if (rendered) c.extracted = rendered;
@@ -75,10 +75,11 @@ export async function genOutline(b: any): Promise<GenResult> {
 
   const competitors: CompetitorInput[] = Array.isArray(b.competitors) ? b.competitors : [];
   const model = b.model ? String(b.model) : undefined;
+  const baseUrl = b.aiBaseUrl ? String(b.aiBaseUrl) : undefined;
 
   // MAP stage: extract compact facts per source (parallel) before assembling the outline.
   if (b.mapExtract !== false && competitors.length) {
-    try { await mapExtractFacts(competitors, keyword, String(b.country ?? "us"), provider, apiKey, model); } catch { /* fall back to raw text grounding */ }
+    try { await mapExtractFacts(competitors, keyword, String(b.country ?? "us"), provider, apiKey, model, baseUrl); } catch { /* fall back to raw text grounding */ }
   }
 
   const prompt = buildOutlinePrompt({
@@ -101,10 +102,10 @@ export async function genOutline(b: any): Promise<GenResult> {
     structureRules: b.structureRules ? String(b.structureRules) : undefined,
   });
 
-  let raw = await fetchLLM(prompt, provider, apiKey, 16000, model);
+  let raw = await fetchLLM(prompt, provider, apiKey, 16000, model, baseUrl);
   let outline = extractJson(raw);
   if (!outline) {
-    raw = await fetchLLM(prompt + "\n\nПредыдущий ответ не распарсился. Верни ТОЛЬКО валидный JSON, без текста и без markdown-обёрток.", provider, apiKey, 16000, model);
+    raw = await fetchLLM(prompt + "\n\nПредыдущий ответ не распарсился. Верни ТОЛЬКО валидный JSON, без текста и без markdown-обёрток.", provider, apiKey, 16000, model, baseUrl);
     outline = extractJson(raw);
   }
   if (!outline) return { ok: false, error: "parse_failed" };
@@ -114,7 +115,7 @@ export async function genOutline(b: any): Promise<GenResult> {
   if (b.factScrub !== false) {
     try {
       const scrubPrompt = buildFactScrubPrompt({ outline, keyword, country: String(b.country ?? "us") });
-      const scrubRaw = await fetchLLM(scrubPrompt, provider, apiKey, 4000, model);
+      const scrubRaw = await fetchLLM(scrubPrompt, provider, apiKey, 4000, model, baseUrl);
       const parsed: any = extractJson(scrubRaw);
       const corrections = Array.isArray(parsed?.corrections)
         ? parsed.corrections
@@ -226,8 +227,9 @@ export async function genText(b: any): Promise<GenResult> {
     includeToc: b.includeToc === true,
   });
   const model = b.model ? String(b.model) : undefined;
+  const baseUrl = b.aiBaseUrl ? String(b.aiBaseUrl) : undefined;
 
-  let text = await fetchLLM(prompt, provider, apiKey, 12000, model);
+  let text = await fetchLLM(prompt, provider, apiKey, 12000, model, baseUrl);
   if (!text) return { ok: false, error: "generation_failed" };
 
   const banned = [
@@ -249,7 +251,7 @@ export async function genText(b: any): Promise<GenResult> {
   if (b.autoFactCheck !== false && bank.length && text) {
     try {
       const bankText = bank.map((x: any, i: number) => `[${i + 1}]${x.official ? " (ОФИЦИАЛЬНЫЙ)" : ""} ${x.domain || x.source}\n${x.facts}`).join("\n\n");
-      let cleaned = await fetchLLM(buildAutoFactCleanPrompt({ article: text, factsBank: bankText, language: String(b.language ?? "en") }), provider, apiKey, 12000, model);
+      let cleaned = await fetchLLM(buildAutoFactCleanPrompt({ article: text, factsBank: bankText, language: String(b.language ?? "en") }), provider, apiKey, 12000, model, baseUrl);
       if (cleaned && cleaned.trim().length > text.length * 0.85) {
         cleaned = cleaned.trim().replace(/^```(?:markdown|md)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
         text = stripForeignScripts(cleaned, String(b.language ?? "en"));
@@ -311,11 +313,12 @@ export async function genAnalysis(b: any): Promise<GenResult> {
     policy: b.policy || undefined,
   });
   const model = b.model ? String(b.model) : undefined;
+  const baseUrl = b.aiBaseUrl ? String(b.aiBaseUrl) : undefined;
 
-  let raw = await fetchLLM(prompt, provider, apiKey, 16000, model);
+  let raw = await fetchLLM(prompt, provider, apiKey, 16000, model, baseUrl);
   let report = extractJson(raw);
   if (!report) {
-    raw = await fetchLLM(prompt + "\n\nПредыдущий ответ не распарсился. Верни ТОЛЬКО валидный JSON.", provider, apiKey, 16000, model);
+    raw = await fetchLLM(prompt + "\n\nПредыдущий ответ не распарсился. Верни ТОЛЬКО валидный JSON.", provider, apiKey, 16000, model, baseUrl);
     report = extractJson(raw);
   }
   if (!report) return { ok: false, error: "parse_failed" };

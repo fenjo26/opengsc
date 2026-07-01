@@ -10,7 +10,7 @@ import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { OutlineView } from "@/components/SeoRenderers";
 import SeoJobProgress from "@/components/SeoJobProgress";
 import SeoRecentList from "@/components/SeoRecentList";
-import { getSeoGenCreds, getSerpCreds, getFirecrawlKey, getDataForSeoKey, loadPolicies, getActivePolicyName } from "@/lib/seo/keys";
+import { getSeoGenCreds, getTaskCreds, getSerpCreds, getFirecrawlKey, getDataForSeoKey, loadPolicies, getActivePolicyName } from "@/lib/seo/keys";
 import { COUNTRIES, LANGUAGES } from "@/lib/seo/regions";
 import { TONES, toneToPrompt } from "@/lib/seo/tones";
 import { OUTLINE_TEMPLATES } from "@/lib/seo/templates";
@@ -187,7 +187,7 @@ export default function OutlinePage() {
 
   async function generate() {
     setErr(""); setArticle("");
-    const { provider, apiKey, model } = getSeoGenCreds();
+    const { provider, apiKey, model, baseUrl } = getTaskCreds("outline");
     if (!apiKey) { setErr(t("seoErrNoAiKey")); return; }
     const urls = serp.filter(s => selected.has(s.url)).map(s => s.url);
     if (!urls.length) { setErr(t("seoErrSelectComp")); return; }
@@ -208,7 +208,7 @@ export default function OutlinePage() {
       const pageGoal = goalFromTone(tone || activePolicy?.voice?.toneOfVoice || "");
       const { jobId: jid, error } = await startJob("outline", {
         keyword, language, country, competitors,
-        aiProvider: provider, aiApiKey: apiKey, model: model || undefined,
+        aiProvider: provider, aiApiKey: apiKey, model: model || undefined, aiBaseUrl: baseUrl || undefined,
         policy: activePolicy, paa, related,
         tone: resolvedTone, persona: resolvedPersona,
         additionalKeywords: addKeywords.split(/[\n,]+/).map(s => s.trim()).filter(Boolean).join(", "),
@@ -227,13 +227,13 @@ export default function OutlinePage() {
 
   async function generateText() {
     if (!outline) return;
-    const { provider, apiKey, model } = getSeoGenCreds();
+    const { provider, apiKey, model, baseUrl } = getTaskCreds("text");
     if (!apiKey) { setErr(t("seoErrNoAiKeyShort")); return; }
     setLoading("text"); setErr("");
     try {
       const res = await fetch("/api/seo/text", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ outline, policy: activePolicy, language, tone: resolveTone() || undefined, aiProvider: provider, aiApiKey: apiKey, model: model || undefined }),
+        body: JSON.stringify({ outline, policy: activePolicy, language, tone: resolveTone() || undefined, aiProvider: provider, aiApiKey: apiKey, model: model || undefined, aiBaseUrl: baseUrl || undefined }),
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || t("seoErrText")); setLoading(""); return; }

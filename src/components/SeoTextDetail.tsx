@@ -9,7 +9,7 @@ import {
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { HistoryItem, getHistoryItem, updateHistory, patchHistory } from "@/lib/seo/history";
 import { outlineHeadings, articleHeadings, markdownToHtml, htmlDocument, countWords, splitArticleSections, hasVerifiableFacts } from "@/lib/seo/outlineFormat";
-import { getSeoGenCreds, getSerpCreds, getFirecrawlKey, getAutoFactcheck, getAutoImages, getFactSourceCount, getFactBearingOnly, getFactReuseCorpus } from "@/lib/seo/keys";
+import { getSeoGenCreds, getTaskCreds, getSerpCreds, getFirecrawlKey, getAutoFactcheck, getAutoImages, getFactSourceCount, getFactBearingOnly, getFactReuseCorpus } from "@/lib/seo/keys";
 
 export default function SeoTextDetail({ item: initial }: { item: HistoryItem }) {
   const { t } = useLanguage();
@@ -222,13 +222,13 @@ function FactCheck({ item, setItem, article, t, autoStart }: any) {
     .filter((f: any) => f.claim);
 
   async function fixText() {
-    const ai = getSeoGenCreds();
+    const ai = getTaskCreds("text");
     if (!ai.apiKey || !badFacts.length || fixing) return;
     setFixing(true); setErr("");
     try {
       const res = await fetch("/api/seo/factfix", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ article, claims: badFacts, keyword: item.keyword, aiProvider: ai.provider, aiApiKey: ai.apiKey, model: ai.model || undefined }),
+        body: JSON.stringify({ article, claims: badFacts, keyword: item.keyword, aiProvider: ai.provider, aiApiKey: ai.apiKey, model: ai.model || undefined, aiBaseUrl: ai.baseUrl || undefined }),
       });
       const data = await res.json();
       if (res.ok && data.text) {
@@ -243,13 +243,13 @@ function FactCheck({ item, setItem, article, t, autoStart }: any) {
   }
 
   useEffect(() => {
-    if (autoStart && getAutoFactcheck() && !report && !running && getSeoGenCreds().apiKey) run();
+    if (autoStart && getAutoFactcheck() && !report && !running && getTaskCreds("text").apiKey) run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function run() {
     setErr("");
-    const ai = getSeoGenCreds(); const serp = getSerpCreds();
+    const ai = getTaskCreds("text"); const serp = getSerpCreds();
     if (!ai.apiKey) { setErr(t("seoErrNoAiKey")); return; }
     let sections = splitArticleSections(article);
     if (!sections.length) { setErr("—"); return; }
@@ -288,7 +288,7 @@ function FactCheck({ item, setItem, article, t, autoStart }: any) {
     for (let i = 0; i < sections.length; i++) {
       const s = sections[i];
       try {
-        const body: any = { heading: s.heading, text: s.text, keyword: item.keyword, aiProvider: ai.provider, aiApiKey: ai.apiKey, model: ai.model || undefined };
+        const body: any = { heading: s.heading, text: s.text, keyword: item.keyword, aiProvider: ai.provider, aiApiKey: ai.apiKey, model: ai.model || undefined, aiBaseUrl: ai.baseUrl || undefined };
         if (shared) { body.sources = shared; } // reuse-corpus mode → route skips its own SERP
         else { body.serpProvider = serp.provider; body.serpKey = serp.apiKey; body.firecrawlKey = getFirecrawlKey() || undefined; body.scrapeCount = getFactSourceCount(); body.engine = "google"; }
         const res = await fetch("/api/seo/factcheck-section", {
@@ -446,17 +446,17 @@ function Images({ item, setItem, outline, article, t, autoStart }: any) {
   const images = item.meta?.images;
 
   useEffect(() => {
-    if (autoStart && getAutoImages() && !images && !loading && getSeoGenCreds().apiKey) run();
+    if (autoStart && getAutoImages() && !images && !loading && getTaskCreds("text").apiKey) run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function run() {
     setErr("");
-    const { provider, apiKey, model } = getSeoGenCreds();
+    const { provider, apiKey, model, baseUrl } = getTaskCreds("text");
     if (!apiKey) { setErr(t("seoErrNoAiKey")); return; }
     setLoading(true);
     try {
-      const res = await fetch("/api/seo/images", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ outline, article: outline ? undefined : article, keyword: item.keyword, aiProvider: provider, aiApiKey: apiKey, model: model || undefined }) });
+      const res = await fetch("/api/seo/images", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ outline, article: outline ? undefined : article, keyword: item.keyword, aiProvider: provider, aiApiKey: apiKey, model: model || undefined, aiBaseUrl: baseUrl || undefined }) });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || "error"); setLoading(false); return; }
       patchHistory(item.id, { meta: { images: data.images } });

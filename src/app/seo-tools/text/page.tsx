@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PenLine, Loader2, AlertTriangle, Wand2, Eye } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
-import { getSeoGenCreds, getSerpCreds, getFirecrawlKey, getFactSourceCount, getHardRedact, loadPolicies, getActivePolicyName } from "@/lib/seo/keys";
+import { getSeoGenCreds, getTaskCreds, getSerpCreds, getFirecrawlKey, getFactSourceCount, getHardRedact, loadPolicies, getActivePolicyName } from "@/lib/seo/keys";
 import { TONES, toneToPrompt } from "@/lib/seo/tones";
 import { LANGUAGES } from "@/lib/seo/regions";
 import { loadHistory, HistoryItem } from "@/lib/seo/history";
@@ -73,7 +73,7 @@ export default function TextGenPage() {
     setErr("");
     const outline = outlines.find(o => o.id === structureId);
     if (!outline) { setErr(t("seoSelectStructureFirst")); return; }
-    const { provider, apiKey, model } = getSeoGenCreds();
+    const { provider, apiKey, model, baseUrl } = getTaskCreds("text");
     if (!apiKey) { setErr(t("seoErrNoAiKey")); return; }
     const policy = loadPolicies().find(p => p.name === policyName) || loadPolicies()[0];
     const resolvedTone = tone ? toneToPrompt(tone) : toneToPrompt((policy as any)?.voice?.toneOfVoice || "");
@@ -84,7 +84,7 @@ export default function TextGenPage() {
       custom: useCustom && custom.trim() ? custom : undefined, promptType, includeToc,
       sourceMode, serpProvider: getSerpCreds().provider, serpKey: getSerpCreds().apiKey || undefined,
       firecrawlKey: getFirecrawlKey() || undefined, scrapeCount: getFactSourceCount(), hardRedact: getHardRedact(),
-      aiProvider: provider, aiApiKey: apiKey, model: model || undefined,
+      aiProvider: provider, aiApiKey: apiKey, model: model || undefined, aiBaseUrl: baseUrl || undefined,
     }, { tone: tone || (policy as any)?.voice?.toneOfVoice || "", promptType: promptType === "custom" ? t("seoPromptCustom") : t("seoPromptService"), outlineId: outline.id });
     setLoading(false);
     if (error || !jid) { setErr(error || t("seoErrText")); return; }

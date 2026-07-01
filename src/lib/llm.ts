@@ -6,6 +6,7 @@ export async function fetchLLM(
   apiKey: string,
   maxTokens = 1024,
   modelOverride?: string,
+  baseUrl?: string,
 ): Promise<string | null> {
   // Hard timeout so a stuck/over-long generation fails in minutes instead of hanging forever.
   const ctrl = new AbortController();
@@ -50,6 +51,19 @@ export async function fetchLLM(
         body: JSON.stringify({ model: modelOverride ?? 'anthropic/claude-3.5-haiku', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
       });
       if (!res.ok) { console.error('[LLM] openrouter', res.status); return null; }
+      const data = await res.json();
+      text = data.choices?.[0]?.message?.content ?? '';
+    } else if (provider === 'custom') {
+      // Any OpenAI-compatible endpoint (e.g. kie.ai). baseUrl is the API root; we call /chat/completions.
+      const root = (baseUrl || '').replace(/\/+$/, '');
+      if (!root) { console.error('[LLM] custom: no baseUrl'); return null; }
+      const url = /\/chat\/completions$/.test(root) ? root : `${root}/chat/completions`;
+      const res = await fetch(url, {
+        method: 'POST', signal: sig,
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: modelOverride ?? 'gpt-4o-mini', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
+      });
+      if (!res.ok) { console.error('[LLM] custom', res.status, await res.text().catch(() => '')); return null; }
       const data = await res.json();
       text = data.choices?.[0]?.message?.content ?? '';
     }

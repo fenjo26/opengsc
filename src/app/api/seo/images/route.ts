@@ -16,9 +16,10 @@ export async function POST(req: Request) {
 
   const prompt = buildImagePromptsPrompt({ outlineJson: b.outline, article: b.article, keyword: String(b.keyword ?? "") });
   const model = b.model ? String(b.model) : undefined;
-  let raw = await fetchLLM(prompt, provider, apiKey, 3000, model);
+  const baseUrl = b.aiBaseUrl ? String(b.aiBaseUrl) : undefined;
+  let raw = await fetchLLM(prompt, provider, apiKey, 3000, model, baseUrl);
   let data = extractJson(raw);
-  if (!data) { raw = await fetchLLM(prompt + "\n\nВерни ТОЛЬКО валидный JSON.", provider, apiKey, 3000, model); data = extractJson(raw); }
+  if (!data) { raw = await fetchLLM(prompt + "\n\nВерни ТОЛЬКО валидный JSON.", provider, apiKey, 3000, model, baseUrl); data = extractJson(raw); }
   if (!data) return NextResponse.json({ error: "parse_failed" }, { status: 502 });
   return NextResponse.json({ images: data });
 }
