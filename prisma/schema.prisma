@@ -325,7 +325,7 @@ model IndexerDictionary {
 model SeoJob {
   id        String   @id @default(cuid())
   userId    String
-  type      String   // "outline" | "text" | "analysis"
+  type      String   // "outline" | "text" | "analysis" | "landing"
   keyword   String   @default("")
   status    String   @default("processing") // "processing" | "completed" | "error"
   result    String?  // JSON string of the result (outline object / { text, ... } / report)

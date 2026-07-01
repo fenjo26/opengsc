@@ -2,7 +2,7 @@
 // Stored in localStorage — same browser-only convention as keys/policies.
 "use client";
 
-export type HistoryType = "outline" | "text" | "analysis";
+export type HistoryType = "outline" | "text" | "analysis" | "landing";
 export type HistoryStatus = "processing" | "completed" | "error";
 
 export interface HistoryItem {
@@ -12,7 +12,7 @@ export interface HistoryItem {
   createdAt: number;
   status: HistoryStatus;
   data: any; // outline object | article string | gap report object
-  meta?: { tone?: string; promptType?: string; version?: string; error?: string; outlineId?: string; factcheck?: any; images?: any };
+  meta?: { tone?: string; promptType?: string; version?: string; error?: string; outlineId?: string; factcheck?: any; images?: any; serpIntent?: any };
 }
 
 const KEY = "seoHistory";

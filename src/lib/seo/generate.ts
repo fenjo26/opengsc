@@ -6,7 +6,7 @@ import { runSerp } from "@/lib/seo/serp";
 import { scrapeMany } from "@/lib/seo/scrape";
 import {
   buildOutlinePrompt, buildTextPrompt, buildAnalysisPrompt, buildFactScrubPrompt, buildSourceExtractPrompt,
-  buildAutoFactCleanPrompt, enforceLinkPolicy, redactBannedWords, extractJson, CompetitorInput,
+  buildAutoFactCleanPrompt, buildWireframePrompt, enforceLinkPolicy, redactBannedWords, extractJson, CompetitorInput,
 } from "@/lib/seo/prompts";
 
 export type GenResult = { ok: true; data: any } | { ok: false; error: string };
@@ -93,6 +93,7 @@ export async function genOutline(b: any): Promise<GenResult> {
     tone: b.tone ? String(b.tone) : undefined,
     persona: b.persona ? String(b.persona) : undefined,
     additionalKeywords: b.additionalKeywords ? String(b.additionalKeywords) : undefined,
+    lsiKeywords: b.lsiKeywords ? String(b.lsiKeywords) : undefined,
     targetWordCount: b.targetWordCount ? Number(b.targetWordCount) : undefined,
     manualTexts: Array.isArray(b.manualTexts) ? b.manualTexts : undefined,
     keywordsData: Array.isArray(b.keywordsData) ? b.keywordsData : undefined,
@@ -296,6 +297,64 @@ export function stripForeignScripts(text: string, language: string): string {
     .replace(/([:：])\s+([.,;!?])/g, "$2");
 }
 
+// ─── Wireframe (Landing-flow block skeleton) ─────────────────────────────────────
+export async function genWireframe(b: any): Promise<GenResult> {
+  if (!b.outline) return { ok: false, error: "no_outline" };
+  const provider = String(b.aiProvider ?? "anthropic");
+  const apiKey = String(b.aiApiKey ?? "");
+  if (!apiKey) return { ok: false, error: "no_ai_key" };
+  const model = b.model ? String(b.model) : undefined;
+  const baseUrl = b.aiBaseUrl ? String(b.aiBaseUrl) : undefined;
+
+  const prompt = buildWireframePrompt({
+    keyword: String(b.keyword ?? b.outline?.meta?.keyword ?? ""),
+    language: String(b.language ?? b.outline?.meta?.language ?? "en"),
+    country: String(b.country ?? b.outline?.meta?.country ?? "us"),
+    outline: b.outline,
+    structureMode: b.structureMode,
+    myStructure: Array.isArray(b.myStructure) ? b.myStructure : undefined,
+    targetWordCount: b.targetWordCount ? Number(b.targetWordCount) : undefined,
+  });
+
+  let raw = await fetchLLM(prompt, provider, apiKey, 8000, model, baseUrl);
+  let wireframe = extractJson(raw);
+  if (!wireframe || !Array.isArray((wireframe as any).blocks)) {
+    raw = await fetchLLM(prompt + "\n\nПредыдущий ответ не распарсился. Верни ТОЛЬКО валидный JSON, без текста и без markdown-обёрток.", provider, apiKey, 8000, model, baseUrl);
+    wireframe = extractJson(raw);
+  }
+  if (!wireframe || !Array.isArray((wireframe as any).blocks)) return { ok: false, error: "parse_failed" };
+  return { ok: true, data: wireframe };
+}
+
+// ─── Landing-flow orchestrator: ТЗ (+ wireframe) (+ текст), per "что генерировать" ───
+// b.generate: "tz" | "tz_text" | "tz_wireframe" | "all" (default "tz_wireframe", matches the
+// reference tool's Landing-flow which always ships a wireframe alongside the ТЗ).
+export async function genLanding(b: any): Promise<GenResult> {
+  const want = String(b.generate || "tz_wireframe");
+  const wantsWireframe = want === "tz_wireframe" || want === "all";
+  const wantsText = want === "tz_text" || want === "all";
+
+  const outlineRes = await genOutline(b);
+  if (!outlineRes.ok) return outlineRes;
+  const outline = outlineRes.data;
+
+  const result: any = { outline };
+
+  if (wantsWireframe) {
+    const wfRes = await genWireframe({ ...b, outline });
+    if (wfRes.ok) result.wireframe = wfRes.data;
+    else result.wireframeError = wfRes.error;
+  }
+
+  if (wantsText) {
+    const textRes = await genText({ ...b, outline });
+    if (textRes.ok) result.text = (textRes.data as any)?.text ?? textRes.data;
+    else result.textError = textRes.error;
+  }
+
+  return { ok: true, data: result };
+}
+
 // ─── Content analysis ──────────────────────────────────────────────────────────────
 export async function genAnalysis(b: any): Promise<GenResult> {
   const keyword = String(b.keyword ?? "").trim();
@@ -329,5 +388,6 @@ export function genByType(type: string, payload: any): Promise<GenResult> {
   if (type === "outline") return genOutline(payload);
   if (type === "text") return genText(payload);
   if (type === "analysis") return genAnalysis(payload);
+  if (type === "landing") return genLanding(payload);
   return Promise.resolve({ ok: false, error: "unknown_job_type" });
 }

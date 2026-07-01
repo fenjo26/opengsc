@@ -52,6 +52,7 @@ export function buildOutlinePrompt(args: {
   tone?: string;
   persona?: string;
   additionalKeywords?: string;
+  lsiKeywords?: string;
   targetWordCount?: number;
   manualTexts?: { name: string; text: string }[];
   keywordsData?: { keyword: string; volume: number }[];
@@ -80,6 +81,7 @@ export function buildOutlinePrompt(args: {
     ? `\n\nПРАВИЛА СТРУКТУРЫ ОТ ПОЛЬЗОВАТЕЛЯ (учитывай ОБЯЗАТЕЛЬНО при построении секций — это указания, как организовать статью): ${args.structureRules.trim().slice(0, 1500)}`
     : "";
   const addKw = args.additionalKeywords?.trim() ? `\n- доп. ключевые слова (обязательно учесть): ${args.additionalKeywords}` : "";
+  const lsiKw = args.lsiKeywords?.trim() ? `\n- LSI-фразы (вплетай в значения атрибутов сущностей и в текст секций естественно, не в заголовки): ${args.lsiKeywords}` : "";
   const twc = args.targetWordCount ? `\n- целевой объём статьи: ~${args.targetWordCount} слов (распредели по секциям, не раздувай)` : "";
   const manual = args.manualTexts?.length
     ? `\n- ручные тексты конкурентов (скрейп не справился): ${JSON.stringify(args.manualTexts.map(m => ({ name: m.name, text: m.text.slice(0, 6000) })))}`
@@ -146,7 +148,7 @@ export function buildOutlinePrompt(args: {
 
 ДАНО:
 - keyword: ${args.keyword}
-- язык/страна: ${args.language}/${args.country}${toneBlock}${personaBlock}${narrationBlock}${addKw}${twc}${paaBlock}${relBlock}
+- язык/страна: ${args.language}/${args.country}${toneBlock}${personaBlock}${narrationBlock}${addKw}${lsiKw}${twc}${paaBlock}${relBlock}
 - топ-конкуренты (типы + структура): ${JSON.stringify(args.competitors.map(({ text_sample, ...c }) => { void text_sample; return c; }))}${manual}${kwData}${customTplBlock}${structRulesBlock}${factsBlock}
 
 МЕТА-ТЕГИ (title/description/slug) — по правилам Google и Bing, проработай ТЩАТЕЛЬНО (это готовые к публикации варианты):
@@ -193,6 +195,81 @@ export function buildOutlinePrompt(args: {
   "price_table_template": { "columns": [""], "rows": [ {} ] },
   "authority_fields_to_fill_by_user": [ "" ]
 }`;
+}
+
+// ─── Landing wireframe (block-by-block skeleton, no visual design) ──────────────────
+// Turns the already-built outline (ТЗ) + optionally the author's own page structure into an
+// ordered list of landing-page BLOCKS (hero, USP bar, card lists, reviews, FAQ, CTA…), each with
+// concrete, checkable requirements — mirrors the "Wireframe (макет лендинга)" step of the
+// reference tool. Runs AFTER buildOutlinePrompt so it can reuse the same entities/keywords/intent.
+export const WIREFRAME_BLOCK_TYPES = [
+  "HERO_FORM", "USP_BAR", "ITEM_CARD_LIST", "HOW_IT_WORKS", "COMPARISON_TABLE",
+  "PRICING_TABLE", "FEATURE_LIST", "GALLERY", "REVIEWS", "TRUST_BADGES", "MAP",
+  "FAQ", "TEXT_BLOCK", "CTA_BANNER",
+] as const;
+
+export function buildWireframePrompt(args: {
+  keyword: string;
+  language: string;
+  country: string;
+  outline: any;
+  structureMode?: "serp" | "my_1to1" | "hybrid" | "seo_block";
+  myStructure?: { level: string; text: string; words: number }[];
+  targetWordCount?: number;
+}): string {
+  const meta = args.outline?.meta || {};
+  const sections = Array.isArray(args.outline?.sections) ? args.outline.sections : [];
+  const slimSections = sections.map((s: any) => ({
+    h_level: s.h_level, heading: s.heading, summary: s.summary,
+    entities: (s.entities_to_cover || []).map((e: any) => typeof e === "string" ? e : e.name),
+    keywords: s.keywords,
+  }));
+  const mode = args.structureMode || "serp";
+  const modeBlock = mode === "my_1to1" && args.myStructure?.length
+    ? `\n\nРЕЖИМ: ПО МОЕЙ СТРУКТУРЕ (1:1). У пользователя уже есть готовая страница со СВОИМИ заголовками — используй ИХ порядок и формулировки ДОСЛОВНО как каркас wireframe-блоков (не придумывай новые заголовки, не переставляй и не выкидывай). Для каждого заголовка подбери наиболее подходящий тип блока из каталога и требования, наполненные фактурой из ТЗ (сущности/ключи ниже). "words" ориентир для секции указан у пользователя — держись его при формулировке requirements по объёму.\nМОЯ СТРУКТУРА СТРАНИЦЫ: ${JSON.stringify(args.myStructure)}`
+    : mode === "hybrid" && args.myStructure?.length
+    ? `\n\nРЕЖИМ: ВЫДАЧА + МОЯ СТРАНИЦА (гибрид). Построй wireframe на основе анализа ТОП-конкурентов (ниже), но учти мою существующую структуру как ДОПОЛНИТЕЛЬНЫЙ контекст — можешь заимствовать из неё удачные секции/формулировки, если они усиливают структуру, без обязательства повторять её дословно.\nМОЯ СУЩЕСТВУЮЩАЯ СТРАНИЦА (контекст): ${JSON.stringify(args.myStructure)}`
+    : mode === "seo_block"
+    ? `\n\nРЕЖИМ: SEO-БЛОК («портянка» вниз, для интернет-магазинов/каталогов). После основных конверсионных блоков (hero/usp/карточки товаров) добавь РАЗВЁРНУТЫЙ SEO-текстовый блок(и) внизу страницы (TEXT_BLOCK) — информационное наполнение под все sub-intents и FAQ, максимально покрывающее ключи и сущности из ТЗ, ДО финального CTA/футера.`
+    : `\n\nРЕЖИМ: ПО ВЫДАЧЕ. Построй wireframe с нуля на основе анализа конкурентов и ТЗ ниже — типовая для тематики и intent структура блоков.`;
+
+  const dominant = meta.dominant_intent || "";
+  const twc = args.targetWordCount ? `\n- ориентир общего объёма текста на странице: ~${args.targetWordCount} слов` : "";
+
+  return `Ты — UX/CRO-стратег лендингов. По ТЗ статьи ниже построй WIREFRAME лендинга — упорядоченный список БЛОКОВ секций (без визуального дизайна, просто структура и требования к содержимому каждого блока), максимально конверсионный для intent="${dominant || "mixed"}" и пригодный сразу отдать дизайнеру/верстальщику. Верни СТРОГИЙ JSON без преамбулы и без markdown-обёрток.
+
+КАТАЛОГ ТИПОВ БЛОКОВ (используй ТОЛЬКО эти значения для "type"): ${WIREFRAME_BLOCK_TYPES.join(", ")}.
+- HERO_FORM: главный экран — заголовок H1, подзаголовок/подводка, CTA-кнопка (и/или форма заявки).
+- USP_BAR: полоса ключевых преимуществ/УТП.
+- ITEM_CARD_LIST: карточки товаров/услуг/тарифов/авто и т.п.
+- HOW_IT_WORKS: этапы процесса/использования услуги.
+- COMPARISON_TABLE: сравнение вариантов/тарифов/конкурентов.
+- PRICING_TABLE: таблица цен/тарифов.
+- FEATURE_LIST: колонки преимуществ (иконка + заголовок + описание).
+- GALLERY: фото/видео-галерея.
+- REVIEWS: отзывы/рейтинги/соц. доказательство.
+- TRUST_BADGES: сертификаты/лицензии/логотипы партнёров/платёжные системы.
+- MAP: карта/зона покрытия/маршрут.
+- FAQ: блок вопрос-ответ.
+- TEXT_BLOCK: развёрнутый SEO-текст (информационный, не конверсионный).
+- CTA_BANNER: финальный призыв к действию перед футером.
+
+ПРАВИЛА:
+- 8-14 блоков для обычного лендинга, ДО 20 для режима SEO-блок. Порядок — логичный путь пользователя: hero → доверие/УТП → предложение/карточки → как это работает → сравнение/цены (если уместно) → отзывы → FAQ → CTA.
+- Для КАЖДОГО блока: "heading" — конкретный заголовок ЭТОГО блока (не общее название типа), на языке ${args.language}, с ключом, где уместно.
+- "requirements" (2-4 шт. на блок) — КОНКРЕТНЫЕ, проверяемые пункты содержимого (например "≥3 карточки типов авто", "у каждой карточки: фото, название, вместимость, цена от", "агрегированный рейтинг с известной площадки (Google/Trustpilot)", "≥3 именных отзыва с деталями поездки"). НЕ общие фразы вроде «сделать хорошо».
+- Используй сущности/ключи/факты из ТЗ ниже, чтобы requirements были предметными (конкретные типы авто/тарифов/сущности, а не абстракции).
+- source_section (опционально) — heading соответствующей секции из ТЗ, если блок её раскрывает.
+- НЕ выдумывай лицензий/отзывов/цифр — требования должны описывать ЧТО показать, а не выдуманные значения.${modeBlock}
+
+ДАНО:
+- keyword: ${args.keyword}
+- язык/страна: ${args.language}/${args.country}
+- доминирующий интент: ${dominant || "не определён"}${twc}
+- ТЗ (сокращённо — заголовки/summary/сущности/ключи по секциям): ${JSON.stringify(slimSections).slice(0, 9000)}
+
+ВЕРНИ JSON строго по схеме (только JSON):
+{ "blocks": [ { "type": "HERO_FORM", "heading": "", "requirements": ["",""], "source_section": "" } ] }`;
 }
 
 // ─── Outline fact-scrub: correct baked-in wrong/fabricated specifics before the text is written ──
@@ -452,6 +529,18 @@ export function redactBannedWords(text: string, bannedTokens: string[]): { text:
     out = out.replace(re, () => { count++; return "[…]"; });
   }
   return { text: out, count };
+}
+
+// ─── Vision structure extraction (Landing-flow "разобрать по скриншоту") ─────────
+// The page has no semantic H-tags (or they're unreliable), so we ask a vision model to read the
+// screenshot and reconstruct the visual heading hierarchy + an approximate word budget per section
+// (estimated from how much text/space the section visually occupies).
+export function buildVisionStructurePrompt(): string {
+  return `Ты — веб-аналитик. На скриншоте — лендинг/страница сайта. Восстанови её ВИЗУАЛЬНУЮ иерархию заголовков (даже если в HTML нет тегов H1-H6 — ориентируйся на размер шрифта, жирность, расположение): главный заголовок = H1, крупные заголовки секций = H2, подзаголовки внутри секций = H3/H4.
+Для КАЖДОГО заголовка укажи ПРИМЕРНЫЙ объём текста этой секции в словах (оцени по количеству видимого текста/абзацев/карточек под заголовком до следующего заголовка того же или более высокого уровня; если это просто список/карточки без текста — дай малую оценку 15-40).
+Верни СТРОГИЙ JSON без преамбулы и без markdown-обёрток:
+{ "title": "заголовок вкладки/страницы, если виден", "nodes": [ { "level": "H1|H2|H3|H4", "text": "текст заголовка как он написан на скриншоте", "words": 120 } ] }
+Порядок — сверху вниз, как на экране. Не выдумывай заголовков, которых не видно на скриншоте.`;
 }
 
 // ─── Strict-JSON extraction (spec §6) ───────────────────────────────────────────

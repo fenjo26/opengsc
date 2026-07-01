@@ -79,6 +79,96 @@ export function parseHtml(url: string, html: string): ScrapedPage {
   };
 }
 
+// ─── Heading structure extraction (Landing-flow "my page" import) ───────────────
+// Splits the raw HTML between consecutive heading tags and counts words in each slice, so the
+// UI can show "H2: ... (~120 сл.)" — a per-section word budget derived from the LIVE page, not
+// a guess. Order = document order (same as parseHtml's `headings`, but with real per-section size).
+export interface StructureNode { level: string; text: string; words: number; }
+
+export function extractStructure(html: string): StructureNode[] {
+  const marks: { level: string; text: string; start: number; end: number }[] = [];
+  const hRe = /<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = hRe.exec(html)) !== null) {
+    const text = stripTags(m[2]);
+    if (text) marks.push({ level: `H${m[1]}`, text, start: m.index, end: m.index + m[0].length });
+    if (marks.length > 150) break;
+  }
+  if (!marks.length) return [];
+  return marks.map((h, i) => {
+    const sliceEnd = i + 1 < marks.length ? marks[i + 1].start : html.length;
+    const body = stripTags(html.slice(h.end, sliceEnd));
+    const words = body ? body.split(/\s+/).filter(Boolean).length : 0;
+    return { level: h.level, text: h.text, words };
+  });
+}
+
+// Markdown fallback (Firecrawl returned no HTML, only markdown) — split on markdown heading lines.
+function extractStructureFromMarkdown(md: string): StructureNode[] {
+  const lines = md.split(/\r?\n/);
+  const marks: { level: string; text: string; line: number }[] = [];
+  lines.forEach((line, i) => {
+    const hm = line.match(/^(#{1,6})\s+(.+)$/);
+    if (hm) marks.push({ level: `H${hm[1].length}`, text: hm[2].trim(), line: i });
+  });
+  if (!marks.length) return [];
+  return marks.map((h, i) => {
+    const endLine = i + 1 < marks.length ? marks[i + 1].line : lines.length;
+    const body = lines.slice(h.line + 1, endLine).join(" ").trim();
+    const words = body ? body.split(/\s+/).filter(Boolean).length : 0;
+    return { level: h.level, text: h.text, words };
+  });
+}
+
+export interface StructureResult {
+  url: string; ok: boolean; via: "fetch" | "firecrawl" | "failed";
+  title: string; nodes: StructureNode[]; totalWords: number; error?: string;
+}
+
+// Fetch a single page (own site or competitor) and return its H1-H6 structure with a real
+// per-section word count — used by the Landing-flow "under my page" import.
+export async function scrapeStructure(url: string, firecrawlKey?: string): Promise<StructureResult> {
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml",
+      },
+      signal: AbortSignal.timeout(15000),
+      redirect: "follow",
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const html = await res.text();
+    const nodes = extractStructure(html);
+    if (!nodes.length) throw new Error("no_headings");
+    const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    const title = titleMatch ? decodeEntities(stripTags(titleMatch[1])) : "";
+    return { url, ok: true, via: "fetch", title, nodes, totalWords: nodes.reduce((s, n) => s + n.words, 0) };
+  } catch (e: any) {
+    if (firecrawlKey) {
+      try {
+        const res = await fetch("https://api.firecrawl.dev/v1/scrape", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${firecrawlKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ url, formats: ["html", "markdown"], onlyMainContent: true }),
+          signal: AbortSignal.timeout(45000),
+        });
+        if (!res.ok) throw new Error(`firecrawl ${res.status}`);
+        const data = await res.json();
+        const html: string = data?.data?.html ?? "";
+        const md: string = data?.data?.markdown ?? "";
+        const meta = data?.data?.metadata ?? {};
+        const nodes = html ? extractStructure(html) : extractStructureFromMarkdown(md);
+        if (!nodes.length) throw new Error("no_headings");
+        return { url, ok: true, via: "firecrawl", title: meta.title || "", nodes, totalWords: nodes.reduce((s, n) => s + n.words, 0) };
+      } catch (e2: any) {
+        return { url, ok: false, via: "failed", title: "", nodes: [], totalWords: 0, error: `fetch:${e?.message}; firecrawl:${e2?.message}` };
+      }
+    }
+    return { url, ok: false, via: "failed", title: "", nodes: [], totalWords: 0, error: e?.message ?? "fetch_failed" };
+  }
+}
+
 async function directFetch(url: string): Promise<ScrapedPage> {
   const res = await fetch(url, {
     headers: {

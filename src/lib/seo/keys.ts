@@ -35,7 +35,7 @@ export function getConfiguredProviders(): { id: string; key: string }[] {
 }
 
 // SEO task IDs that can each have their own default provider/model.
-export type SeoTask = "outline" | "text" | "analysis" | "policy";
+export type SeoTask = "outline" | "text" | "analysis" | "policy" | "landing";
 
 // Per-task resolved creds: a task-specific default (set once in SEO settings) overrides the global
 // SEO provider. For the custom provider, also returns baseUrl. Falls back gracefully at each level.

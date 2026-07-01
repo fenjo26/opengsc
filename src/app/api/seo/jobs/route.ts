@@ -29,7 +29,7 @@ export async function POST(req: Request) {
 
   const b = await req.json();
   const type = String(b.type ?? "");
-  if (!["outline", "text", "analysis"].includes(type)) return NextResponse.json({ error: "bad_type" }, { status: 400 });
+  if (!["outline", "text", "analysis", "landing"].includes(type)) return NextResponse.json({ error: "bad_type" }, { status: 400 });
   const payload = b.payload ?? {};
   const keyword = String(b.keyword ?? payload?.keyword ?? payload?.outline?.meta?.keyword ?? "").slice(0, 300);
 

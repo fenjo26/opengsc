@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Wand2, Download, Loader2, ChevronDown, ChevronRight, BarChart3 } from "lucide-react";
+import { FileText, Wand2, Download, Loader2, ChevronDown, ChevronRight, BarChart3, LayoutTemplate } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 const W_COLOR = (w: number) => w >= 9 ? "#ff453a" : w >= 7 ? "#ff9f0a" : "#2997ff";
@@ -275,6 +275,65 @@ export function OutlineView({ outline, onGenText, genTextLoading }: { outline: a
       </div>
       <OutlineStructure outline={outline} />
       <OutlineEntities outline={outline} />
+    </div>
+  );
+}
+
+// ─── SERP intent/page-type analysis (deterministic, Landing-flow "Анализ выдачи") ──
+export function SerpIntentPanel({ analysis }: { analysis: { dominantIntent: string; pageType: string; share: number; total: number; note: string } | null | undefined }) {
+  const { t } = useLanguage();
+  if (!analysis) return null;
+  return (
+    <div className="panel">
+      <div className="tool-section-label">{t("seoSerpAnalysisTitle")}</div>
+      <div style={{ fontSize: "13px", color: "var(--color-text-secondary)", display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center", marginTop: "6px" }}>
+        <span>{t("seoDominantIntent")}: <b style={{ color: "var(--color-accent-green)" }}>{analysis.dominantIntent}</b></span>
+        <span style={{ color: "var(--color-border)" }}>·</span>
+        <span>{t("seoPageType")}: <span className="pill">{analysis.pageType}</span></span>
+      </div>
+      <div style={{ fontSize: "12px", color: "var(--color-text-tertiary)", marginTop: "8px", fontFamily: "monospace" }}>{analysis.note}</div>
+    </div>
+  );
+}
+
+// ─── Landing wireframe (block skeleton) ──────────────────────────────────────────
+const BLOCK_COLOR: Record<string, string> = {
+  HERO_FORM: "#bf5af2", USP_BAR: "#2997ff", ITEM_CARD_LIST: "#ff9f0a", HOW_IT_WORKS: "#34c759",
+  COMPARISON_TABLE: "#ff9f0a", PRICING_TABLE: "#ff9f0a", FEATURE_LIST: "#2997ff", GALLERY: "#bf5af2",
+  REVIEWS: "#34c759", TRUST_BADGES: "#34c759", MAP: "#2997ff", FAQ: "#8e8e93", TEXT_BLOCK: "#8e8e93", CTA_BANNER: "#ff453a",
+};
+
+export function WireframeView({ wireframe }: { wireframe: any }) {
+  const { t } = useLanguage();
+  const blocks = Array.isArray(wireframe?.blocks) ? wireframe.blocks : [];
+  if (!blocks.length) return null;
+  return (
+    <div className="panel">
+      <h3 style={{ fontSize: "16px", fontWeight: 700, margin: "0 0 4px", color: "var(--color-text-primary)", display: "flex", alignItems: "center", gap: "8px" }}>
+        <LayoutTemplate size={18} color="var(--color-accent-purple)" /> {t("seoWireframeTitle")}
+      </h3>
+      <p style={{ fontSize: "12px", color: "var(--color-text-tertiary)", margin: "0 0 8px" }}>{t("seoWireframeSub")}</p>
+      <div>
+        {blocks.map((b: any, i: number) => {
+          const color = BLOCK_COLOR[b.type] || "#8e8e93";
+          return (
+            <div key={i} style={{ padding: "14px 4px", borderTop: i ? "1px dashed var(--color-border)" : "none" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "5px" }}>
+                <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.03em", padding: "2px 8px", borderRadius: "5px", color, background: `${color}1a` }}>{b.type}</span>
+                {b.source_section && <span style={{ fontSize: "11px", color: "var(--color-text-tertiary)" }}>← {b.source_section}</span>}
+              </div>
+              <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: b.requirements?.length ? "8px" : 0 }}>{b.heading}</div>
+              {Array.isArray(b.requirements) && b.requirements.length > 0 && (
+                <ul style={{ margin: 0, paddingLeft: "18px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                  {b.requirements.map((r: string, j: number) => (
+                    <li key={j} style={{ fontSize: "12px", color: "var(--color-accent-orange)", lineHeight: 1.5, textTransform: "uppercase", letterSpacing: "0.01em" }}>{r}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
