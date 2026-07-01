@@ -12,8 +12,12 @@ import {
   getGeoModel, setGeoModel, GeoAuditRec,
 } from "@/lib/seo/geoClient";
 
-const OPENAI_MODELS = ["gpt-5", "gpt-4.1", "gpt-4o", "gpt-4o-mini"];
-const KIE_MODELS = ["gpt-5-5", "gpt-5-4", "gpt-5-2"];
+// Fallback lists only — used until the live /api/seo/models call resolves (or if it fails).
+// The provider's actual current lineup is fetched live below, same as the global model picker.
+const OPENAI_MODELS_FALLBACK = ["gpt-5", "gpt-4.1", "gpt-4o", "gpt-4o-mini"];
+const KIE_MODELS_FALLBACK = ["gpt-5-5", "gpt-5-4", "gpt-5-2"];
+
+type ModelOpt = { id: string; label: string };
 
 export default function GeoAuditPage() {
   const { t } = useLanguage();
@@ -22,6 +26,8 @@ export default function GeoAuditPage() {
   const [country, setCountry] = useState("us");
   const [engine, setEngine] = useState<GeoEngineChoice>("openai");
   const [model, setModel] = useState("gpt-5");
+  const [modelOpts, setModelOpts] = useState<ModelOpt[]>(OPENAI_MODELS_FALLBACK.map(id => ({ id, label: id })));
+  const [modelsLoading, setModelsLoading] = useState(false);
 
   const [running, setRunning] = useState(false);
   const [stage, setStage] = useState("");
@@ -38,17 +44,46 @@ export default function GeoAuditPage() {
     setHasKey(oa || kie);
     const eng = getGeoEngine();
     setEngine(eng);
+    const fallback = eng === "kie" ? KIE_MODELS_FALLBACK : OPENAI_MODELS_FALLBACK;
     const storedModel = getGeoModel();
-    const validForEngine = (eng === "kie" ? KIE_MODELS : OPENAI_MODELS).includes(storedModel);
-    setModel(validForEngine ? storedModel : (eng === "kie" ? "gpt-5-5" : "gpt-5"));
+    setModel(fallback.includes(storedModel) ? storedModel : fallback[0]);
+    loadModels(eng);
     refreshRecent();
   }, []);
+
+  // Pull the provider's actual current model list with the user's own key (mirrors the global
+  // AI-provider settings picker) instead of trusting a hardcoded, easily stale id list.
+  async function loadModels(eng: GeoEngineChoice) {
+    const apiKey = getGeoApiKey(eng);
+    const fallback = eng === "kie" ? KIE_MODELS_FALLBACK : OPENAI_MODELS_FALLBACK;
+    if (!apiKey) { setModelOpts(fallback.map(id => ({ id, label: id }))); return; }
+    setModelsLoading(true);
+    try {
+      const res = await fetch("/api/seo/models", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: eng, apiKey }),
+      });
+      const data = await res.json();
+      const live: ModelOpt[] = Array.isArray(data.models) ? data.models : [];
+      if (live.length) {
+        setModelOpts(live);
+        setModel(cur => (live.some(m => m.id === cur) ? cur : (live.find(m => m.id === "gpt-5")?.id || live[0].id)));
+      } else {
+        setModelOpts(fallback.map(id => ({ id, label: id })));
+      }
+    } catch {
+      setModelOpts(fallback.map(id => ({ id, label: id })));
+    } finally {
+      setModelsLoading(false);
+    }
+  }
 
   function chooseEngine(e: GeoEngineChoice) {
     setEngine(e);
     setGeoEngine(e);
-    const models = e === "kie" ? KIE_MODELS : OPENAI_MODELS;
-    if (!models.includes(model)) setModel(models[0]);
+    const fallback = e === "kie" ? KIE_MODELS_FALLBACK : OPENAI_MODELS_FALLBACK;
+    setModel(fallback[0]);
+    setModelOpts(fallback.map(id => ({ id, label: id })));
+    loadModels(e);
   }
 
   async function refreshRecent() { setRecent(await listGeoAudits()); }
@@ -168,9 +203,9 @@ export default function GeoAuditPage() {
             </select>
           </div>
           <div>
-            <label className="tool-field-label">{t("geoModel")}</label>
-            <select className="tool-input" value={model} onChange={e => setModel(e.target.value)} disabled={running}>
-              {(engine === "kie" ? KIE_MODELS : OPENAI_MODELS).map(mm => <option key={mm} value={mm}>{mm}</option>)}
+            <label className="tool-field-label">{t("geoModel")}{modelsLoading ? " …" : ""}</label>
+            <select className="tool-input" value={model} onChange={e => setModel(e.target.value)} disabled={running || modelsLoading}>
+              {modelOpts.map(mm => <option key={mm.id} value={mm.id}>{mm.label}</option>)}
             </select>
           </div>
         </div>
