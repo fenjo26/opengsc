@@ -114,17 +114,24 @@ function buildSearchInput(query: string, language: string, country: string): str
   ].join(" ");
 }
 
-async function runWebSearch(query: string, language: string, country: string, model: string, apiKey: string): Promise<RawTrace | { error: string }> {
+// "openai" hits OpenAI's own Responses API directly. "kie" routes the same request shape through
+// kie.ai's `/codex/v1/responses` endpoint, which mirrors OpenAI's Responses API 1:1 (including the
+// `web_search` tool) but bills against the user's kie.ai credits instead of a separate OpenAI key.
+export type GeoEngine = "openai" | "kie";
+
+async function runWebSearch(query: string, language: string, country: string, model: string, apiKey: string, engine: GeoEngine = "openai"): Promise<RawTrace | { error: string }> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 280_000);
   const input = buildSearchInput(query, language, country);
+  const endpoint = engine === "kie" ? "https://api.kie.ai/codex/v1/responses" : "https://api.openai.com/v1/responses";
 
   async function call(toolType: string) {
-    return fetch("https://api.openai.com/v1/responses", {
+    return fetch(endpoint, {
       method: "POST", signal: ctrl.signal,
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model,
+        stream: false,
         tools: [{ type: toolType }],
         tool_choice: "auto",
         include: ["web_search_call.action.sources"],
@@ -137,13 +144,14 @@ async function runWebSearch(query: string, language: string, country: string, mo
     let res = await call("web_search");
     if (!res.ok) {
       const errText = await res.text();
-      // Older snapshots expose the tool as `web_search_preview`; retry once.
-      if (/web_search(?!_preview)/.test(errText) || /tool/i.test(errText)) {
+      // Older OpenAI snapshots expose the tool as `web_search_preview`; retry once. kie.ai's unified
+      // endpoint only documents `web_search`, so skip the retry there.
+      if (engine === "openai" && (/web_search(?!_preview)/.test(errText) || /tool/i.test(errText))) {
         res = await call("web_search_preview");
       }
       if (!res.ok) {
         const t2 = res.ok ? "" : await res.text().catch(() => errText);
-        return { error: `openai_${res.status}: ${(t2 || errText).slice(0, 300)}` };
+        return { error: `${engine}_${res.status}: ${(t2 || errText).slice(0, 300)}` };
       }
     }
     const data = await res.json();
@@ -260,19 +268,44 @@ Rules:
 - Keep every string short. Language of notes: ${language}.`;
 }
 
-async function runAnalysis(t: RawTrace, query: string, language: string, country: string, model: string, apiKey: string): Promise<any> {
+async function runAnalysis(t: RawTrace, query: string, language: string, country: string, model: string, apiKey: string, engine: GeoEngine = "openai"): Promise<any> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 120_000);
-  // Use a fast, cheap text model for the structured pass (independent of the search model).
-  const analysisModel = /^gpt-5/.test(model) ? "gpt-4o-mini" : (model || "gpt-4o-mini");
+  const prompt = buildAnalysisPrompt(t, query, language, country);
   try {
+    if (engine === "kie") {
+      // kie.ai's chat catalog doesn't expose a cheap gpt-4o-mini equivalent; reuse the same
+      // Responses-API endpoint (no tools) with a lighter GPT model for the structured pass.
+      const res = await fetch("https://api.kie.ai/codex/v1/responses", {
+        method: "POST", signal: ctrl.signal,
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "gpt-5-2", stream: false,
+          input: [{ role: "user", content: [{ type: "input_text", text: prompt }] }],
+          reasoning: { effort: "low" },
+        }),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const out: any[] = Array.isArray(data?.output) ? data.output : [];
+      let text = "";
+      for (const item of out) {
+        if (item?.type === "message") {
+          for (const c of item.content ?? []) if (typeof c?.text === "string") text += c.text;
+        }
+      }
+      return extractJson(text);
+    }
+
+    // Use a fast, cheap text model for the structured pass (independent of the search model).
+    const analysisModel = /^gpt-5/.test(model) ? "gpt-4o-mini" : (model || "gpt-4o-mini");
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST", signal: ctrl.signal,
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: analysisModel,
         response_format: { type: "json_object" },
-        messages: [{ role: "user", content: buildAnalysisPrompt(t, query, language, country) }],
+        messages: [{ role: "user", content: prompt }],
         temperature: 0.2,
       }),
     });
@@ -508,23 +541,24 @@ export function assembleReport(opts: {
 
 // ─── Orchestrator ────────────────────────────────────────────────────────────────
 export async function runGeoAudit(params: {
-  query: string; language?: string; country?: string; model?: string; apiKey: string;
+  query: string; language?: string; country?: string; model?: string; apiKey: string; engine?: GeoEngine;
 }): Promise<GeoResult> {
   const query = String(params.query ?? "").trim();
   if (!query) return { ok: false, error: "no_query" };
   const apiKey = String(params.apiKey ?? "");
-  if (!apiKey) return { ok: false, error: "no_openai_key" };
+  if (!apiKey) return { ok: false, error: "no_key" };
   const language = String(params.language ?? "en");
   const country = String(params.country ?? "us");
-  const model = String(params.model ?? "gpt-5") || "gpt-5";
+  const engine: GeoEngine = params.engine === "kie" ? "kie" : "openai";
+  const model = String(params.model ?? "") || (engine === "kie" ? "gpt-5-5" : "gpt-5");
 
-  const trace = await runWebSearch(query, language, country, model, apiKey);
+  const trace = await runWebSearch(query, language, country, model, apiKey, engine);
   if ("error" in trace) return { ok: false, error: trace.error };
   if (!trace.answerText && trace.citations.length === 0 && trace.batches.length === 0) {
     return { ok: false, error: "empty_trace" };
   }
 
-  const analysis = await runAnalysis(trace, query, language, country, model, apiKey);
+  const analysis = await runAnalysis(trace, query, language, country, model, apiKey, engine);
   const report = assembleReport({ query, language, country, model, trace, analysis });
   return { ok: true, data: report };
 }

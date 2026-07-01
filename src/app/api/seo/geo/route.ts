@@ -2,15 +2,15 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { runGeoAudit } from "@/lib/seo/geo";
+import { runGeoAudit, type GeoEngine } from "@/lib/seo/geo";
 
 // GeoAudit isn't in the committed generated client until `prisma generate` re-runs on
 // build; access it via a loose handle so types resolve everywhere (mirrors SeoJob).
 const audits = () => (prisma as any).geoAudit;
 
 // Detached background run — not awaited by the request, so the result is persisted even
-// if the client navigates away. The OpenAI key lives only in memory for the run.
-function runAudit(id: string, params: { query: string; language: string; country: string; model: string; apiKey: string }) {
+// if the client navigates away. The API key lives only in memory for the run.
+function runAudit(id: string, params: { query: string; language: string; country: string; model: string; apiKey: string; engine: GeoEngine }) {
   runGeoAudit(params)
     .then(async (r) => {
       if (r.ok) await audits().update({ where: { id }, data: { status: "completed", report: JSON.stringify(r.data) } });
@@ -31,10 +31,11 @@ export async function POST(req: Request) {
   const query = String(b.query ?? "").trim().slice(0, 300);
   if (!query) return NextResponse.json({ error: "no_query" }, { status: 400 });
   const apiKey = String(b.apiKey ?? "");
-  if (!apiKey) return NextResponse.json({ error: "no_openai_key" }, { status: 400 });
+  if (!apiKey) return NextResponse.json({ error: "no_key" }, { status: 400 });
+  const engine: GeoEngine = b.engine === "kie" ? "kie" : "openai";
   const language = String(b.language ?? "en");
   const country = String(b.country ?? "us");
-  const model = String(b.model ?? "gpt-5") || "gpt-5";
+  const model = String(b.model ?? "") || (engine === "kie" ? "gpt-5-5" : "gpt-5");
 
   let rec: any;
   try {
@@ -43,7 +44,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `db: ${String(e?.message ?? e)} (run: npx prisma db push)` }, { status: 500 });
   }
 
-  runAudit(rec.id, { query, language, country, model, apiKey }); // fire-and-forget
+  runAudit(rec.id, { query, language, country, model, apiKey, engine }); // fire-and-forget
   return NextResponse.json({ id: rec.id });
 }
 

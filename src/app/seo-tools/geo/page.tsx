@@ -8,16 +8,19 @@ import GeoAuditReport from "@/components/GeoAuditReport";
 import type { GeoReport } from "@/lib/seo/geo";
 import {
   startGeoAudit, getGeoAudit, listGeoAudits, deleteGeoAudit, parseReport,
-  getOpenAiKey, getGeoModel, setGeoModel, GeoAuditRec,
+  getOpenAiKey, getKieKeyForGeo, getGeoEngine, setGeoEngine, getGeoApiKey, GeoEngineChoice,
+  getGeoModel, setGeoModel, GeoAuditRec,
 } from "@/lib/seo/geoClient";
 
-const MODELS = ["gpt-5", "gpt-4.1", "gpt-4o", "gpt-4o-mini"];
+const OPENAI_MODELS = ["gpt-5", "gpt-4.1", "gpt-4o", "gpt-4o-mini"];
+const KIE_MODELS = ["gpt-5-5", "gpt-5-4", "gpt-5-2"];
 
 export default function GeoAuditPage() {
   const { t } = useLanguage();
   const [query, setQuery] = useState("");
   const [language, setLanguage] = useState("en");
   const [country, setCountry] = useState("us");
+  const [engine, setEngine] = useState<GeoEngineChoice>("openai");
   const [model, setModel] = useState("gpt-5");
 
   const [running, setRunning] = useState(false);
@@ -26,12 +29,27 @@ export default function GeoAuditPage() {
   const [report, setReport] = useState<GeoReport | null>(null);
   const [recent, setRecent] = useState<GeoAuditRec[]>([]);
   const [hasKey, setHasKey] = useState(true);
+  const [hasOpenAi, setHasOpenAi] = useState(false);
+  const [hasKie, setHasKie] = useState(false);
 
   useEffect(() => {
-    setModel(getGeoModel());
-    setHasKey(!!getOpenAiKey());
+    const oa = !!getOpenAiKey(), kie = !!getKieKeyForGeo();
+    setHasOpenAi(oa); setHasKie(kie);
+    setHasKey(oa || kie);
+    const eng = getGeoEngine();
+    setEngine(eng);
+    const storedModel = getGeoModel();
+    const validForEngine = (eng === "kie" ? KIE_MODELS : OPENAI_MODELS).includes(storedModel);
+    setModel(validForEngine ? storedModel : (eng === "kie" ? "gpt-5-5" : "gpt-5"));
     refreshRecent();
   }, []);
+
+  function chooseEngine(e: GeoEngineChoice) {
+    setEngine(e);
+    setGeoEngine(e);
+    const models = e === "kie" ? KIE_MODELS : OPENAI_MODELS;
+    if (!models.includes(model)) setModel(models[0]);
+  }
 
   async function refreshRecent() { setRecent(await listGeoAudits()); }
 
@@ -39,14 +57,14 @@ export default function GeoAuditPage() {
     setErr("");
     const q = query.trim();
     if (!q) { setErr(t("geoErrEmpty")); return; }
-    const apiKey = getOpenAiKey();
+    const apiKey = getGeoApiKey(engine);
     if (!apiKey) { setErr(t("geoNoKey")); return; }
     setGeoModel(model);
     setRunning(true);
     setReport(null);
     setStage(t("geoStageSearching"));
 
-    const { id, error } = await startGeoAudit({ query: q, language, country, model, apiKey });
+    const { id, error } = await startGeoAudit({ query: q, language, country, model, apiKey, engine });
     if (error || !id) { setRunning(false); setErr(error || "audit_failed"); return; }
 
     // Poll until done.
@@ -120,6 +138,22 @@ export default function GeoAuditPage() {
         <input className="tool-input" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !running) run(); }}
           placeholder={t("geoFieldKeywordPh")} disabled={running} />
 
+        {hasOpenAi && hasKie && (
+          <div style={{ display: "flex", gap: "8px", marginTop: "14px" }}>
+            {(["openai", "kie"] as GeoEngineChoice[]).map(e => (
+              <button key={e} onClick={() => !running && chooseEngine(e)} disabled={running}
+                style={{
+                  padding: "7px 13px", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: running ? "default" : "pointer",
+                  border: `1px solid ${engine === e ? "var(--color-accent-purple)" : "var(--color-border)"}`,
+                  background: engine === e ? "rgba(191,90,242,0.12)" : "var(--color-card)",
+                  color: engine === e ? "var(--color-accent-purple)" : "var(--color-text-secondary)",
+                }}>
+                {e === "openai" ? "OpenAI" : "Kie.ai"}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginTop: "14px" }}>
           <div>
             <label className="tool-field-label">{t("geoFieldLanguage")}</label>
@@ -136,7 +170,7 @@ export default function GeoAuditPage() {
           <div>
             <label className="tool-field-label">{t("geoModel")}</label>
             <select className="tool-input" value={model} onChange={e => setModel(e.target.value)} disabled={running}>
-              {MODELS.map(mm => <option key={mm} value={mm}>{mm}</option>)}
+              {(engine === "kie" ? KIE_MODELS : OPENAI_MODELS).map(mm => <option key={mm} value={mm}>{mm}</option>)}
             </select>
           </div>
         </div>

@@ -1544,7 +1544,7 @@
   "geoRunningHint": "Agentic web search can take 1–3 minutes. You can leave this page — the result is saved.",
   "geoNewAudit": "New audit",
   "geoRecentTitle": "Recent audits",
-  "geoNoKey": "No OpenAI key — add it in Settings → AI Providers. GEO audit uses OpenAI web search.",
+  "geoNoKey": "No OpenAI or Kie.ai key — add one in Settings → AI Providers. GEO audit needs a real web-search-capable key.",
   "geoErrEmpty": "Enter a keyword or search query.",
   "geoStageSearching": "Searching the web…",
   "geoStageAnalyzing": "Analyzing citations…",
