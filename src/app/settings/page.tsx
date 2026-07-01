@@ -565,6 +565,17 @@ const AI_PROVIDERS = [
     color: "#0EA5E9",
     logo: "Z",
   },
+  {
+    id: "kie",
+    name: "Kie.ai",
+    model: "GPT-5.5 (Codex)",
+    placeholder: "kie-...",
+    hint: "OpenAI-compatible Responses API, agentic coding/reasoning model",
+    docsUrl: "https://kie.ai",
+    docsLabel: "kie.ai",
+    color: "#F97316",
+    logo: "K",
+  },
 ] as const;
 
 function AIProviderCard({ provider }: { provider: typeof AI_PROVIDERS[number] }) {

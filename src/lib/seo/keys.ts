@@ -11,9 +11,9 @@ export function getAiCreds(): { provider: string; apiKey: string } {
   return { provider, apiKey };
 }
 
-export const AI_PROVIDER_IDS = ["anthropic", "openai", "gemini", "openrouter", "zai", "custom"] as const;
+export const AI_PROVIDER_IDS = ["anthropic", "openai", "gemini", "openrouter", "zai", "kie", "custom"] as const;
 export const AI_PROVIDER_NAMES: Record<string, string> = {
-  anthropic: "Anthropic", openai: "OpenAI", gemini: "Google Gemini", openrouter: "OpenRouter", zai: "Z.AI", custom: "Custom (OpenAI-compatible)",
+  anthropic: "Anthropic", openai: "OpenAI", gemini: "Google Gemini", openrouter: "OpenRouter", zai: "Z.AI", kie: "Kie.ai (GPT-5.5)", custom: "Custom (OpenAI-compatible)",
 };
 
 // Custom OpenAI-compatible provider (e.g. kie.ai): base URL + key + default model, stored separately.

@@ -78,6 +78,12 @@ async function listModels(provider: string, apiKey: string): Promise<M[]> {
       .filter((m) => m.id);
   }
 
+  if (provider === "kie") {
+    // Kie.ai's Codex Responses endpoint currently exposes a single fixed model — no public
+    // /models listing to query, so just surface the one known id (matches fetchLLM's default).
+    return [{ id: "gpt-5-5", label: "GPT-5.5 (Codex)" }];
+  }
+
   return [];
 }
 

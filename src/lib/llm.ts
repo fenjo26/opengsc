@@ -1,5 +1,23 @@
 // Shared multi-provider LLM caller. Mirrors the providers supported elsewhere
-// in the app (Anthropic, Z.AI, OpenAI, Gemini, OpenRouter).
+// in the app (Anthropic, Z.AI, OpenAI, Gemini, OpenRouter, Kie.ai).
+
+// Kie.ai's "Codex" endpoint (GPT-5.5) speaks the OpenAI *Responses* API shape, not classic
+// chat-completions: `input` is an array of {role, content:[...]} messages (content items are
+// {type:"input_text"|"input_image"|"input_file", ...}), and the reply comes back as an `output`
+// array of items — a "reasoning" item (usually empty/summary-only) and a "message" item whose
+// content holds the actual text. Shared by fetchLLM + fetchLLMVision below.
+function parseKieOutput(data: any): string {
+  const out: any[] = Array.isArray(data?.output) ? data.output : [];
+  for (const item of out) {
+    if (item?.type === 'message') {
+      const content: any[] = Array.isArray(item.content) ? item.content : [];
+      const part = content.find((c: any) => c?.type === 'output_text' || typeof c?.text === 'string');
+      if (part?.text) return part.text;
+    }
+  }
+  return typeof data?.output_text === 'string' ? data.output_text : '';
+}
+
 export async function fetchLLM(
   prompt: string,
   provider: string,
@@ -53,8 +71,24 @@ export async function fetchLLM(
       if (!res.ok) { console.error('[LLM] openrouter', res.status); return null; }
       const data = await res.json();
       text = data.choices?.[0]?.message?.content ?? '';
+    } else if (provider === 'kie') {
+      // Kie.ai "Codex" (GPT-5.5) — Responses API, distinct from the "custom" chat-completions path.
+      const root = (baseUrl || 'https://api.kie.ai').replace(/\/+$/, '');
+      const res = await fetch(`${root}/codex/v1/responses`, {
+        method: 'POST', signal: sig,
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: modelOverride ?? 'gpt-5-5',
+          stream: false,
+          input: [{ role: 'user', content: [{ type: 'input_text', text: prompt }] }],
+          reasoning: { effort: 'medium' },
+        }),
+      });
+      if (!res.ok) { console.error('[LLM] kie', res.status, await res.text().catch(() => '')); return null; }
+      const data = await res.json();
+      text = parseKieOutput(data);
     } else if (provider === 'custom') {
-      // Any OpenAI-compatible endpoint (e.g. kie.ai). baseUrl is the API root; we call /chat/completions.
+      // Any OpenAI-compatible endpoint. baseUrl is the API root; we call /chat/completions.
       const root = (baseUrl || '').replace(/\/+$/, '');
       if (!root) { console.error('[LLM] custom: no baseUrl'); return null; }
       const url = /\/chat\/completions$/.test(root) ? root : `${root}/chat/completions`;
@@ -143,6 +177,29 @@ export async function fetchLLMVision(
       if (!res.ok) { console.error('[LLM vision]', provider, res.status, await res.text().catch(() => '')); return null; }
       const data = await res.json();
       text = data.choices?.[0]?.message?.content ?? '';
+    } else if (provider === 'kie') {
+      // NOTE: the Codex Responses API's `input_image.image_url` is documented as a "publicly
+      // accessible URL" — unclear if kie.ai's backend also accepts base64 data URIs the way
+      // OpenAI's own Responses API does. Untested against a real key; falls back cleanly (non-200)
+      // if the backend rejects it, same as any other provider error path here.
+      const root = (baseUrl || 'https://api.kie.ai').replace(/\/+$/, '');
+      const dataUrl = `data:${mimeType};base64,${b64}`;
+      const res = await fetch(`${root}/codex/v1/responses`, {
+        method: 'POST', signal: sig,
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: modelOverride ?? 'gpt-5-5',
+          stream: false,
+          input: [{ role: 'user', content: [
+            { type: 'input_text', text: prompt },
+            { type: 'input_image', image_url: dataUrl },
+          ] }],
+          reasoning: { effort: 'medium' },
+        }),
+      });
+      if (!res.ok) { console.error('[LLM vision] kie', res.status, await res.text().catch(() => '')); return null; }
+      const data = await res.json();
+      text = parseKieOutput(data);
     } else {
       console.error('[LLM vision] unsupported provider', provider);
       return null;
