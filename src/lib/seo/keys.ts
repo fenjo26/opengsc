@@ -74,6 +74,13 @@ export function getFirecrawlKey(): string {
   return localStorage.getItem("seoKey_firecrawl") || "";
 }
 
+// Kie.ai's image-generation jobs API (GPT Image-2, Nano Banana 2) uses the same account/key as
+// the "kie" chat provider above — read straight from its key slot, no separate settings needed.
+export function getKieKey(): string {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem("aiKey_kie") || "";
+}
+
 // DataForSEO key specifically (Keywords Data / Labs need DataForSEO, regardless of active SERP provider).
 export function getDataForSeoKey(): string {
   if (typeof window === "undefined") return "";

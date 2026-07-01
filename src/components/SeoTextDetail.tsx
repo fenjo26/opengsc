@@ -9,7 +9,8 @@ import {
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { HistoryItem, getHistoryItem, updateHistory, patchHistory } from "@/lib/seo/history";
 import { outlineHeadings, articleHeadings, markdownToHtml, htmlDocument, countWords, splitArticleSections, hasVerifiableFacts } from "@/lib/seo/outlineFormat";
-import { getSeoGenCreds, getTaskCreds, getSerpCreds, getFirecrawlKey, getAutoFactcheck, getAutoImages, getFactSourceCount, getFactBearingOnly, getFactReuseCorpus } from "@/lib/seo/keys";
+import { getSeoGenCreds, getTaskCreds, getSerpCreds, getFirecrawlKey, getAutoFactcheck, getAutoImages, getFactSourceCount, getFactBearingOnly, getFactReuseCorpus, getKieKey } from "@/lib/seo/keys";
+import { IMAGE_MODELS, ImageModelId } from "@/lib/seo/kieImages";
 
 export default function SeoTextDetail({ item: initial }: { item: HistoryItem }) {
   const { t } = useLanguage();
@@ -439,11 +440,19 @@ function FcSection({ sec, t, forceOpen }: any) {
 }
 
 // ─── Images tab ───────────────────────────────────────────────────────────────
+type GenStatus = { status: "generating" | "done" | "error"; url?: string; error?: string };
+
 function Images({ item, setItem, outline, article, t, autoStart }: any) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [copied, setCopied] = useState("");
   const images = item.meta?.images;
+
+  // Real image rendering (kie.ai) — separate from the prompt-generation step above.
+  const [imgModel, setImgModel] = useState<ImageModelId>("gpt-image-2-text-to-image");
+  const [imgResolution, setImgResolution] = useState<"1K" | "2K" | "4K">("1K");
+  const [imgAspect, setImgAspect] = useState("auto");
+  const [genState, setGenState] = useState<Record<string, GenStatus>>({});
 
   useEffect(() => {
     if (autoStart && getAutoImages() && !images && !loading && getTaskCreds("text").apiKey) run();
@@ -466,6 +475,52 @@ function Images({ item, setItem, outline, article, t, autoStart }: any) {
   }
   const copy = (txt: string, k: string) => navigator.clipboard.writeText(txt).then(() => { setCopied(k); setTimeout(() => setCopied(""), 1500); });
 
+  // Create a kie.ai render task for one prompt (hero, or section index `s${i}`), poll it to
+  // completion, then persist the resulting URL into item.meta.images so it survives a reload.
+  async function generateImage(key: string, prompt: string) {
+    const kieKey = getKieKey();
+    if (!kieKey) { setGenState(s => ({ ...s, [key]: { status: "error", error: t("seoImgNoKieKey") } })); return; }
+    setGenState(s => ({ ...s, [key]: { status: "generating" } }));
+    try {
+      const input: Record<string, any> = { prompt, aspect_ratio: imgAspect, resolution: imgResolution };
+      if (imgModel === "nano-banana-2") input.output_format = "jpg";
+      const createRes = await fetch("/api/seo/image-gen", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: imgModel, input, apiKey: kieKey }),
+      });
+      const createData = await createRes.json();
+      if (!createRes.ok || !createData.taskId) { setGenState(s => ({ ...s, [key]: { status: "error", error: createData.error || "error" } })); return; }
+      const taskId = createData.taskId;
+
+      const deadline = Date.now() + 5 * 60 * 1000; // kie.ai docs: stop polling after ~10-15min; 5min is plenty for stills
+      while (Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 3000));
+        const stRes = await fetch("/api/seo/image-gen/status", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ taskId, apiKey: kieKey }),
+        });
+        const st = await stRes.json();
+        if (st.state === "success" && st.resultUrls?.length) {
+          const url = st.resultUrls[0];
+          setGenState(s => ({ ...s, [key]: { status: "done", url } }));
+          const nextImages = { ...images };
+          if (key === "hero") {
+            nextImages.hero = typeof nextImages.hero === "string" ? { prompt: nextImages.hero, generatedUrl: url } : { ...nextImages.hero, generatedUrl: url };
+          } else {
+            const idx = Number(key.slice(1));
+            nextImages.sections = (nextImages.sections || []).map((sec: any, i: number) => i === idx ? { ...sec, generatedUrl: url } : sec);
+          }
+          patchHistory(item.id, { meta: { images: nextImages } });
+          setItem((prev: any) => ({ ...prev, meta: { ...prev.meta, images: nextImages } }));
+          return;
+        }
+        if (st.state === "fail" || st.error) { setGenState(s => ({ ...s, [key]: { status: "error", error: st.error || "generation_failed" } })); return; }
+        // waiting / queuing / generating → keep polling
+      }
+      setGenState(s => ({ ...s, [key]: { status: "error", error: "timeout" } }));
+    } catch (e: any) { setGenState(s => ({ ...s, [key]: { status: "error", error: String(e?.message ?? e) } })); }
+  }
+
   if (!images) return (
     <div style={{ textAlign: "center", padding: "30px 12px" }}>
       {err && <div style={{ color: "var(--color-accent-red)", fontSize: "13px", marginBottom: "10px" }}>{err}</div>}
@@ -475,10 +530,28 @@ function Images({ item, setItem, outline, article, t, autoStart }: any) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      {/* Real render settings — shared by every "Generate image" button below */}
+      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center", padding: "10px 12px", borderRadius: "10px", background: "var(--color-bg)", border: "1px solid var(--color-border)" }}>
+        <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--color-text-secondary)" }}>{t("seoImgRenderWith")}</span>
+        <select value={imgModel} onChange={e => setImgModel(e.target.value as ImageModelId)} className="tool-input" style={{ width: "auto", padding: "6px 10px", fontSize: "12px" }}>
+          {IMAGE_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+        </select>
+        <select value={imgResolution} onChange={e => setImgResolution(e.target.value as any)} className="tool-input" style={{ width: "auto", padding: "6px 10px", fontSize: "12px" }}>
+          <option value="1K">1K</option>
+          <option value="2K">2K</option>
+          <option value="4K">4K</option>
+        </select>
+        <select value={imgAspect} onChange={e => setImgAspect(e.target.value)} className="tool-input" style={{ width: "auto", padding: "6px 10px", fontSize: "12px" }}>
+          {["auto", "1:1", "16:9", "9:16", "4:3", "3:4"].map(a => <option key={a} value={a}>{a}</option>)}
+        </select>
+        {!getKieKey() && <span style={{ fontSize: "11px", color: "var(--color-accent-orange)" }}>{t("seoImgNoKieKey")}</span>}
+      </div>
+
       {images.hero && (() => {
         const hp = typeof images.hero === "string" ? images.hero : images.hero?.prompt;
         const ha = typeof images.hero === "object" ? images.hero?.alt : "";
         const ht = typeof images.hero === "object" ? images.hero?.title : "";
+        const generatedUrl = typeof images.hero === "object" ? images.hero?.generatedUrl : undefined;
         return (
           <div style={{ borderRadius: "12px", overflow: "hidden", border: "1px solid var(--color-border)" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "linear-gradient(90deg, var(--color-accent-purple), #ff2d92)" }}>
@@ -487,6 +560,7 @@ function Images({ item, setItem, outline, article, t, autoStart }: any) {
             </div>
             <div style={{ padding: "14px 16px", fontSize: "13px", lineHeight: 1.6, color: "var(--color-text-primary)" }}>{hp}</div>
             {(ha || ht) && <ImgSeoMeta alt={ha} title={ht} />}
+            <GeneratedImageBlock genKey="hero" prompt={hp} generatedUrl={generatedUrl} genState={genState["hero"]} onGenerate={generateImage} t={t} />
           </div>
         );
       })()}
@@ -501,8 +575,38 @@ function Images({ item, setItem, outline, article, t, autoStart }: any) {
           </div>
           <div style={{ fontSize: "13px", lineHeight: 1.6, color: "var(--color-text-secondary)" }}>{s.prompt}</div>
           {(s.alt || s.title) && <ImgSeoMeta alt={s.alt} title={s.title} />}
+          <GeneratedImageBlock genKey={`s${i}`} prompt={s.prompt} generatedUrl={s.generatedUrl} genState={genState[`s${i}`]} onGenerate={generateImage} t={t} />
         </div>
       ))}
+    </div>
+  );
+}
+
+// One prompt's render state: idle → "Generate image" button; generating → spinner; done → <img>
+// + download link (kie.ai result URLs expire after ~24h, hence the download-now nudge).
+function GeneratedImageBlock({ genKey, prompt, generatedUrl, genState, onGenerate, t }: {
+  genKey: string; prompt: string; generatedUrl?: string; genState?: GenStatus; onGenerate: (key: string, prompt: string) => void; t: any;
+}) {
+  const url = genState?.url || generatedUrl;
+  const busy = genState?.status === "generating";
+  return (
+    <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px dashed var(--color-border)" }}>
+      {url ? (
+        <div>
+          <img src={url} alt={prompt} style={{ maxWidth: "100%", borderRadius: "8px", display: "block" }} />
+          <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+            <a href={url} download target="_blank" rel="noreferrer" style={{ ...btnGhost, textDecoration: "none" }}><Download size={13} /> {t("seoImgDownload")}</a>
+            <button onClick={() => onGenerate(genKey, prompt)} disabled={busy} style={btnGhost}>{busy ? <Loader2 size={13} className="spin" /> : <Wand2 size={13} />} {t("seoImgRegenerate")}</button>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <button onClick={() => onGenerate(genKey, prompt)} disabled={busy} style={btnPurple}>
+            {busy ? <Loader2 size={14} className="spin" /> : <ImageIcon size={14} />} {busy ? t("seoImgGenerating") : t("seoImgGenerateReal")}
+          </button>
+          {genState?.status === "error" && <div style={{ fontSize: "12px", color: "var(--color-accent-red)", marginTop: "6px" }}>{genState.error}</div>}
+        </div>
+      )}
     </div>
   );
 }
