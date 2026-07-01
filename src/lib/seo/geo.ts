@@ -206,7 +206,37 @@ function parseResponses(data: any): RawTrace {
   // Fallback: some responses surface the joined text on output_text.
   if (!answerText && typeof data?.output_text === "string") answerText = data.output_text;
 
+  // Fallback citation extraction: OpenAI's real web_search tool attaches structured
+  // `url_citation` annotations to the message, but kie.ai's proxy (and some other
+  // OpenAI-compatible relays) just print plain links/URLs in the answer body with no
+  // annotation metadata. Without this, every downstream metric (brands, trust signals,
+  // source-type mix, top-3 concentration) silently collapses to zero even though the
+  // answer clearly names real sources. Mine the text itself as a last resort.
+  if (citations.length === 0 && answerText) {
+    for (const c of extractLinksFromText(answerText)) citations.push(c);
+  }
+
   return { batches, opened, scannedAll, answerText: answerText.trim(), citations };
+}
+
+function extractLinksFromText(text: string): { url: string; title: string; domain: string }[] {
+  const seen = new Set<string>();
+  const out: { url: string; title: string; domain: string }[] = [];
+  const push = (rawUrl: string, title: string) => {
+    const url = rawUrl.replace(/[),.;:!?\]]+$/g, "");
+    if (!/^https?:\/\//i.test(url)) return;
+    if (seen.has(url)) return;
+    seen.add(url);
+    out.push({ url, title: title.trim(), domain: domainOf(url) });
+  };
+  // Markdown links: [title](url)
+  const mdRe = /\[([^\]]{1,120})\]\((https?:\/\/[^\s)]+)\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = mdRe.exec(text))) push(m[2], m[1]);
+  // Bare URLs not already captured as markdown links.
+  const bareRe = /https?:\/\/[^\s|)\]"'<>]+/g;
+  while ((m = bareRe.exec(text))) push(m[0], "");
+  return out.slice(0, 60);
 }
 
 // ─── Stage 2: qualitative analysis pass ──────────────────────────────────────────
