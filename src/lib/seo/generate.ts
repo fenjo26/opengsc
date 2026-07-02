@@ -6,7 +6,8 @@ import { runSerp } from "@/lib/seo/serp";
 import { scrapeMany } from "@/lib/seo/scrape";
 import {
   buildOutlinePrompt, buildTextPrompt, buildAnalysisPrompt, buildFactScrubPrompt, buildSourceExtractPrompt,
-  buildAutoFactCleanPrompt, buildWireframePrompt, buildSectionEnrichPrompt, buildStructureExpandPrompt, enforceLinkPolicy, redactBannedWords, extractJson, CompetitorInput,
+  buildAutoFactCleanPrompt, buildWireframePrompt, buildSectionEnrichPrompt, buildStructureExpandPrompt,
+  buildHeadingLocalizePrompt, enforceLinkPolicy, redactBannedWords, extractJson, CompetitorInput,
 } from "@/lib/seo/prompts";
 import { findRagFacts } from "@/lib/seo/rag";
 
@@ -80,19 +81,31 @@ function toWcRange(v: any): [number, number] | null {
   }
   return null;
 }
-export function normalizeWordBudgets(outline: any, target: number): boolean {
-  if (!target || !Array.isArray(outline?.sections) || !outline.sections.length) return false;
-  const secs: any[] = outline.sections;
+// Each section's OWN contribution to the article: childless section → total; parent →
+// self (its intro paragraphs) since a parent's total conventionally includes subsections.
+function ownRanges(secs: any[]): ([number, number] | null)[] {
   const depth = (s: any) => (s?.h_level === "H4" ? 4 : s?.h_level === "H3" ? 3 : 2);
-  // A parent's word_count_total conventionally INCLUDES its subsections, so summing totals
-  // across all sections double-counts. Sum each section's OWN contribution instead:
-  // childless section → total; parent → self (its intro paragraphs).
   const hasKids = (i: number) => i + 1 < secs.length && depth(secs[i + 1]) > depth(secs[i]);
-  const own = secs.map((s: any, i: number) => {
+  return secs.map((s: any, i: number) => {
     const total = toWcRange(s?.word_count_total);
     const self = toWcRange(s?.word_count_self);
     return hasKids(i) ? (self || (total ? [Math.round(total[0] * 0.3), Math.round(total[1] * 0.3)] as [number, number] : null)) : (total || self);
   });
+}
+
+// Sum of the outline's own per-section budgets — the volume the outline would really produce.
+export function ownBudgetSum(outline: any): number {
+  const secs: any[] = Array.isArray(outline?.sections) ? outline.sections : [];
+  if (!secs.length) return 0;
+  return Math.round(ownRanges(secs).reduce((acc, r) => acc + (r ? (r[0] + r[1]) / 2 : 0), 0));
+}
+
+export function normalizeWordBudgets(outline: any, target: number): boolean {
+  if (!target || !Array.isArray(outline?.sections) || !outline.sections.length) return false;
+  const secs: any[] = outline.sections;
+  const depth = (s: any) => (s?.h_level === "H4" ? 4 : s?.h_level === "H3" ? 3 : 2);
+  const hasKids = (i: number) => i + 1 < secs.length && depth(secs[i + 1]) > depth(secs[i]);
+  const own = ownRanges(secs);
   const sum = own.reduce((acc: number, r: [number, number] | null) => acc + (r ? (r[0] + r[1]) / 2 : 0), 0);
   if (!sum) return false;
   const k = target / sum;
@@ -176,6 +189,49 @@ async function expandOutlineStructure(outline: any, ctx: {
     if (sections.length >= 34) break;
   }
   return added > 0;
+}
+
+// ─── Heading localization pass: apply model-proposed renames deterministically ─────
+// Template headings arrive in English and models keep them verbatim; this pass translates
+// them into the article language and applies the narration voice, without touching order,
+// structure or budgets. Renames are matched exactly and deduplicated before applying.
+async function localizeOutlineHeadings(outline: any, ctx: {
+  keyword: string; language: string; country: string; provider: string; apiKey: string;
+  model?: string; baseUrl?: string; pageGoal?: "informational" | "commercial" | "mixed";
+}): Promise<boolean> {
+  const sections: any[] = Array.isArray(outline?.sections) ? outline.sections : [];
+  if (!sections.length) return false;
+  const prompt = buildHeadingLocalizePrompt({
+    keyword: ctx.keyword, language: ctx.language, country: ctx.country,
+    narration: outline?.meta?.narration === "first" ? "first" : outline?.meta?.narration === "third" ? "third" : undefined,
+    pageGoal: ctx.pageGoal, h1: outline?.meta?.h1,
+    headings: sections.map((s: any) => ({ h_level: s.h_level, heading: s.heading })),
+  });
+  const raw = await fetchLLM(prompt, ctx.provider, ctx.apiKey, 3000, ctx.model, ctx.baseUrl);
+  const parsed: any = extractJson(raw);
+  if (!parsed) return false;
+
+  let changed = false;
+  const have = new Set(sections.map((s: any) => String(s.heading || "").trim().toLowerCase()));
+  const renames: any[] = Array.isArray(parsed.renames) ? parsed.renames : [];
+  for (const r of renames) {
+    const from = String(r?.from || "").trim();
+    const to = String(r?.to || "").trim();
+    if (!from || !to || from === to) continue;
+    if (have.has(to.toLowerCase())) continue; // never create duplicate headings
+    const sec = sections.find((s: any) => String(s.heading || "").trim() === from);
+    if (!sec) continue;
+    have.delete(from.toLowerCase());
+    have.add(to.toLowerCase());
+    sec.heading = to;
+    changed = true;
+  }
+  const newH1 = String(parsed.h1 || "").trim();
+  if (newH1 && newH1 !== String(outline?.meta?.h1 || "").trim()) {
+    (outline.meta ||= {}).h1 = newH1;
+    changed = true;
+  }
+  return changed;
 }
 
 // ─── Section-enrichment pass: deepen per-section EAV detail in parallel batches ────
@@ -317,9 +373,30 @@ export async function genOutline(b: any): Promise<GenResult> {
     } catch { /* expansion is best-effort */ }
   }
 
+  // LOCALIZE pass (default on): translate/style headings into the article language with the
+  // chosen narration voice — template skeletons arrive in English and models keep them
+  // verbatim otherwise. Runs before enrichment so opening lines match the final headings.
+  if (b.localizeHeadings !== false) {
+    try {
+      const renamed = await localizeOutlineHeadings(outline, {
+        keyword, language: String(b.language ?? "en"), country: String(b.country ?? "us"),
+        provider, apiKey, model, baseUrl,
+        pageGoal: b.pageGoal === "commercial" || b.pageGoal === "informational" ? b.pageGoal : "mixed",
+      });
+      if (renamed) (outline as any)._localized = true;
+    } catch { /* localization is best-effort */ }
+  }
+
   // Volume guard: stamp the requested target and rescale section budgets if the model
-  // under-budgeted them (e.g. copied the schema's example numbers into every section).
-  const targetWc = Number(b.targetWordCount) || Number(meta.target_word_count) || 0;
+  // under-budgeted them. The USER's explicit target is authoritative; a MODEL-emitted
+  // meta.target_word_count is distrusted when implausible (e.g. junk like 247) — in that
+  // case we adopt the sum of the outline's own budgets instead of shrinking a healthy outline.
+  const explicitWc = Number(b.targetWordCount) || 0;
+  let targetWc = explicitWc;
+  if (!targetWc) {
+    const modelWc = Number(meta.target_word_count) || 0;
+    targetWc = modelWc >= 500 ? modelWc : (ownBudgetSum(outline) || modelWc);
+  }
   if (targetWc > 0) {
     meta.target_word_count = targetWc;
     if (normalizeWordBudgets(outline, targetWc)) (outline as any)._wc_rescaled = true;
@@ -426,9 +503,11 @@ export async function genText(b: any): Promise<GenResult> {
   };
   // Volume guard for outlines saved before this fix (or edited by hand): if the sum of
   // section budgets is far below the target word count, rescale so the writer isn't
-  // silently capped at a fraction of the plan.
+  // silently capped at a fraction of the plan. Implausibly small targets (junk emitted
+  // by the model into meta) are ignored rather than shrinking a healthy outline.
   const textTargetWc = Number(b.targetWordCount) || Number(metaSlim?.target_word_count) || 0;
-  if (textTargetWc > 0) normalizeWordBudgets(slimOutline, textTargetWc);
+  if (textTargetWc >= 500) normalizeWordBudgets(slimOutline, textTargetWc);
+  else if (textTargetWc > 0) (slimOutline.meta as any).target_word_count = ownBudgetSum(slimOutline) || textTargetWc;
 
   // Casino RAG: re-retrieve knowledge-base facts for the text step (fresh + full-length),
   // honoring either the explicit flag or the outline generated with RAG enabled.

@@ -233,6 +233,39 @@ export function buildStructureExpandPrompt(args: {
 { "insertions": [ { "after_heading": "точный H2", "sections": [ { "h_level": "H3", "heading": "", "word_count_total": [80,160], "summary": "1-2 предложения — что раскрыть" } ] } ] }`;
 }
 
+// ─── Heading localization/styling: translate template headings into the article language ──
+// User templates come in English; models keep them verbatim despite instructions. This pass
+// returns explicit renames (old → new) that we apply deterministically: headings land in the
+// article language, carry keywords naturally, and pick up the narration voice (first-person
+// "Mon avis / Ma comparaison" style) the way reference-grade outlines do.
+export function buildHeadingLocalizePrompt(args: {
+  keyword: string;
+  language: string;
+  country: string;
+  narration?: "first" | "third";
+  pageGoal?: "informational" | "commercial" | "mixed";
+  h1?: string;
+  headings: { h_level: string; heading: string }[];
+}): string {
+  const voice = args.narration === "first"
+    ? `\n- ГОЛОС: повествование от ПЕРВОГО лица (экспертный «я»-обзор). H1 и ~30-50% H2 переформулируй в личной форме на языке ${args.language} (примеры для fr: «Mon Avis Complet sur…», «Ma Comparaison des…», «Comment J'Utilise…»; для en: «My Complete Review of…», «How I Use…»). НЕ делай личными служебные секции (FAQ, юридические).`
+    : "\n- ГОЛОС: нейтральный/корпоративный — без «я»-формулировок.";
+  return `Ты — SEO-редактор. Ниже H1 и заголовки секций статьи по теме "${args.keyword}". Статья пишется на языке ${args.language} (регион ${args.country}), но часть заголовков — на другом языке (каркас из шаблона) или звучит шаблонно. ПЕРЕИМЕНУЙ их: естественный язык статьи + поисковые ключи + живые формулировки. Верни СТРОГИЙ JSON без преамбулы и markdown-обёрток.
+
+ПРАВИЛА:
+- КАЖДЫЙ заголовок не на языке ${args.language} — ОБЯЗАТЕЛЬНО переведи (естественно, не дословно; сохрани смысл и намерение секции).
+- Вплетай ключи: ВЧ — в H1/крупные H2, НЧ-хвосты — в H3. Без переспама и без потери читабельности.${voice}
+- Заголовки уже на языке ${args.language} и хорошие — НЕ включай в renames.
+- НЕ меняй порядок, НЕ добавляй и НЕ удаляй секции. Одно переименование на заголовок. Без дублей.
+- "from" — ТОЧНАЯ текущая формулировка заголовка.
+
+H1 СЕЙЧАС: ${args.h1 || "—"}
+ЗАГОЛОВКИ: ${JSON.stringify(args.headings)}
+
+ВЕРНИ JSON строго по схеме:
+{ "h1": "новый H1 на языке ${args.language} (или текущий, если он уже хорош)", "renames": [ { "from": "", "to": "" } ] }`;
+}
+
 // ─── Section enrichment (2nd pass): deepen each section's EAV detail in small batches ──
 // A single outline call compresses per-section detail when there are 15-30 sections (token
 // budget). This pass re-processes sections in batches of ~5 parallel calls, so every section
