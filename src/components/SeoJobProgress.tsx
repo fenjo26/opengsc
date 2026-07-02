@@ -27,7 +27,10 @@ export default function SeoJobProgress({ jobId, keyword, onDone, onError, onCanc
     const t0 = Date.now();
     const timer = setInterval(() => {
       setElapsed(Math.floor((Date.now() - t0) / 1000));
-      setProgress(p => (p < 92 ? p + Math.max(0.5, (92 - p) * 0.015) : p));
+      // Asymptotic approach to 95% calibrated for multi-pass generation (3-6 min typical:
+      // skeleton → expand → localize → enrich → RAG). No linear floor — the bar visibly
+      // slows but NEVER fills before the job actually completes (100% only on success).
+      setProgress(p => Math.min(95, p + Math.max(0.05, (95 - p) * 0.008)));
     }, 1000);
     let poll: any;
     async function tick() {
@@ -66,6 +69,9 @@ export default function SeoJobProgress({ jobId, keyword, onDone, onError, onCanc
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "var(--color-text-secondary)" }}>
         <span>{Math.round(progress)}%</span>
+        <span style={{ color: "var(--color-text-tertiary)" }}>
+          {elapsed < 75 ? t("seoJobStage1") : elapsed < 180 ? t("seoJobStage2") : t("seoJobStage3")}
+        </span>
         <span>{t("seoCaElapsed")}: {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")}</span>
       </div>
       <div style={{ marginTop: "16px", padding: "13px 15px", borderRadius: "10px", background: "rgba(41,151,255,0.06)", border: "1px solid rgba(41,151,255,0.25)", fontSize: "13px", color: "var(--color-text-secondary)", display: "flex", gap: "9px", alignItems: "flex-start" }}>
