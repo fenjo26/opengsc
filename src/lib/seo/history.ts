@@ -16,7 +16,38 @@ export interface HistoryItem {
 }
 
 const KEY = "seoHistory";
-const MAX = 100;
+const MAX = 40;
+
+// Quota-safe persist: enriched outlines are heavy (100-300KB each), so localStorage's ~5MB
+// cap is reachable. On QuotaExceededError evict the OLDEST records and retry — the newest
+// record (first in the list) always survives, so redirects to it never break. Never throws:
+// a failed history write must not crash the generation onDone flow.
+function persist(list: HistoryItem[]): void {
+  if (typeof window === "undefined") return;
+  let next = list.slice(0, MAX);
+  for (;;) {
+    try { localStorage.setItem(KEY, JSON.stringify(next)); return; }
+    catch {
+      if (next.length <= 1) {
+        // Single record still too big — strip the heavy carried blocks and try once more.
+        try {
+          const slim = next.map(h => {
+            const d = h?.data && typeof h.data === "object" ? { ...h.data } : h.data;
+            if (d && typeof d === "object" && d.meta && typeof d.meta === "object") {
+              const { sources: _s, facts_bank: _f, ...metaSlim } = d.meta;
+              void _s; void _f;
+              d.meta = metaSlim;
+            }
+            return { ...h, data: d };
+          });
+          localStorage.setItem(KEY, JSON.stringify(slim));
+        } catch { /* give up silently — history is a cache, not the source of truth */ }
+        return;
+      }
+      next = next.slice(0, next.length - Math.max(1, Math.ceil(next.length * 0.2))); // evict oldest ~20%
+    }
+  }
+}
 
 export function loadHistory(): HistoryItem[] {
   if (typeof window === "undefined") return [];
@@ -39,18 +70,15 @@ export function addHistory(item: { type: HistoryType; keyword: string; data: any
     data: item.data,
     meta: item.meta,
   };
-  if (typeof window !== "undefined") {
-    const next = [rec, ...loadHistory()].slice(0, MAX);
-    localStorage.setItem(KEY, JSON.stringify(next));
-  }
+  persist([rec, ...loadHistory()]);
   return rec;
 }
 
 export function patchHistory(id: string, patch: Partial<Pick<HistoryItem, "status" | "data">> & { meta?: HistoryItem["meta"] }) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(KEY, JSON.stringify(loadHistory().map(h =>
+  persist(loadHistory().map(h =>
     h.id === id ? { ...h, ...patch, meta: { ...h.meta, ...patch.meta } } : h
-  )));
+  ));
 }
 
 export function getHistoryItem(id: string): HistoryItem | undefined {
@@ -59,12 +87,12 @@ export function getHistoryItem(id: string): HistoryItem | undefined {
 
 export function updateHistory(id: string, data: any) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(KEY, JSON.stringify(loadHistory().map(h => h.id === id ? { ...h, data } : h)));
+  persist(loadHistory().map(h => h.id === id ? { ...h, data } : h));
 }
 
 export function removeHistory(id: string) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(KEY, JSON.stringify(loadHistory().filter(h => h.id !== id)));
+  persist(loadHistory().filter(h => h.id !== id));
 }
 
 export function clearHistory() {
