@@ -10,7 +10,11 @@ function wc(sec: any): string {
   if (Array.isArray(t)) return `${t[0]}-${t[1]} words`;
   return "";
 }
-const entName = (e: any) => typeof e === "string" ? e : `${e.name}${e.weight != null ? ` [${e.weight}]` : ""}`;
+const entName = (e: any) => {
+  if (typeof e === "string") return e;
+  const tag = [e.weight != null ? String(e.weight) : "", e.role ? String(e.role) : ""].filter(Boolean).join(" — ");
+  return `${e.name}${tag ? ` [${tag}]` : ""}`;
+};
 
 export function outlineHeadings(o: any): Heading[] {
   if (!o) return [];
@@ -48,6 +52,13 @@ export function outlineToMarkdown(o: any): string {
     if (mTitle) L.push(`- **Title:** ${mTitle}`);
     if (mDesc) L.push(`- **Meta Description:** ${mDesc}`);
     if (mSlug) L.push(`- **URL Slug:** ${mSlug}`);
+    L.push("");
+  }
+  const sum = outlineSummary(o);
+  if (sum.targetWords > 0) {
+    L.push(`- **Target Word Count:** ${sum.targetWords} words (±15%)`);
+    L.push(`- **Available for Content:** ${sum.available} words`);
+    if (sum.faqCount) L.push(`- **FAQ Reserved:** ${sum.faqReserved} words (${sum.faqCount} questions)`);
     L.push("");
   }
   L.push(`# ${title}\n`);

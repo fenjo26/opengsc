@@ -6,7 +6,7 @@ import { runSerp } from "@/lib/seo/serp";
 import { scrapeMany } from "@/lib/seo/scrape";
 import {
   buildOutlinePrompt, buildTextPrompt, buildAnalysisPrompt, buildFactScrubPrompt, buildSourceExtractPrompt,
-  buildAutoFactCleanPrompt, buildWireframePrompt, enforceLinkPolicy, redactBannedWords, extractJson, CompetitorInput,
+  buildAutoFactCleanPrompt, buildWireframePrompt, buildSectionEnrichPrompt, enforceLinkPolicy, redactBannedWords, extractJson, CompetitorInput,
 } from "@/lib/seo/prompts";
 import { findRagFacts } from "@/lib/seo/rag";
 
@@ -97,6 +97,54 @@ export function normalizeWordBudgets(outline: any, target: number): boolean {
   return true;
 }
 
+// ─── Section-enrichment pass: deepen per-section EAV detail in parallel batches ────
+// A single outline call compresses detail when there are 15-30 sections (output-token
+// budget), yielding one-entity sections and one-line summaries/notes. This pass re-runs
+// sections through the model in batches of 5 (3 parallel workers), merging back the
+// enriched fields — total outline size is no longer capped by one response.
+async function enrichOutlineSections(outline: any, ctx: {
+  keyword: string; language: string; country: string; provider: string; apiKey: string;
+  model?: string; baseUrl?: string; tone?: string; persona?: string; ragFacts?: string;
+}): Promise<boolean> {
+  const sections: any[] = Array.isArray(outline?.sections) ? outline.sections : [];
+  if (!sections.length) return false;
+  const globalEntities = (Array.isArray(outline?.entities) ? outline.entities : [])
+    .map((e: any) => (typeof e === "string" ? e : e?.name)).filter(Boolean);
+  const BATCH = 5;
+  const batches: { start: number; items: any[] }[] = [];
+  for (let i = 0; i < sections.length; i += BATCH) batches.push({ start: i, items: sections.slice(i, i + BATCH) });
+
+  let enrichedAny = false;
+  await runPool(batches, 3, async (batch) => {
+    try {
+      const prompt = buildSectionEnrichPrompt({
+        keyword: ctx.keyword, language: ctx.language, country: ctx.country,
+        tone: ctx.tone, persona: ctx.persona,
+        narration: outline?.meta?.narration === "first" ? "first" : outline?.meta?.narration === "third" ? "third" : undefined,
+        h1: outline?.meta?.h1, globalEntities, ragFacts: ctx.ragFacts, sections: batch.items,
+      });
+      const raw = await fetchLLM(prompt, ctx.provider, ctx.apiKey, 8000, ctx.model, ctx.baseUrl);
+      const parsed: any = extractJson(raw);
+      const out: any[] = Array.isArray(parsed?.sections) ? parsed.sections : [];
+      out.forEach((es: any, j: number) => {
+        const target = sections[batch.start + j];
+        if (!target || !es) return;
+        // Heading sanity: merge only when it's clearly the same section (or model kept it).
+        if (es.heading && target.heading && String(es.heading).trim() !== String(target.heading).trim()) return;
+        // Merge ONLY the enrichable fields; structure and word budgets stay untouched.
+        if (Array.isArray(es.entities_to_cover) && es.entities_to_cover.length) target.entities_to_cover = es.entities_to_cover;
+        if (Array.isArray(es.keywords) && es.keywords.length) target.keywords = es.keywords;
+        if (typeof es.summary === "string" && es.summary.trim().length > String(target.summary || "").length) target.summary = es.summary.trim();
+        if (typeof es.copywriter_notes === "string" && es.copywriter_notes.trim().length > String(target.copywriter_notes || "").length) target.copywriter_notes = es.copywriter_notes.trim();
+        if (Array.isArray(es.entity_connections) && es.entity_connections.length) target.entity_connections = es.entity_connections;
+        if (Array.isArray(es.visual_elements) && es.visual_elements.length && !(target.visual_elements || []).length) target.visual_elements = es.visual_elements;
+        enrichedAny = true;
+      });
+    } catch { /* per-batch enrichment is best-effort */ }
+  });
+  return enrichedAny;
+}
+
 // ─── Outline (structure) ─────────────────────────────────────────────────────────
 export async function genOutline(b: any): Promise<GenResult> {
   const keyword = String(b.keyword ?? "").trim();
@@ -178,6 +226,22 @@ export async function genOutline(b: any): Promise<GenResult> {
   if (targetWc > 0) {
     meta.target_word_count = targetWc;
     if (normalizeWordBudgets(outline, targetWc)) (outline as any)._wc_rescaled = true;
+  }
+
+  // ENRICH pass (default on): deepen every section's EAV detail in parallel batches —
+  // role-annotated entities, 4-6 sentence summaries, rich copywriter notes with a
+  // ready opening line, weighted triplets. Off with enrich:false.
+  if (b.enrich !== false) {
+    try {
+      const ok = await enrichOutlineSections(outline, {
+        keyword, language: String(b.language ?? "en"), country: String(b.country ?? "us"),
+        provider, apiKey, model, baseUrl,
+        tone: b.tone ? String(b.tone) : undefined,
+        persona: b.persona ? String(b.persona) : undefined,
+        ragFacts: rag?.rendered,
+      });
+      if (ok) (outline as any)._enriched = true;
+    } catch { /* enrichment is best-effort */ }
   }
   // Persist the real competitor facts that grounded the outline, so the TEXT step is built on the
   // SAME sources (fact-check then just confirms, instead of cleaning up). Kept compact for size.

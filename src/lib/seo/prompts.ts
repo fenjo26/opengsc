@@ -76,7 +76,7 @@ export function buildOutlinePrompt(args: {
     ? `\n- лицо повествования: ${args.narration === "first" ? "ПЕРВОЕ лицо — экспертный «я»-голос (личный опыт, рекомендации от себя, «я проверял…»)" : "ТРЕТЬЕ лицо — корпоративный нейтральный голос (без «я», от лица компании)"}. Установи meta.narration = "${args.narration}".`
     : "";
   const customTplBlock = args.customTemplate?.trim()
-    ? `\n\nПОЛЬЗОВАТЕЛЬСКИЙ ШАБЛОН СТРУКТУРЫ (ВЫСШИЙ ПРИОРИТЕТ — следуй ему ДОСЛОВНО как каркасу): используй ИМЕННО эти заголовки H1/H2/H3, в ТОМ ЖЕ порядке и с той же формулировкой. НЕ переименовывай, не выкидывай и не переставляй заданные пункты. Добавлять свои H2/H3 можно ТОЛЬКО если их не хватает для полноты, и только между заданными, не нарушая порядок. Детально заполняй секции по EAV.\n${args.customTemplate.trim().slice(0, 4000)}`
+    ? `\n\nПОЛЬЗОВАТЕЛЬСКИЙ ШАБЛОН СТРУКТУРЫ (ВЫСШИЙ ПРИОРИТЕТ — каркас): используй ИМЕННО эти заголовки H1/H2/H3, в ТОМ ЖЕ порядке и с той же формулировкой (язык заголовков адаптируй под язык статьи, если шаблон на другом). НЕ переименовывай по смыслу, не выкидывай и не переставляй заданные пункты. При этом ОБОГАЩАЙ шаблон: внутри крупных шаблонных H2 ДОБАВЛЯЙ 2-4 СВОИХ H3-подсекции (сразу после их H2, до следующего шаблонного H2), покрывающих реальные под-интенты темы — шаблон задаёт каркас, а полнота набирается твоими H3. Детально заполняй все секции по EAV.\n${args.customTemplate.trim().slice(0, 4000)}`
     : "";
   const structRulesBlock = args.structureRules?.trim()
     ? `\n\nПРАВИЛА СТРУКТУРЫ ОТ ПОЛЬЗОВАТЕЛЯ (учитывай ОБЯЗАТЕЛЬНО при построении секций — это указания, как организовать статью): ${args.structureRules.trim().slice(0, 1500)}`
@@ -140,7 +140,7 @@ export function buildOutlinePrompt(args: {
 - ГЛУБИНА И ВЛОЖЕННОСТЬ (КРИТИЧНО): почти каждый содержательный H2 ОБЯЗАН иметь 2-4 вложенных H3. H3 — это ОТДЕЛЬНЫЙ элемент массива sections с "h_level":"H3", идущий сразу ПОСЛЕ своего H2. Крупные/коммерческие H2 (сравнение вариантов, цены, бронирование, услуга/автопарк, безопасность) — минимум 3 H3 каждый. У H2 word_count_self делай маленьким (30-60 слов вступления), основной объём — в H3. НЕ делай плоский список из одних H2.
 - ПЛОТНОСТЬ ЗАГОЛОВКОВ (БОГАТО, как у топовых гайдов): дай ПОДРОБНУЮ структуру — обычно 18-30 секций (H2+H3 суммарно) для широких тем, меньше только для узких. Почти каждый содержательный H2 имеет 2-4 вложенных H3. Покрой ВСЕ реальные sub-intents и под-вопросы (включая узкие: конкретные маршруты/типы/FAQ как H3). Верхний предел ~32 секции — не плоди пустые, но и не обедняй. Объём добирается и числом, и длиной секций.
 - БЮДЖЕТ ОБЪЁМА (КРИТИЧНО): word_count_total КАЖДОЙ секции РАССЧИТАЙ САМ по её важности — числа в схеме ниже ([0,0]) это НЕ значения по умолчанию, их обязательно заменить. СУММА word_count_total по ВСЕМ секциям = целевой объём статьи (±10%); если целевой объём не задан — считай ~2000 слов. Крупные содержательные H2 — 200-400 слов (через свои H3), H3 — 80-160, вводные/мелкие — меньше. НЕ ставь всем секциям одинаковый маленький бюджет.
-- СУЩНОСТИ: для крупных секций 4-7 сущностей с весами, для мелких H3 — 2-3.
+- СУЩНОСТИ: для крупных секций 4-7 сущностей, для мелких H3 — 2-3. У КАЖДОЙ — weight И role: {"name":"","weight":10,"role":"primary — ядро секции"} или "secondary — регуляторная валидация/социальное доказательство/контекст рынка". РАЗНООБРАЗИЕ ОБЯЗАТЕЛЬНО: НЕ ставь во все секции один лишь главный бренд — добавляй регуляторов (лицензии), платёжные системы, типы игр/ставок/продуктов, лиги/турниры, провайдеров, площадки отзывов (Trustpilot) и т.п.
 - КЛЮЧИ: 3-6 ПОЛНЫХ поисковых фраз на секцию (реальные запросы, напр. "how far is pefkohori from thessaloniki airport"), а НЕ слова-обрывки ("distance, time"). Бери формулировки из keywordsData (если есть), остальное — реалистичный длинный хвост.
 - ЧАСТОТНОСТЬ → УРОВЕНЬ ЗАГОЛОВКА (по методике Rush): распредели ключи по частотности из keywordsData. ВЧ (самые объёмные, 1-2 слова) → в H1 и крупные H2. СЧ (уточняющие, 2-3 слова) → в H2. НЧ/длинный хвост (4+ слов, конкретные вопросы) → в H3 (там ключи можно склонять). Не дублируй один ключ во многих заголовках — раскидывай.
 - H1 ≠ TITLE: H1 (заголовок на странице) и Title (тег для выдачи) — РАЗНЫЕ формулировки, обе с ключами. H1 — цепляющий, для читателя, с ВЧ-ключом; Title — под клик в выдаче. Заполни meta.h1 отдельным от title_options заголовком (с ТЕКУЩИМ годом, если год уместен).
@@ -173,7 +173,7 @@ export function buildOutlinePrompt(args: {
     "heading": "",
     "word_count_total": [0,0],
     "word_count_self": [0,0],
-    "entities_to_cover": [ { "name": "", "weight": 10 } ],
+    "entities_to_cover": [ { "name": "", "weight": 10, "role": "primary|secondary — роль сущности в секции" } ],
     "keywords": [""],
     "summary": "",
     "visual_elements": [ { "type": "table|infographic|list|checklist|flowchart", "title": "", "description": "" } ],
@@ -201,6 +201,56 @@ export function buildOutlinePrompt(args: {
   "price_table_template": { "columns": [""], "rows": [ {} ] },
   "authority_fields_to_fill_by_user": [ "" ]
 }`;
+}
+
+// ─── Section enrichment (2nd pass): deepen each section's EAV detail in small batches ──
+// A single outline call compresses per-section detail when there are 15-30 sections (token
+// budget). This pass re-processes sections in batches of ~5 parallel calls, so every section
+// gets reference-grade depth: 3-5 role-annotated entities, 4-6 sentence summary, rich
+// copywriter notes with a ready-made opening line, 3-5 weighted triplets, format hints.
+export function buildSectionEnrichPrompt(args: {
+  keyword: string;
+  language: string;
+  country: string;
+  tone?: string;
+  persona?: string;
+  narration?: "first" | "third";
+  h1?: string;
+  globalEntities?: string[];   // outline-level entity names for consistency
+  ragFacts?: string;
+  sections: any[];             // the batch (full section objects)
+}): string {
+  const voice = args.narration === "first"
+    ? "первое лицо, экспертный «я»-голос (личный опыт)"
+    : args.narration === "third" ? "третье лицо, нейтральный корпоративный голос" : "экспертный";
+  const ents = args.globalEntities?.length ? `\n- сущности статьи (используй эти + добавляй релевантные): ${args.globalEntities.slice(0, 25).join(", ")}` : "";
+  const rag = args.ragFacts?.trim() ? `\n- ПРОВЕРЕННЫЕ ФАКТЫ ИЗ БАЗЫ ЗНАНИЙ (вплетай конкретику в summary/notes): ${args.ragFacts.trim().slice(0, 2500)}` : "";
+  const slim = args.sections.map((s: any) => ({
+    h_level: s.h_level, heading: s.heading,
+    word_count_total: s.word_count_total, word_count_self: s.word_count_self,
+    entities_to_cover: s.entities_to_cover, keywords: s.keywords, summary: s.summary,
+    copywriter_notes: s.copywriter_notes, entity_connections: s.entity_connections,
+    visual_elements: s.visual_elements,
+  }));
+  return `Ты — SEO-стратег и entity-аналитик. Ниже ${slim.length} секций структуры статьи по теме "${args.keyword}" (язык ${args.language}, регион ${args.country}). Они набросаны СКУДНО. ОБОГАТИ каждую до эталонной детализации, по которой копирайтер напишет идеальную секцию. Верни СТРОГИЙ JSON без преамбулы и markdown-обёрток.
+
+ДЛЯ КАЖДОЙ СЕКЦИИ (ЖЁСТКИЕ ТРЕБОВАНИЯ):
+- "entities_to_cover": 3-5 сущностей (для мелких H3 — 2-3), КАЖДАЯ с weight (1-10) и role ("primary — ядро секции" / "secondary — регуляторная валидация" / "secondary — социальное доказательство" / "secondary — контекст рынка" и т.п.). НЕ дублируй один бренд во все секции — добавляй регуляторов, платёжки, типы игр/ставок, лиги, провайдеров, площадки отзывов.
+- "keywords": 4-6 ПОЛНЫХ поисковых фраз, УНИКАЛЬНЫХ для этой секции (не повторяй между секциями), на языке ${args.language}.
+- "summary": 4-6 предложений — что раскрыть, какая сущность что якорит, какими конкретными фактами/цифрами насытить, чем секция завершается.
+- "copywriter_notes": 5-7 предложений в тоне «${args.tone || "нейтральный эксперт"}»${args.persona ? ` (persona: ${args.persona})` : ""}, голос: ${voice}. ОБЯЗАТЕЛЬНО включи: (1) готовое ПЕРВОЕ ПРЕДЛОЖЕНИЕ секции на языке ${args.language} в кавычках, (2) как вплести сущности и их атрибуты, (3) формат подачи («2 абзаца + маркированный список», «нумерованные шаги», «таблица сравнения»), (4) конкретные якоря для региона ${args.country} (лиги, регуляторы, платёжки, известные продукты).
+- "entity_connections": 3-5 триплетов { "subject","predicate","object","strength": 1-10 }.
+- "visual_elements": там где уместно — [{ "type":"table|infographic|list|checklist|flowchart", "title":"", "description":"" }]; иначе пустой массив.
+- НЕ МЕНЯЙ: heading, h_level, word_count_total, word_count_self — верни их как есть.
+- ${NO_FABRICATION}
+
+ДАНО:
+- keyword: ${args.keyword}
+- H1 статьи: ${args.h1 || "—"}${ents}${rag}
+- СЕКЦИИ (обогати каждую, порядок сохрани): ${JSON.stringify(slim)}
+
+ВЕРНИ JSON строго по схеме: { "sections": [ { "heading":"", "h_level":"", "word_count_total":[0,0], "word_count_self":[0,0], "entities_to_cover":[{"name":"","weight":10,"role":""}], "keywords":[""], "summary":"", "copywriter_notes":"", "entity_connections":[{"subject":"","predicate":"","object":"","strength":10}], "visual_elements":[] } ] }
+Количество секций в ответе = ${slim.length}, тот же порядок.`;
 }
 
 // ─── Landing wireframe (block-by-block skeleton, no visual design) ──────────────────
