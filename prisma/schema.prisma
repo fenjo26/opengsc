@@ -338,6 +338,49 @@ model SeoJob {
   @@index([userId, createdAt])
 }
 
+// ─── SEO Tools knowledge base (Casino RAG) ─────────────────────────────────────
+// Structured entity facts (slots, casinos) injected into outline/text generation.
+// Populated by scripts/import-rag.ts from CSV exports; matched by normalized name.
+model RagSlot {
+  id         String  @id @default(cuid())
+  name       String
+  nameNorm   String  // lowercase, trimmed — for keyword containment matching
+  provider   String  @default("")
+  released   String  @default("")  // release date/year as text (source formats vary)
+  slotType   String  @default("")  // "Видео слоты" / genre
+  rtp        String  @default("")
+  volatility String  @default("")
+  maxWin     String  @default("")
+  minBet     String  @default("")
+  maxBet     String  @default("")
+  layout     String  @default("")  // e.g. "5-3" reels x rows
+  lines      String  @default("")
+  features   String  @default("")  // comma-separated feature list
+  themes     String  @default("")
+  demoUrl    String  @default("")
+  platform   String  @default("")
+  source     String  @default("")  // "35k" | "demo"
+
+  @@index([nameNorm])
+  @@index([provider])
+}
+
+model RagCasino {
+  id          String @id @default(cuid())
+  name        String
+  nameNorm    String
+  website     String @default("")
+  country     String @default("")
+  founded     String @default("")
+  locality    String @default("")
+  region      String @default("")
+  size        String @default("")
+  linkedinUrl String @default("")
+  source      String @default("")
+
+  @@index([nameNorm])
+}
+
 // ─── GEO Audit — how AI search engines (e.g. ChatGPT web search) perceive a niche ──
 // A single run = one keyword/query analyzed with an agentic web-search model. We persist
 // the raw search trace (batches, opened pages, citations) plus the derived analytics

@@ -193,6 +193,9 @@ npx prisma generate 2>/dev/null
 info "Pushing database schema..."
 npx prisma db push 2>/dev/null
 
+info "Seeding Casino RAG knowledge base..."
+node scripts/seed-rag.mjs || warn "RAG seed skipped (non-fatal) — run 'node scripts/seed-rag.mjs' manually"
+
 info "Building Next.js..."
 npm run build
 

@@ -60,6 +60,7 @@ export function buildOutlinePrompt(args: {
   narration?: "first" | "third";
   customTemplate?: string;
   structureRules?: string;
+  ragFacts?: string;
 }): string {
   // Tone is rendered once: folded into the policy block (override) when a policy exists,
   // otherwise as a standalone line. Never both → no conflicting tone signals.
@@ -82,7 +83,7 @@ export function buildOutlinePrompt(args: {
     : "";
   const addKw = args.additionalKeywords?.trim() ? `\n- доп. ключевые слова (обязательно учесть): ${args.additionalKeywords}` : "";
   const lsiKw = args.lsiKeywords?.trim() ? `\n- LSI-фразы (вплетай в значения атрибутов сущностей и в текст секций естественно, не в заголовки): ${args.lsiKeywords}` : "";
-  const twc = args.targetWordCount ? `\n- целевой объём статьи: ~${args.targetWordCount} слов (распредели по секциям, не раздувай)` : "";
+  const twc = args.targetWordCount ? `\n- целевой объём статьи: ~${args.targetWordCount} слов — РАСПРЕДЕЛИ его по секциям: СУММА word_count_total всех секций должна быть ≈${args.targetWordCount} (±10%)` : "";
   const manual = args.manualTexts?.length
     ? `\n- ручные тексты конкурентов (скрейп не справился): ${JSON.stringify(args.manualTexts.map(m => ({ name: m.name, text: m.text.slice(0, 6000) })))}`
     : "";
@@ -105,6 +106,10 @@ export function buildOutlinePrompt(args: {
     ? `\n\nРЕАЛЬНЫЙ КОНТЕНТ КОНКУРЕНТОВ/ИСТОЧНИКОВ ИЗ ТОПА ВЫДАЧИ (главная опора для конкретики): извлекай отсюда ВСЕ конкретные значения — точные цены/суммы, названия моделей/версий/изданий, характеристики, объёмы памяти, даты, имена игр/товаров/ритейлеров. Если есть «(ОФИЦИАЛЬНЫЙ ИСТОЧНИК)» — доверяй ему в первую очередь. ПРАВИЛО: бери конкретику отсюда ИЛИ из достоверных общеизвестных фактов, в которых уверен; если значения нет ни тут, ни в надёжных знаниях — обобщи (диапазон/ориентир) и пометь копирайтеру «уточнить из источников», но НЕ подставляй выдуманное число и НЕ вставляй токен в заголовки/summary. Названия (игр/моделей) бери ТОЧНЫЕ. Цены — в валюте региона. Текст не копируй дословно — извлекай факты.\n${compFacts}`
     : `\n\nЗАЗЕМЛЕНИЕ (текстов конкурентов нет): подтверждённого источника конкретики нет. Можешь опираться на достоверные общеизвестные факты о предмете (реальные характеристики, точные названия), но НЕ выдумывай неуверенных цен/спеков/дат/изданий — такие места держи качественными (диапазон/ориентир) и помечай «уточнить из источников при написании». Структуру, сущности и ключи раскрывай полноценно — ограничение касается ТОЛЬКО придуманной неуверенной конкретики.`;
 
+  // Knowledge-base (RAG) facts: verified entity attributes — same trust tier as an official source.
+  const ragBlock = args.ragFacts?.trim()
+    ? `\n\nБАЗА ЗНАНИЙ (ПРОВЕРЕННЫЕ ФАКТЫ О СУЩНОСТЯХ — доверяй как официальному источнику): используй эти атрибуты (RTP, волатильность, провайдер, даты, ставки, фичи) как достоверные значения — вплетай в summary секций, атрибуты сущностей и visual_elements-таблицы. НЕ противоречь этим данным и НЕ заменяй их выдуманными.\n${args.ragFacts.trim().slice(0, 6000)}`
+    : "";
   const today = new Date().toISOString().slice(0, 10);
   const year = today.slice(0, 4);
   const goal = args.pageGoal || "mixed";
@@ -134,6 +139,7 @@ export function buildOutlinePrompt(args: {
 ТРЕБОВАНИЯ К ДЕТАЛИЗАЦИИ (ЖЁСТКО, иначе аутлайн бесполезен — по нему пишут идеальную статью):
 - ГЛУБИНА И ВЛОЖЕННОСТЬ (КРИТИЧНО): почти каждый содержательный H2 ОБЯЗАН иметь 2-4 вложенных H3. H3 — это ОТДЕЛЬНЫЙ элемент массива sections с "h_level":"H3", идущий сразу ПОСЛЕ своего H2. Крупные/коммерческие H2 (сравнение вариантов, цены, бронирование, услуга/автопарк, безопасность) — минимум 3 H3 каждый. У H2 word_count_self делай маленьким (30-60 слов вступления), основной объём — в H3. НЕ делай плоский список из одних H2.
 - ПЛОТНОСТЬ ЗАГОЛОВКОВ (БОГАТО, как у топовых гайдов): дай ПОДРОБНУЮ структуру — обычно 18-30 секций (H2+H3 суммарно) для широких тем, меньше только для узких. Почти каждый содержательный H2 имеет 2-4 вложенных H3. Покрой ВСЕ реальные sub-intents и под-вопросы (включая узкие: конкретные маршруты/типы/FAQ как H3). Верхний предел ~32 секции — не плоди пустые, но и не обедняй. Объём добирается и числом, и длиной секций.
+- БЮДЖЕТ ОБЪЁМА (КРИТИЧНО): word_count_total КАЖДОЙ секции РАССЧИТАЙ САМ по её важности — числа в схеме ниже ([0,0]) это НЕ значения по умолчанию, их обязательно заменить. СУММА word_count_total по ВСЕМ секциям = целевой объём статьи (±10%); если целевой объём не задан — считай ~2000 слов. Крупные содержательные H2 — 200-400 слов (через свои H3), H3 — 80-160, вводные/мелкие — меньше. НЕ ставь всем секциям одинаковый маленький бюджет.
 - СУЩНОСТИ: для крупных секций 4-7 сущностей с весами, для мелких H3 — 2-3.
 - КЛЮЧИ: 3-6 ПОЛНЫХ поисковых фраз на секцию (реальные запросы, напр. "how far is pefkohori from thessaloniki airport"), а НЕ слова-обрывки ("distance, time"). Бери формулировки из keywordsData (если есть), остальное — реалистичный длинный хвост.
 - ЧАСТОТНОСТЬ → УРОВЕНЬ ЗАГОЛОВКА (по методике Rush): распредели ключи по частотности из keywordsData. ВЧ (самые объёмные, 1-2 слова) → в H1 и крупные H2. СЧ (уточняющие, 2-3 слова) → в H2. НЧ/длинный хвост (4+ слов, конкретные вопросы) → в H3 (там ключи можно склонять). Не дублируй один ключ во многих заголовках — раскидывай.
@@ -149,7 +155,7 @@ export function buildOutlinePrompt(args: {
 ДАНО:
 - keyword: ${args.keyword}
 - язык/страна: ${args.language}/${args.country}${toneBlock}${personaBlock}${narrationBlock}${addKw}${lsiKw}${twc}${paaBlock}${relBlock}
-- топ-конкуренты (типы + структура): ${JSON.stringify(args.competitors.map(({ text_sample, ...c }) => { void text_sample; return c; }))}${manual}${kwData}${customTplBlock}${structRulesBlock}${factsBlock}
+- топ-конкуренты (типы + структура): ${JSON.stringify(args.competitors.map(({ text_sample, ...c }) => { void text_sample; return c; }))}${manual}${kwData}${customTplBlock}${structRulesBlock}${factsBlock}${ragBlock}
 
 МЕТА-ТЕГИ (title/description/slug) — по правилам Google и Bing, проработай ТЩАТЕЛЬНО (это готовые к публикации варианты):
 - title_options (3 шт.): 50–60 символов (под ~600px, иначе обрежется в выдаче). Главный ключ — в САМОМ НАЧАЛЕ. Если бренд известен — в конце через « | » или « - ». Формула: [Главный ключ] - [Вторичный ключ/УТП] | [Бренд]. Коммерческие — продающий хук (Buy/Best/от €X/Free shipping); информационные — «How to / Guide / Число + …»; числа и скобки повышают CTR. Bing любит точное вхождение ключа.
@@ -165,8 +171,8 @@ export function buildOutlinePrompt(args: {
   "sections": [ {
     "h_level": "H2",
     "heading": "",
-    "word_count_total": [130,160],
-    "word_count_self": [60,80],
+    "word_count_total": [0,0],
+    "word_count_self": [0,0],
     "entities_to_cover": [ { "name": "", "weight": 10 } ],
     "keywords": [""],
     "summary": "",
@@ -377,6 +383,7 @@ export function buildTextPrompt(args: {
   sources?: { title: string; snippet: string; url: string; domain: string }[];
   sourceMode?: "off" | "facts" | "cited";
   includeToc?: boolean;
+  ragFacts?: string;
 }): string {
   // Tone folded into the policy block (single source) when a policy exists; otherwise a header line.
   const policyBlock = args.policy ? renderPolicy(args.policy, args.tone) + "\n\n" : "";
@@ -392,6 +399,8 @@ export function buildTextPrompt(args: {
   const year = today.slice(0, 4);
   const dateLine = `Сегодня ${today}. Если нужен год — используй ТЕКУЩИЙ (${year}); никогда не пиши устаревшие годы (2023/2024) и не выдумывай год.\n`;
   const customLine = args.custom ? `Дополнительная инструкция автора (учесть обязательно): ${args.custom}\n` : "";
+  const twcNum = Number((args.outlineJson as any)?.meta?.target_word_count) || 0;
+  const twcLine = twcNum ? `ЦЕЛЕВОЙ ОБЪЁМ СТАТЬИ: ~${twcNum} слов (это сумма word_count секций). Пиши каждую секцию на её word_count — НЕ короче; итоговый текст должен выйти ≈${twcNum} слов, недобор объёма недопустим.\n` : "";
 
   // Carry the chosen meta tags (title/description/slug) from the outline into the article head,
   // so the generated text ships with publish-ready SEO meta instead of dropping them.
@@ -404,6 +413,11 @@ export function buildTextPrompt(args: {
   const h1Line = metaH1 ? `\nЗаголовок H1 статьи: «${metaH1}» — используй ИМЕННО его как H1 (он ОТЛИЧАЕТСЯ от Title: H1 — для читателя, Title — для выдачи). НЕ копируй Title в H1.` : "";
   const metaBlock = (metaTitle || metaDesc || metaSlug)
     ? `\nМЕТА-ТЕГИ (вставь их В САМОЕ НАЧАЛО статьи отдельным блоком ДО заголовка H1, ровно в таком виде, заполнив значения):\n\`\`\`\nTitle: ${metaTitle}\nMeta Description: ${metaDesc}\nURL Slug: ${metaSlug}\n\`\`\`\nЗатем с новой строки начни саму статью с H1.${h1Line} Title должен быть 50–60 символов, Meta Description ~155, Slug — латиницей в нижнем регистре через дефисы. Если значение пустое — допиши подходящее по правилам.\n`
+    : "";
+
+  // Knowledge-base (RAG) facts block — verified entity attributes, no links needed.
+  const ragTextBlock = args.ragFacts?.trim()
+    ? `\nБАЗА ЗНАНИЙ (ПРОВЕРЕННЫЕ ФАКТЫ О СУЩНОСТЯХ): используй эти атрибуты как достоверные данные (подавай как собственную проверенную информацию, БЕЗ ссылок на базу). Не противоречь им и не подменяй выдуманными значениями.\n${args.ragFacts.trim().slice(0, 6000)}\n`
     : "";
 
   // Real-source grounding (retrieval-augmented). Two modes:
@@ -423,10 +437,10 @@ export function buildTextPrompt(args: {
   // Custom prompt type: the author's instruction drives the writing; service template is minimal.
   if (args.promptType === "custom" && args.custom) {
     return `${policyBlock}${toneHeader}${narrLine}${regionLine}${structRulesLine}Язык вывода: ${args.language}
-${dateLine}${NO_FABRICATION}
+${dateLine}${twcLine}${NO_FABRICATION}
 ${metaBlock}ГЛАВНАЯ ИНСТРУКЦИЯ АВТОРА:
 ${args.custom}
-${sourcesBlock}
+${sourcesBlock}${ragTextBlock}
 Напиши статью по структуре ниже, следуя инструкции автора выше. Соблюдай word_count секций.
 ЖЁСТКИЕ ПРАВИЛА: ровно один H1 (из Title), и СРАЗУ после него — первый H2, БЕЗ вводного абзаца между H1 и первым H2; весь текст только под заголовками H2/H3. Где нет реальных данных — не выдумывай лицензии/регалии/отзывы, ставь плейсхолдер [ЗАПОЛНИТЬ ВРУЧНУЮ: ...]; секции needs_real_experience=true — оставь [ВСТАВЬ РЕАЛЬНЫЙ ОПЫТ]; соблюдай ограничения политики.
 Верни готовый текст в Markdown.
@@ -436,7 +450,7 @@ ${JSON.stringify(args.outlineJson)}`;
   }
 
   return `${policyBlock}${toneHeader}${narrLine}${regionLine}${structRulesLine}Язык вывода: ${args.language}
-${dateLine}${customLine}${metaBlock}${sourcesBlock}
+${dateLine}${twcLine}${customLine}${metaBlock}${sourcesBlock}${ragTextBlock}
 Напиши статью строго по структуре ниже. ОХВАТИ КАЖДУЮ секцию структуры (НЕ пропускай ни одного H2/H3) и пиши КАЖДУЮ развёрнуто — целься в указанный для секции word_count и в общий целевой объём; НЕ ужимай и не сокращай. Используй summary, keywords, entities_to_cover и copywriter_notes как ориентир. Естественно вплетай сущности и ключи.
 - КОНКРЕТИКА ИЗ СТРУКТУРЫ (КРИТИЧНО): все конкретные бренды, модели, ритейлеры, цифры и цены, что есть в summary, copywriter_notes и entities_to_cover, ОБЯЗАТЕЛЬНО перенеси в текст ДОСЛОВНО (например «RIVERSOFT 15 — €690», «Water-filters.gr — от €610», «Pentair Foleo»). НЕ заменяй их общими словами («разные модели», «местные магазины») — именно конкретные названия и цены делают статью полезной и цитируемой в ИИ-поиске. Если у секции есть visual_element-таблица (Бренд/Модель/Цена и т.п.) — построй её РЕАЛЬНЫМИ моделями из структуры, а не пустыми/обобщёнными строками.
 - ПРИОРИТЕТ ПРИ ОГРАНИЧЕННОМ ОБЪЁМЕ: если целевой объём небольшой и всё не помещается — режь ВОДУ и общие фразы, а конкретику (бренды, модели, цены, цифры) СОХРАНЯЙ. Лучше короче, но с реальными названиями и ценами, чем длинно и общо.

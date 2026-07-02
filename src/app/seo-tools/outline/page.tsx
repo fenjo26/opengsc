@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Search, Loader2, Check, AlertTriangle, Wand2, Copy, Plus, X,
+  LayoutGrid, List as ListIcon, ExternalLink, TrendingUp, CheckCircle2,
+  Database, Sparkles, Globe2,
 } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { OutlineView } from "@/components/SeoRenderers";
@@ -13,7 +15,7 @@ import SeoRecentList from "@/components/SeoRecentList";
 import { getSeoGenCreds, getTaskCreds, getSerpCreds, getFirecrawlKey, getDataForSeoKey, loadPolicies, getActivePolicyName } from "@/lib/seo/keys";
 import { COUNTRIES, LANGUAGES } from "@/lib/seo/regions";
 import { TONES, toneToPrompt } from "@/lib/seo/tones";
-import { OUTLINE_TEMPLATES } from "@/lib/seo/templates";
+import { OUTLINE_TEMPLATES, TEMPLATE_GROUPS } from "@/lib/seo/templates";
 import { addHistory, takeView } from "@/lib/seo/history";
 import { startJob, importJob } from "@/lib/seo/jobs";
 
@@ -41,6 +43,14 @@ const SITE_TYPE_COLOR: Record<string, string> = {
 const SITE_TYPE_KEY: Record<string, string> = {
   official_store: "seoStOfficial", aggregator: "seoStAggregator", forum_ugc: "seoStForum", editorial: "seoStEditorial", monobrand: "seoStMonobrand",
 };
+// Cluster ordering for the grouped ("clusters") competitors view; unknown/manual → "other".
+const SITE_TYPE_ORDER = ["official_store", "monobrand", "editorial", "aggregator", "forum_ugc", "other"];
+const INTENT_KEY: Record<string, string> = {
+  buy: "seoIntentBuy", info: "seoIntentInfo", review: "seoIntentReview", listicle: "seoIntentListicle", use_case: "seoIntentUseCase",
+};
+const INTENT_COLOR: Record<string, string> = {
+  buy: "#10A37F", review: "#2997ff", listicle: "#ff9f0a", use_case: "#8e8e93", info: "#8e8e93",
+};
 
 type SerpItem = { position: number; url: string; title: string; snippet: string; domain: string; site_type: string | null; intent?: string };
 type Scraped = { url: string; ok: boolean; via: string; title: string; metaDescription: string; textSample?: string; headings: string[]; wordCount: number; hasPriceTable: boolean; hasFaq: boolean; error?: string };
@@ -60,6 +70,8 @@ export default function OutlinePage() {
   const [related, setRelated] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [scraped, setScraped] = useState<Record<string, Scraped>>({});
+  const [serpView, setSerpView] = useState<"clusters" | "list">("list");
+  const [parsing, setParsing] = useState<Set<string>>(new Set());
   const [keywordsData, setKeywordsData] = useState<{ keyword: string; volume: number; cpc: number; competition: number }[]>([]);
   const [kwLoading, setKwLoading] = useState(false);
 
@@ -69,6 +81,9 @@ export default function OutlinePage() {
   const [persona, setPersona] = useState("");
   const [narration, setNarration] = useState<"" | "first" | "third">("");
   const [customTemplate, setCustomTemplate] = useState("");
+  const [selectedTplId, setSelectedTplId] = useState<string | null>(null);
+  const [ragOn, setRagOn] = useState(true);
+  const [ragStats, setRagStats] = useState<{ slots: number; casinos: number } | null>(null);
   const [structureRules, setStructureRules] = useState("");
   const [addKeywords, setAddKeywords] = useState("");
   const [targetWords, setTargetWords] = useState("");
@@ -98,18 +113,36 @@ export default function OutlinePage() {
 
   const stepNum = outline ? 3 : serp.length > 0 ? 2 : 1;
 
-  async function ensureScraped(urls: string[]): Promise<Record<string, Scraped>> {
-    const missing = urls.filter(u => !scraped[u]);
-    if (!missing.length) return scraped;
-    const res = await fetch("/api/seo/scrape", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ urls: missing, firecrawlKey: getFirecrawlKey() }),
-    });
-    const data = await res.json();
-    const next = { ...scraped };
-    (data.pages || []).forEach((p: Scraped) => { next[p.url] = p; });
-    setScraped(next);
-    return next;
+  // Knowledge-base sizes for the Casino RAG card (once per page load).
+  useEffect(() => {
+    fetch("/api/seo/rag/stats").then(r => r.ok ? r.json() : null).then(d => {
+      if (d && typeof d.slots === "number") setRagStats({ slots: d.slots, casinos: d.casinos });
+    }).catch(() => {});
+  }, []);
+  const ragAvailable = !!ragStats && (ragStats.slots + ragStats.casinos) > 0;
+
+  async function ensureScraped(urls: string[], base: Record<string, Scraped> = scraped): Promise<Record<string, Scraped>> {
+    const missing = urls.filter(u => !base[u]);
+    if (!missing.length) return base;
+    setParsing(p => new Set([...Array.from(p), ...missing]));
+    try {
+      // The scrape API caps at 15 urls per request — chunk so Top N 20/30 is fully parsed.
+      const fetched: Record<string, Scraped> = {};
+      for (let i = 0; i < missing.length; i += 15) {
+        const chunk = missing.slice(i, i + 15);
+        const res = await fetch("/api/seo/scrape", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ urls: chunk, firecrawlKey: getFirecrawlKey() }),
+        });
+        const data = await res.json();
+        (data.pages || []).forEach((p: Scraped) => { fetched[p.url] = p; });
+        setScraped(prev => ({ ...prev, ...fetched }));
+        setParsing(p => { const n = new Set(p); chunk.forEach(u => n.delete(u)); return n; });
+      }
+      return { ...base, ...fetched };
+    } finally {
+      setParsing(p => { const n = new Set(p); missing.forEach(u => n.delete(u)); return n; });
+    }
   }
 
   async function fetchKeywords() {
@@ -145,6 +178,9 @@ export default function OutlinePage() {
       setRelated(data.relatedSearches || []);
       setSelected(new Set((data.results || []).map((r: SerpItem) => r.url)));
       fetchKeywords(); // grounding keywords with real volumes (DataForSEO), if key present
+      // Kick off background scraping of ALL results so per-row word counts appear
+      // immediately (competitor-style "Парсинг…" → count). Best-effort, non-blocking.
+      ensureScraped((data.results || []).map((r: SerpItem) => r.url), {}).catch(() => {});
     } catch (e: any) { setErr(String(e?.message ?? e)); }
     setLoading("");
   }
@@ -180,6 +216,8 @@ export default function OutlinePage() {
         sel.add(url);
       }
       setSelected(sel);
+      // Scrape manual additions in the background so their word counts show up too.
+      if (additions.length) ensureScraped(additions.map(a => a.url)).catch(() => {});
       return [...prev, ...additions];
     });
     setManualUrl("");
@@ -217,6 +255,7 @@ export default function OutlinePage() {
         narration: narration || undefined,
         customTemplate: customTemplate.trim() || undefined,
         structureRules: structureRules.trim() || undefined,
+        useRag: ragOn && ragAvailable,
       });
       if (error || !jid) { setErr(error === "parse_failed" ? t("seoErrParseJson") : (error || t("seoErrGen"))); setLoading(""); return; }
       setJobId(jid); // background job started — render live progress; user can leave
@@ -320,52 +359,149 @@ export default function OutlinePage() {
       {/* Step 2: competitors + config (hidden while a job runs) */}
       {!jobId && serp.length > 0 && (
         <div className={card}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
             <h3 style={{ fontSize: "14px", fontWeight: 700, margin: 0, color: "var(--color-text-primary)" }}>
               {t("seoCompetitors")} ({selected.size}/{serp.length} {t("seoSelectedWord")})
             </h3>
+            <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+              <div style={{ display: "flex", border: "1px solid var(--color-border)", borderRadius: "8px", overflow: "hidden" }}>
+                {([["clusters", t("seoViewClusters"), <LayoutGrid key="c" size={13} />], ["list", t("seoViewList"), <ListIcon key="l" size={13} />]] as [typeof serpView, string, React.ReactNode][]).map(([v, lbl, ic]) => (
+                  <button key={v} onClick={() => setSerpView(v)} style={{
+                    display: "flex", alignItems: "center", gap: "5px", padding: "7px 12px", fontSize: "12px", fontWeight: 600, cursor: "pointer", border: "none",
+                    background: serpView === v ? "var(--color-text-primary)" : "var(--color-bg)",
+                    color: serpView === v ? "var(--color-bg)" : "var(--color-text-secondary)",
+                  }}>{ic} {lbl}</button>
+                ))}
+              </div>
+              <button onClick={() => setSelected(new Set(serp.map(s => s.url)))} style={{ ...btnGhost, padding: "7px 12px" }}>{t("seoSelectAll")}</button>
+              <button onClick={() => setSelected(new Set())} style={{ ...btnGhost, padding: "7px 12px" }}>{t("seoClearAll")}</button>
+            </div>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            {serp.map(s => {
+
+          {/* Dominant intent bar */}
+          {(() => {
+            const counts: Record<string, number> = {};
+            serp.forEach(s => { if (s.intent) counts[s.intent] = (counts[s.intent] || 0) + 1; });
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+            if (!sorted.length) return null;
+            return (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", padding: "10px 12px", borderRadius: "10px", border: "1px solid var(--color-border)", background: "var(--color-bg)", marginBottom: "12px" }}>
+                <TrendingUp size={14} color="var(--color-text-tertiary)" />
+                <span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>{t("seoDominantIntent")}</span>
+                {sorted.map(([intent, n], i) => (
+                  <span key={intent} style={{
+                    fontSize: "11px", fontWeight: 700, padding: "4px 11px", borderRadius: "20px",
+                    color: i === 0 ? "var(--color-accent-blue)" : "var(--color-text-secondary)",
+                    background: i === 0 ? "rgba(41,151,255,0.1)" : "transparent",
+                    border: `1px solid ${i === 0 ? "rgba(41,151,255,0.35)" : "var(--color-border)"}`,
+                  }}>
+                    {t((INTENT_KEY[intent] || "seoIntentInfo") as any)}{sorted.length > 1 ? ` (${n})` : ""}
+                  </span>
+                ))}
+              </div>
+            );
+          })()}
+
+          {/* Competitor rows: shared renderer for both views */}
+          {(() => {
+            const gridCols = "26px 34px minmax(0,1fr) 130px 100px 120px";
+            const Row = (s: SerpItem) => {
               const on = selected.has(s.url);
-              const wc = scraped[s.url]?.wordCount;
+              const p = scraped[s.url];
+              const wc = p?.wordCount;
+              const isParsing = parsing.has(s.url) && !p;
               return (
                 <div key={s.url} onClick={() => toggle(s.url)} style={{
-                  display: "flex", alignItems: "center", gap: "10px", padding: "9px 11px",
-                  borderRadius: "8px", cursor: "pointer",
+                  display: "grid", gridTemplateColumns: gridCols, gap: "10px", alignItems: "center",
+                  padding: "10px 11px", borderRadius: "8px", cursor: "pointer",
                   background: on ? "rgba(41,151,255,0.08)" : "transparent",
                   border: `1px solid ${on ? "rgba(41,151,255,0.3)" : "var(--color-border)"}`,
                 }}>
                   <div style={{
-                    width: 18, height: 18, borderRadius: "5px", flexShrink: 0,
+                    width: 18, height: 18, borderRadius: "5px",
                     border: `1.5px solid ${on ? "var(--color-accent-blue)" : "var(--color-border)"}`,
                     background: on ? "var(--color-accent-blue)" : "transparent",
                     display: "flex", alignItems: "center", justifyContent: "center",
                   }}>{on && <Check size={12} color="#fff" />}</div>
-                  <span style={{ fontSize: "12px", color: "var(--color-text-tertiary)", width: "22px", flexShrink: 0 }}>#{s.position}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: "13px", color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.title}</div>
-                    <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.domain}</div>
+                  <span style={{ fontSize: "12px", color: "var(--color-text-tertiary)" }}>#{s.position}</span>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.title}</div>
+                    <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "4px" }}>
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{s.url}</span>
+                      <a href={s.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: "var(--color-text-tertiary)", flexShrink: 0, display: "flex" }}><ExternalLink size={10} /></a>
+                    </div>
                   </div>
-                  {wc ? <span style={{ fontSize: "11px", color: "var(--color-text-tertiary)", flexShrink: 0 }}>{wc} {t("seoWords")}</span> : null}
-                  {s.intent && (
-                    <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "20px", flexShrink: 0,
-                      color: s.intent === "buy" ? "#10A37F" : "var(--color-text-secondary)",
-                      background: s.intent === "buy" ? "rgba(16,163,127,0.12)" : "var(--color-bg)" }}>
-                      {t(s.intent === "buy" ? "seoIntentBuy" : "seoIntentInfo")}
-                    </span>
-                  )}
-                  {s.site_type && (
-                    <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "20px", flexShrink: 0,
-                      color: SITE_TYPE_COLOR[s.site_type] || "var(--color-text-secondary)",
-                      background: `${SITE_TYPE_COLOR[s.site_type] || "#888"}1a` }}>
-                      {t((SITE_TYPE_KEY[s.site_type] || "") as any) || s.site_type}
-                    </span>
-                  )}
+                  <span>
+                    {s.site_type && (
+                      <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 9px", borderRadius: "20px",
+                        color: SITE_TYPE_COLOR[s.site_type] || "var(--color-text-secondary)",
+                        background: `${SITE_TYPE_COLOR[s.site_type] || "#888"}1a` }}>
+                        {t((SITE_TYPE_KEY[s.site_type] || "") as any) || s.site_type}
+                      </span>
+                    )}
+                  </span>
+                  <span>
+                    {s.intent && (
+                      <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 9px", borderRadius: "20px",
+                        color: INTENT_COLOR[s.intent] || "var(--color-text-secondary)",
+                        background: `${INTENT_COLOR[s.intent] || "#888"}1a` }}>
+                        {t((INTENT_KEY[s.intent] || "seoIntentInfo") as any)}
+                      </span>
+                    )}
+                  </span>
+                  <span style={{ fontSize: "12px", color: "var(--color-text-secondary)", display: "flex", alignItems: "center", gap: "5px", justifyContent: "flex-end" }}>
+                    {isParsing ? (<><Loader2 size={12} className="spin" /> {t("seoParsing")}</>)
+                      : wc ? (<><CheckCircle2 size={13} color="#34c759" /> <b style={{ color: "var(--color-text-primary)" }}>{wc.toLocaleString()}</b></>)
+                      : p ? "—" : null}
+                  </span>
                 </div>
               );
-            })}
-          </div>
+            };
+            const Header = () => (
+              <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: "10px", padding: "4px 11px", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", color: "var(--color-text-tertiary)" }}>
+                <span>{t("seoColSelect")}</span><span>#</span><span>{t("seoColUrl")}</span><span>{t("seoColSiteType")}</span><span>{t("seoColIntent")}</span><span style={{ textAlign: "right" }}>{t("seoColWords")}</span>
+              </div>
+            );
+            if (serpView === "list") {
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <Header />
+                  {serp.map(Row)}
+                </div>
+              );
+            }
+            // Clusters view: group by site type
+            const groups = SITE_TYPE_ORDER
+              .map(gt => ({ gt, items: serp.filter(s => (s.site_type && SITE_TYPE_ORDER.includes(s.site_type) ? s.site_type : "other") === gt) }))
+              .filter(g => g.items.length);
+            return (
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                {groups.map(({ gt, items }) => {
+                  const clr = SITE_TYPE_COLOR[gt] || "var(--color-text-tertiary)";
+                  const allOn = items.every(s => selected.has(s.url));
+                  return (
+                    <div key={gt} style={{ border: "1px solid var(--color-border)", borderRadius: "10px", padding: "10px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: clr }} />
+                        <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--color-text-primary)" }}>
+                          {t((SITE_TYPE_KEY[gt] || "seoStOther") as any)}
+                        </span>
+                        <span style={{ fontSize: "11px", color: "var(--color-text-tertiary)" }}>({items.length})</span>
+                        <button onClick={() => setSelected(prev => {
+                          const n = new Set(prev);
+                          items.forEach(s => allOn ? n.delete(s.url) : n.add(s.url));
+                          return n;
+                        })} style={{ ...btnGhost, padding: "4px 9px", fontSize: "11px", marginLeft: "auto" }}>
+                          {allOn ? t("seoClearAll") : t("seoSelectAll")}
+                        </button>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>{items.map(Row)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
           {(paa.length > 0 || related.length > 0) && (
             <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: "1px solid var(--color-border)", fontSize: "12px", color: "var(--color-text-secondary)" }}>
               {paa.length > 0 && <div style={{ marginBottom: "6px" }}><b>People Also Ask:</b> {paa.join(" · ")}</div>}
@@ -456,17 +592,103 @@ export default function OutlinePage() {
               </div>
             </div>
 
+            {/* Casino RAG knowledge-base card */}
+            {ragStats !== null && (
+              <div style={{ marginTop: "14px" }}>
+                <span className="tool-field-label">{t("seoRagSub")}</span>
+                <div style={{ fontSize: "11px", color: "var(--color-text-tertiary)", marginBottom: "8px" }}>{t("seoRagHint")}</div>
+                <div onClick={() => ragAvailable && setRagOn(v => !v)} style={{
+                  border: `1.5px solid ${ragOn && ragAvailable ? "var(--color-text-primary)" : "var(--color-border)"}`,
+                  borderRadius: "12px", padding: "14px 16px", cursor: ragAvailable ? "pointer" : "default",
+                  background: ragOn && ragAvailable ? "var(--color-bg)" : "transparent",
+                  opacity: ragAvailable ? 1 : 0.6, maxWidth: "560px",
+                }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
+                    <div style={{ width: 38, height: 38, borderRadius: "9px", background: "var(--color-bg-secondary)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <Database size={18} color="var(--color-text-secondary)" />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)" }}>{t("seoRagTitle")}</div>
+                      <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>{t("seoRagSub")}</div>
+                    </div>
+                    <div style={{
+                      width: 22, height: 22, borderRadius: "6px", flexShrink: 0,
+                      border: `1.5px solid ${ragOn && ragAvailable ? "var(--color-text-primary)" : "var(--color-border)"}`,
+                      background: ragOn && ragAvailable ? "var(--color-text-primary)" : "transparent",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>{ragOn && ragAvailable && <Check size={14} color="var(--color-bg)" />}</div>
+                  </div>
+                  {ragAvailable ? (
+                    <>
+                      <div style={{ display: "flex", gap: "18px", marginTop: "10px" }}>
+                        <span style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "var(--color-text-secondary)" }}>
+                          <Sparkles size={13} /> <b style={{ color: "var(--color-text-primary)" }}>{ragStats.slots.toLocaleString()}</b> {t("seoRagSlots")}
+                        </span>
+                        <span style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "var(--color-text-secondary)" }}>
+                          <Sparkles size={13} /> <b style={{ color: "var(--color-text-primary)" }}>{ragStats.casinos.toLocaleString()}</b> {t("seoRagCasinos")}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", gap: "6px", marginTop: "10px" }}>
+                        <span style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "11px", fontWeight: 600, padding: "4px 11px", borderRadius: "20px", border: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}>
+                          <Globe2 size={11} /> {t("seoRagAllLangs")}
+                        </span>
+                        <span style={{ fontSize: "11px", fontWeight: 600, padding: "4px 11px", borderRadius: "20px", color: "#10A37F", background: "rgba(16,163,127,0.1)", border: "1px solid rgba(16,163,127,0.3)" }}>
+                          {t("seoRagFree")}
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ fontSize: "12px", color: "var(--color-text-tertiary)", marginTop: "8px" }}>{t("seoRagEmpty")}</div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* custom structure template + ready-made presets (incl. iGaming) */}
             <div style={{ marginTop: "14px" }}>
               <span className="tool-field-label">{t("seoCfgCustomTemplate")} <span style={{ textTransform: "none", fontWeight: 400, color: "var(--color-text-tertiary)" }}>· {t("seoCfgOptional")}</span></span>
               <div style={{ fontSize: "11px", color: "var(--color-text-tertiary)", marginBottom: "8px" }}>{t("seoCfgCustomTemplateSub")}</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "8px" }}>
-                {OUTLINE_TEMPLATES.map(tpl => (
-                  <button key={tpl.id} onClick={() => setCustomTemplate(tpl.body.replace(/\{year\}/g, String(new Date().getFullYear())))} style={{ ...btnGhost, padding: "6px 11px" }}>{t(tpl.labelKey as any)}</button>
-                ))}
-                {customTemplate && <button onClick={() => setCustomTemplate("")} style={{ ...btnGhost, padding: "6px 11px", color: "var(--color-accent-red)" }}><X size={12} /> {t("seoCfgClear")}</button>}
-              </div>
-              <textarea className={inputStyle} style={{ minHeight: "90px", resize: "vertical", fontFamily: "monospace", fontSize: "12px" }} value={customTemplate} onChange={e => setCustomTemplate(e.target.value)} placeholder={"H1: ...\nH2: ...\nH3: ..."} />
+              {TEMPLATE_GROUPS.map(g => {
+                const tpls = OUTLINE_TEMPLATES.filter(tpl => tpl.group === g.id);
+                if (!tpls.length) return null;
+                return (
+                  <div key={g.id} style={{ marginBottom: "8px" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: "5px" }}>
+                      {t(g.labelKey as any)} <span style={{ fontWeight: 400, color: "var(--color-text-tertiary)" }}>({tpls.length})</span>
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                      {tpls.map(tpl => {
+                        const active = selectedTplId === tpl.id;
+                        return (
+                          <button key={tpl.id}
+                            onClick={() => {
+                              if (active) { setSelectedTplId(null); setCustomTemplate(""); return; }
+                              setSelectedTplId(tpl.id);
+                              setCustomTemplate(tpl.body.replace(/\{year\}/gi, String(new Date().getFullYear())));
+                            }}
+                            style={{ ...btnGhost, padding: "6px 11px",
+                              background: active ? "var(--color-text-primary)" : "var(--color-bg)",
+                              color: active ? "var(--color-bg)" : "var(--color-text-secondary)",
+                              borderColor: active ? "var(--color-text-primary)" : "var(--color-border)" }}>
+                            {t(tpl.labelKey as any)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+              {selectedTplId && (
+                <div style={{ fontSize: "11px", color: "var(--color-text-tertiary)", margin: "2px 0 6px" }}>
+                  {t("seoTplSelected")}: <span style={{ fontWeight: 600, color: "var(--color-text-secondary)" }}>{t(OUTLINE_TEMPLATES.find(x => x.id === selectedTplId)?.labelKey as any)}</span>
+                </div>
+              )}
+              {customTemplate && (
+                <div style={{ marginBottom: "8px" }}>
+                  <button onClick={() => { setCustomTemplate(""); setSelectedTplId(null); }} style={{ ...btnGhost, padding: "6px 11px", color: "var(--color-accent-red)" }}><X size={12} /> {t("seoCfgClear")}</button>
+                </div>
+              )}
+              <textarea className={inputStyle} style={{ minHeight: "90px", resize: "vertical", fontFamily: "monospace", fontSize: "12px" }} value={customTemplate} onChange={e => { setCustomTemplate(e.target.value); setSelectedTplId(null); }} placeholder={"H1: ...\nH2: ...\nH3: ..."} />
             </div>
 
             {/* free-form structure rules (e.g. "FAQ at the end", "price table in pricing", "more H3") */}

@@ -183,7 +183,7 @@ export async function runSerp(
 
 // ─── Cheap URL classifier (heuristics) ──────────────────────────────────────────
 export type SiteType = "monobrand" | "aggregator" | "forum_ugc" | "editorial" | "official_store";
-export type SerpIntent = "buy" | "info";
+export type SerpIntent = "buy" | "info" | "review" | "listicle" | "use_case";
 
 const AGGREGATOR_DOMAINS = ["rome2rio", "getyourguide", "tripadvisor", "booking", "expedia", "kayak", "holidaytaxis", "viator", "skyscanner", "yelp", "trustpilot",
   "amazon", "ebay", "aliexpress", "walmart", "skroutz", "ubuy", "etsy", "bestbuy", "newegg", "idealo", "pricerunner", "google.com/shopping"];
@@ -200,9 +200,12 @@ export function heuristicSiteType(domain: string, url?: string, title?: string):
   return null; // unknown → let LLM decide, or default editorial
 }
 
-// Buy vs informational intent from URL/title signals.
+// Page intent from URL/title signals: review / listicle (top-N roundup) / buy / use_case / info.
 export function heuristicIntent(url?: string, title?: string): SerpIntent {
   const hay = `${url || ""} ${title || ""}`.toLowerCase();
+  if (/\b(review|reviews|rating|ratings|обзор|огляд|отзыв|відгук)\b|\/review/.test(hay)) return "review";
+  if (/\btop[\s-]?\d+|\b\d+\s+(best|top)\b|\bbest\b.+\b(sites?|casinos?|apps?|tools?|services?|platforms?|bookmakers?|brokers?|hosts?)\b|\branking(s)?\b|\bлучшие\b|\bнайкращі\b/.test(hay)) return "listicle";
   if (/\b(buy|shop|store|price|cost|order|cart|checkout|eshop|deal|discount|coupon|for sale|product)\b|\/p\/|\/product/.test(hay)) return "buy";
-  return "info";
+  if (/\bhow to\b|\bguide\b|\btutorial\b|\bкак\b|\bяк\b|\bчто такое\b|\bщо таке\b/.test(hay)) return "info";
+  return "use_case";
 }

@@ -8,6 +8,7 @@ import {
   buildOutlinePrompt, buildTextPrompt, buildAnalysisPrompt, buildFactScrubPrompt, buildSourceExtractPrompt,
   buildAutoFactCleanPrompt, buildWireframePrompt, enforceLinkPolicy, redactBannedWords, extractJson, CompetitorInput,
 } from "@/lib/seo/prompts";
+import { findRagFacts } from "@/lib/seo/rag";
 
 export type GenResult = { ok: true; data: any } | { ok: false; error: string };
 
@@ -65,6 +66,37 @@ function applyCorrections(obj: any, corrections: { find: string; replace: string
   return obj;
 }
 
+// ─── Volume guard: make per-section word budgets actually sum to the target ──────
+// Models sometimes copy the schema's example numbers into every section (e.g. [130,160]),
+// so a 2500-word plan silently becomes ~1000 words of budgets — and the text step then
+// honors those small budgets. Deterministic fix: if the sum of section budgets is far
+// off the target, scale every section's word_count proportionally.
+function toWcRange(v: any): [number, number] | null {
+  if (Array.isArray(v) && v.length >= 2 && isFinite(+v[0]) && isFinite(+v[1]) && +v[1] > 0) return [+v[0], +v[1]];
+  if (typeof v === "number" && isFinite(v) && v > 0) return [v, v];
+  if (typeof v === "string") {
+    const m = v.match(/\d+/g);
+    if (m?.length) { const a = +m[0], b = +(m[1] ?? m[0]); if (b > 0) return [a, b]; }
+  }
+  return null;
+}
+export function normalizeWordBudgets(outline: any, target: number): boolean {
+  if (!target || !Array.isArray(outline?.sections) || !outline.sections.length) return false;
+  const ranges = outline.sections.map((s: any) => toWcRange(s?.word_count_total));
+  const sum = ranges.reduce((acc: number, r: [number, number] | null) => acc + (r ? (r[0] + r[1]) / 2 : 0), 0);
+  if (!sum) return false;
+  const k = target / sum;
+  if (k > 0.7 && k < 1.25) return false; // close enough — keep the model's distribution
+  for (let i = 0; i < outline.sections.length; i++) {
+    const s = outline.sections[i]; const r = ranges[i];
+    if (!s || !r) continue;
+    s.word_count_total = [Math.round(r[0] * k), Math.round(r[1] * k)];
+    const self = toWcRange(s.word_count_self);
+    if (self) s.word_count_self = [Math.round(self[0] * k), Math.round(self[1] * k)];
+  }
+  return true;
+}
+
 // ─── Outline (structure) ─────────────────────────────────────────────────────────
 export async function genOutline(b: any): Promise<GenResult> {
   const keyword = String(b.keyword ?? "").trim();
@@ -81,6 +113,9 @@ export async function genOutline(b: any): Promise<GenResult> {
   if (b.mapExtract !== false && competitors.length) {
     try { await mapExtractFacts(competitors, keyword, String(b.country ?? "us"), provider, apiKey, model, baseUrl); } catch { /* fall back to raw text grounding */ }
   }
+
+  // Casino RAG: pull verified entity facts (slots/casinos/providers) from the knowledge base.
+  const rag = b.useRag ? await findRagFacts(keyword) : null;
 
   const prompt = buildOutlinePrompt({
     keyword,
@@ -101,6 +136,7 @@ export async function genOutline(b: any): Promise<GenResult> {
     narration: b.narration === "first" || b.narration === "third" ? b.narration : undefined,
     customTemplate: b.customTemplate ? String(b.customTemplate) : undefined,
     structureRules: b.structureRules ? String(b.structureRules) : undefined,
+    ragFacts: rag?.rendered,
   });
 
   let raw = await fetchLLM(prompt, provider, apiKey, 16000, model, baseUrl);
@@ -136,6 +172,13 @@ export async function genOutline(b: any): Promise<GenResult> {
   meta.language = String(b.language ?? "en");
   if (b.narration === "first" || b.narration === "third") meta.narration = b.narration;
   if (b.structureRules && String(b.structureRules).trim()) meta.structureRules = String(b.structureRules).trim();
+  // Volume guard: stamp the requested target and rescale section budgets if the model
+  // under-budgeted them (e.g. copied the schema's example numbers into every section).
+  const targetWc = Number(b.targetWordCount) || Number(meta.target_word_count) || 0;
+  if (targetWc > 0) {
+    meta.target_word_count = targetWc;
+    if (normalizeWordBudgets(outline, targetWc)) (outline as any)._wc_rescaled = true;
+  }
   // Persist the real competitor facts that grounded the outline, so the TEXT step is built on the
   // SAME sources (fact-check then just confirms, instead of cleaning up). Kept compact for size.
   const carriedSources = competitors
@@ -161,7 +204,11 @@ export async function genOutline(b: any): Promise<GenResult> {
       official: c.site_type === "official_store",
       facts: String(c.extracted).trim().slice(0, 1600),
     }));
+  // RAG facts join the facts bank FIRST (highest trust) so both the text step and the
+  // auto fact-clean verify against the knowledge base, not only scraped competitors.
+  if (rag?.bankEntry) factsBank.unshift(rag.bankEntry as any);
   if (factsBank.length) (meta as any).facts_bank = factsBank;
+  if (b.useRag) (meta as any).use_rag = true;
   return { ok: true, data: outline };
 }
 
@@ -215,6 +262,19 @@ export async function genText(b: any): Promise<GenResult> {
     faq: full.faq,
     price_table_template: full.price_table_template,
   };
+  // Volume guard for outlines saved before this fix (or edited by hand): if the sum of
+  // section budgets is far below the target word count, rescale so the writer isn't
+  // silently capped at a fraction of the plan.
+  const textTargetWc = Number(b.targetWordCount) || Number(metaSlim?.target_word_count) || 0;
+  if (textTargetWc > 0) normalizeWordBudgets(slimOutline, textTargetWc);
+
+  // Casino RAG: re-retrieve knowledge-base facts for the text step (fresh + full-length),
+  // honoring either the explicit flag or the outline generated with RAG enabled.
+  let ragFacts: string | undefined;
+  if (b.useRag === true || (b.useRag !== false && full.meta?.use_rag)) {
+    const rag = await findRagFacts(keyword || String(full.meta?.keyword ?? ""));
+    if (rag) ragFacts = rag.rendered;
+  }
 
   const prompt = buildTextPrompt({
     outlineJson: slimOutline,
@@ -226,6 +286,7 @@ export async function genText(b: any): Promise<GenResult> {
     sources,
     sourceMode: effMode,
     includeToc: b.includeToc === true,
+    ragFacts,
   });
   const model = b.model ? String(b.model) : undefined;
   const baseUrl = b.aiBaseUrl ? String(b.aiBaseUrl) : undefined;
