@@ -16,7 +16,7 @@ import {
   SlidersHorizontal, ChevronDown, Smartphone, Monitor, Tablet,
   Users, Activity, Zap, DollarSign, Link2, Check,
   FileText, Globe, Search, ArrowLeftRight, BookmarkCheck, Calendar, X, Download,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, ExternalLink,
 } from "lucide-react";
 import {
   ComposedChart, LineChart, AreaChart, Area, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -3831,6 +3831,12 @@ export default function SitePage() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={`/api/favicon?domain=${domain}`} width={14} height={14} alt="" style={{ borderRadius: "2px" }} onError={e=>((e.target as HTMLImageElement).style.display="none")} />
             <span style={{ fontSize: "14px", fontWeight: 600, ...blurStyle }}>{domain}</span>
+            <a href={`https://${domain}`} target="_blank" rel="noreferrer" title={t("openSite") || "Open site"}
+              style={{ display: "flex", alignItems: "center", color: "var(--color-text-secondary)", flexShrink: 0, padding: "2px", borderRadius: "4px" }}
+              onMouseEnter={e => (e.currentTarget.style.color = "var(--color-text-primary)")}
+              onMouseLeave={e => (e.currentTarget.style.color = "var(--color-text-secondary)")}>
+              <ExternalLink size={12} />
+            </a>
           </div>
           <span style={{ margin: "0 24px", color: "var(--color-border)" }}>|</span>
           {/* Tab nav */}

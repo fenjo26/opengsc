@@ -782,7 +782,10 @@ export default function PortfolioPage() {
   const hiddenSites = filtered.filter(s => hidden.has(s.id));
 
   // ─── Totals from visible (filtered) sites — respects search/tag/branded filters ──
-  const visibleForTotals = [...favSites, ...restSites];
+  // When a tag is active, totals are computed only over sites carrying that tag
+  const visibleForTotals = [...favSites, ...restSites].filter(
+    s => !activeTag || (siteTags[s.id] || []).includes(activeTag)
+  );
   const totalClicks      = visibleForTotals.reduce((s, site) => s + (site.summary?.clicks?.value ?? 0), 0);
   const totalImpressions = visibleForTotals.reduce((s, site) => s + (site.summary?.impressions?.value ?? 0), 0);
   const withCtr = visibleForTotals.filter(s => (s.summary?.ctr?.value ?? 0) > 0);
