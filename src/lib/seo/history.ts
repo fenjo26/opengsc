@@ -12,7 +12,7 @@ export interface HistoryItem {
   createdAt: number;
   status: HistoryStatus;
   data: any; // outline object | article string | gap report object
-  meta?: { tone?: string; promptType?: string; version?: string; error?: string; outlineId?: string; factcheck?: any; images?: any; serpIntent?: any };
+  meta?: { tone?: string; promptType?: string; version?: string; error?: string; outlineId?: string; factcheck?: any; images?: any; serpIntent?: any; jobId?: string };
 }
 
 const KEY = "seoHistory";
@@ -60,12 +60,12 @@ export function loadHistory(): HistoryItem[] {
   }
 }
 
-export function addHistory(item: { type: HistoryType; keyword: string; data: any; status?: HistoryStatus; meta?: HistoryItem["meta"] }): HistoryItem {
+export function addHistory(item: { type: HistoryType; keyword: string; data: any; status?: HistoryStatus; meta?: HistoryItem["meta"]; createdAt?: number }): HistoryItem {
   const rec: HistoryItem = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     type: item.type,
     keyword: item.keyword || "—",
-    createdAt: Date.now(),
+    createdAt: item.createdAt ?? Date.now(),
     status: item.status ?? "completed",
     data: item.data,
     meta: item.meta,

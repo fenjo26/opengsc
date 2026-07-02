@@ -5,7 +5,7 @@
 // pick the finished task up later from History. Completed jobs are imported into the
 // local (localStorage) History so the existing detail/render pages work unchanged.
 
-import { addHistory, HistoryItem, HistoryType } from "@/lib/seo/history";
+import { addHistory, loadHistory, HistoryItem, HistoryType } from "@/lib/seo/history";
 
 export interface SeoJobRec {
   id: string;
@@ -65,14 +65,30 @@ function safeParse(s?: string | null): any { if (!s) return undefined; try { ret
 
 // Map a completed job's result into a local History item, then drop the server copy.
 // Always removes the server job afterwards (even if unparseable) to avoid re-import loops.
+// Dedupe: a job is imported at most once — guarded against concurrent callers in this tab
+// (onDone + History page both firing) via an in-flight set, and against repeats via the
+// jobId stamped into the history record's meta.
+const importing = new Set<string>();
 export async function importJob(job: SeoJobRec): Promise<HistoryItem | null> {
   if (job.status !== "completed") return null;
-  const result = safeParse(job.result);
-  let rec: HistoryItem | null = null;
-  if (result != null) {
-    const data = job.type === "text" ? (result.text ?? result) : result;
-    rec = addHistory({ type: job.type, keyword: job.keyword || "—", data, meta: safeParse(job.meta) });
+  if (importing.has(job.id)) return null;
+  importing.add(job.id);
+  try {
+    const existing = loadHistory().find(h => h.meta?.jobId === job.id);
+    if (existing) { await deleteJob(job.id); return existing; }
+    const result = safeParse(job.result);
+    let rec: HistoryItem | null = null;
+    if (result != null) {
+      const data = job.type === "text" ? (result.text ?? result) : result;
+      const createdAt = Date.parse(job.createdAt || "") || undefined;
+      rec = addHistory({
+        type: job.type, keyword: job.keyword || "—", data, createdAt,
+        meta: { ...(safeParse(job.meta) || {}), jobId: job.id },
+      });
+    }
+    await deleteJob(job.id);
+    return rec;
+  } finally {
+    importing.delete(job.id);
   }
-  await deleteJob(job.id);
-  return rec;
 }
