@@ -150,7 +150,7 @@ export default function AnalysisPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
       {noKeys && step !== 3 && (
         <div className={card} style={{ borderColor: "rgba(255,159,10,0.35)", background: "rgba(255,159,10,0.06)", display: "flex", gap: "10px", alignItems: "center", fontSize: "13px", color: "var(--color-text-secondary)" }}>
-          <AlertTriangle size={18} color="var(--color-accent-orange)" /> {t("seoNeedKeysPrefix")} <b>{t("seoSerpProviderLabel")}</b> + <b>{t("seoAiProviderLabel")}</b>. <Link href="/settings" style={{ color: "var(--color-accent-blue)" }}>{t("seoSettingsShort")}</Link>
+          <AlertTriangle size={18} color="var(--color-accent-orange)" /> {t("seoNeedKeysPrefix")} <b>{t("seoSerpProviderLabel")}</b> + <b>{t("seoAiProviderLabel")}</b>. <Link href="/seo-tools/settings" style={{ color: "var(--color-accent-blue)" }}>{t("seoSettingsShort")}</Link>
         </div>
       )}
 

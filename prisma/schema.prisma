@@ -45,6 +45,10 @@ model User {
   sessions      Session[]
   sites         Site[]
 
+  // SEO Tools settings backup (JSON snapshot of the browser-side keys/preferences), so
+  // clearing the browser storage doesn't lose configured API keys. Accessed via raw SQL.
+  seoSettings String?
+
   // Third-party API integrations
   neuralIndexerToken String?
   xmlRiverUserId     String?

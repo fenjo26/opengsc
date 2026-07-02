@@ -3,6 +3,7 @@ import "./globals.css";
 import { LanguageProvider } from "@/lib/i18n/LanguageProvider";
 import ClientSessionProvider from "@/components/ClientSessionProvider";
 import DashboardShell from "@/components/DashboardShell";
+import SeoKeysSync from "@/components/SeoKeysSync";
 import { PrivacyProvider } from "@/lib/PrivacyContext";
 import { ThemeProvider } from "@/lib/ThemeContext";
 import { LayoutProvider } from "@/lib/LayoutContext";
@@ -28,6 +29,7 @@ export default function RootLayout({
             <LayoutProvider>
               <PrivacyProvider>
                 <LanguageProvider>
+                  <SeoKeysSync />
                   <DashboardShell>
                     {children}
                   </DashboardShell>
