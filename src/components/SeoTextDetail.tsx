@@ -138,7 +138,13 @@ export default function SeoTextDetail({ item: initial }: { item: HistoryItem }) 
             <textarea className="tool-input" style={{ minHeight: "460px", resize: "vertical", fontFamily: "monospace", fontSize: "13px" }} value={editText} onChange={e => setEditText(e.target.value)} />
           ) : (
             <div style={{ display: "flex", gap: "20px", alignItems: "flex-start" }}>
-              <div style={{ flex: 1, minWidth: 0 }} className="seo-article" dangerouslySetInnerHTML={{ __html: markdownToHtml(article) }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="seo-article" dangerouslySetInnerHTML={{ __html: markdownToHtml(article) }} />
+                {/* Back-to-top right where the reader finishes the article */}
+                <div style={{ display: "flex", justifyContent: "center", marginTop: "22px" }}>
+                  <button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} style={{ ...btnGhost, padding: "12px 28px" }}><ArrowUp size={15} /> {t("seoToTop")}</button>
+                </div>
+              </div>
               <div style={{ width: "300px", flexShrink: 0 }}>
                 <div style={{ background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "10px", padding: "16px", position: "sticky", top: "16px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "7px", marginBottom: "10px" }}>
