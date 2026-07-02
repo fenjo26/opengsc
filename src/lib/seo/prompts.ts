@@ -215,6 +215,7 @@ export function buildSectionEnrichPrompt(args: {
   tone?: string;
   persona?: string;
   narration?: "first" | "third";
+  pageGoal?: "informational" | "commercial" | "mixed";
   h1?: string;
   globalEntities?: string[];   // outline-level entity names for consistency
   ragFacts?: string;
@@ -223,6 +224,13 @@ export function buildSectionEnrichPrompt(args: {
   const voice = args.narration === "first"
     ? "первое лицо, экспертный «я»-голос (личный опыт)"
     : args.narration === "third" ? "третье лицо, нейтральный корпоративный голос" : "экспертный";
+  const goalLine = args.pageGoal === "commercial"
+    ? "\n- ЦЕЛЬ СТРАНИЦЫ: КОММЕРЧЕСКАЯ — copywriter_notes ведут читателя к целевому действию (регистрация/бонус/бронирование), подчёркивают выгоды и УТП, но сравнения честные, без обесценивания альтернатив."
+    : args.pageGoal === "informational"
+    ? "\n- ЦЕЛЬ СТРАНИЦЫ: ИНФОРМАЦИОННАЯ — copywriter_notes справочные и нейтральные, без продаж и CTA; полнота и точность важнее конверсии."
+    : args.pageGoal === "mixed"
+    ? "\n- ЦЕЛЬ СТРАНИЦЫ: СМЕШАННАЯ — информационная полнота + мягкие конверсионные вставки, CTA только там, где уместен."
+    : "";
   const ents = args.globalEntities?.length ? `\n- сущности статьи (используй эти + добавляй релевантные): ${args.globalEntities.slice(0, 25).join(", ")}` : "";
   const rag = args.ragFacts?.trim() ? `\n- ПРОВЕРЕННЫЕ ФАКТЫ ИЗ БАЗЫ ЗНАНИЙ (вплетай конкретику в summary/notes): ${args.ragFacts.trim().slice(0, 2500)}` : "";
   const slim = args.sections.map((s: any) => ({
@@ -241,7 +249,7 @@ export function buildSectionEnrichPrompt(args: {
 - "copywriter_notes": 5-7 предложений в тоне «${args.tone || "нейтральный эксперт"}»${args.persona ? ` (persona: ${args.persona})` : ""}, голос: ${voice}. ОБЯЗАТЕЛЬНО включи: (1) готовое ПЕРВОЕ ПРЕДЛОЖЕНИЕ секции на языке ${args.language} в кавычках, (2) как вплести сущности и их атрибуты, (3) формат подачи («2 абзаца + маркированный список», «нумерованные шаги», «таблица сравнения»), (4) конкретные якоря для региона ${args.country} (лиги, регуляторы, платёжки, известные продукты).
 - "entity_connections": 3-5 триплетов { "subject","predicate","object","strength": 1-10 }.
 - "visual_elements": там где уместно — [{ "type":"table|infographic|list|checklist|flowchart", "title":"", "description":"" }]; иначе пустой массив.
-- НЕ МЕНЯЙ: heading, h_level, word_count_total, word_count_self — верни их как есть.
+- НЕ МЕНЯЙ: heading, h_level, word_count_total, word_count_self — верни их как есть.${goalLine}
 - ${NO_FABRICATION}
 
 ДАНО:

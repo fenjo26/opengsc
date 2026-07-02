@@ -105,6 +105,7 @@ export function normalizeWordBudgets(outline: any, target: number): boolean {
 async function enrichOutlineSections(outline: any, ctx: {
   keyword: string; language: string; country: string; provider: string; apiKey: string;
   model?: string; baseUrl?: string; tone?: string; persona?: string; ragFacts?: string;
+  pageGoal?: "informational" | "commercial" | "mixed";
 }): Promise<boolean> {
   const sections: any[] = Array.isArray(outline?.sections) ? outline.sections : [];
   if (!sections.length) return false;
@@ -119,7 +120,7 @@ async function enrichOutlineSections(outline: any, ctx: {
     try {
       const prompt = buildSectionEnrichPrompt({
         keyword: ctx.keyword, language: ctx.language, country: ctx.country,
-        tone: ctx.tone, persona: ctx.persona,
+        tone: ctx.tone, persona: ctx.persona, pageGoal: ctx.pageGoal,
         narration: outline?.meta?.narration === "first" ? "first" : outline?.meta?.narration === "third" ? "third" : undefined,
         h1: outline?.meta?.h1, globalEntities, ragFacts: ctx.ragFacts, sections: batch.items,
       });
@@ -239,6 +240,7 @@ export async function genOutline(b: any): Promise<GenResult> {
         tone: b.tone ? String(b.tone) : undefined,
         persona: b.persona ? String(b.persona) : undefined,
         ragFacts: rag?.rendered,
+        pageGoal: b.pageGoal === "commercial" || b.pageGoal === "informational" ? b.pageGoal : "mixed",
       });
       if (ok) (outline as any)._enriched = true;
     } catch { /* enrichment is best-effort */ }
