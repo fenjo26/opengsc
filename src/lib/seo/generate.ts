@@ -7,7 +7,7 @@ import { scrapeMany } from "@/lib/seo/scrape";
 import {
   buildOutlinePrompt, buildTextPrompt, buildAnalysisPrompt, buildFactScrubPrompt, buildSourceExtractPrompt,
   buildAutoFactCleanPrompt, buildWireframePrompt, buildSectionEnrichPrompt, buildStructureExpandPrompt,
-  buildHeadingLocalizePrompt, enforceLinkPolicy, redactBannedWords, extractJson, CompetitorInput,
+  buildHeadingLocalizePrompt, buildTextExpandPrompt, enforceLinkPolicy, redactBannedWords, extractJson, CompetitorInput,
 } from "@/lib/seo/prompts";
 import { findRagFacts } from "@/lib/seo/rag";
 
@@ -552,6 +552,31 @@ export async function genText(b: any): Promise<GenResult> {
   if (b.hardRedact) { const r = redactBannedWords(text, banned); text = r.text; redacted = r.count; }
 
   text = stripForeignScripts(text, String(b.language ?? "en"));
+
+  // VOLUME guard (default on): models routinely undershoot the budget. If the article came
+  // out below ~82% of the target, run one expansion pass that thickens thin sections with
+  // substance (prose, not lists) while preserving structure. Off with expandText:false.
+  const finalTargetWc = Number(b.targetWordCount) || Number(slimOutline.meta?.target_word_count) || 0;
+  if (b.expandText !== false && finalTargetWc >= 500) {
+    const words = text.split(/\s+/).filter(Boolean).length;
+    if (words < finalTargetWc * 0.82) {
+      try {
+        let expanded = await fetchLLM(
+          buildTextExpandPrompt({ article: text, targetWords: finalTargetWc, currentWords: words, language: String(b.language ?? "en") }),
+          provider, apiKey, 14000, model, baseUrl,
+        );
+        if (expanded) {
+          expanded = expanded.trim().replace(/^```(?:markdown|md)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+          const newWords = expanded.split(/\s+/).filter(Boolean).length;
+          // Accept only a real improvement that didn't mangle the structure (same H2 count ±1).
+          const h2 = (s: string) => (s.match(/^##\s/gm) || []).length;
+          if (newWords > words * 1.1 && Math.abs(h2(expanded) - h2(text)) <= 1) {
+            text = stripForeignScripts(expanded, String(b.language ?? "en"));
+          }
+        }
+      } catch { /* expansion is best-effort */ }
+    }
+  }
 
   // AUTO fact-clean: verify the finished article against the facts bank and fix contradictions /
   // fabrications / number mismatches in one pass — so the article ships clean (fact-check then just
