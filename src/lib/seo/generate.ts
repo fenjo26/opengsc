@@ -205,6 +205,8 @@ async function localizeOutlineHeadings(outline: any, ctx: {
     keyword: ctx.keyword, language: ctx.language, country: ctx.country,
     narration: outline?.meta?.narration === "first" ? "first" : outline?.meta?.narration === "third" ? "third" : undefined,
     pageGoal: ctx.pageGoal, h1: outline?.meta?.h1,
+    titleOptions: Array.isArray(outline?.meta?.title_options) ? outline.meta.title_options : undefined,
+    descriptionOptions: Array.isArray(outline?.meta?.description_options) ? outline.meta.description_options : undefined,
     headings: sections.map((s: any) => ({ h_level: s.h_level, heading: s.heading })),
   });
   const raw = await fetchLLM(prompt, ctx.provider, ctx.apiKey, 3000, ctx.model, ctx.baseUrl);
@@ -231,6 +233,11 @@ async function localizeOutlineHeadings(outline: any, ctx: {
     (outline.meta ||= {}).h1 = newH1;
     changed = true;
   }
+  // Localized meta tags (Title/Description) — applied only when the model returned non-empty ones.
+  const titles = (Array.isArray(parsed.title_options) ? parsed.title_options : []).map((x: any) => String(x || "").trim()).filter(Boolean);
+  if (titles.length) { (outline.meta ||= {}).title_options = titles; changed = true; }
+  const descs = (Array.isArray(parsed.description_options) ? parsed.description_options : []).map((x: any) => String(x || "").trim()).filter(Boolean);
+  if (descs.length) { (outline.meta ||= {}).description_options = descs; changed = true; }
   return changed;
 }
 

@@ -245,6 +245,8 @@ export function buildHeadingLocalizePrompt(args: {
   narration?: "first" | "third";
   pageGoal?: "informational" | "commercial" | "mixed";
   h1?: string;
+  titleOptions?: string[];
+  descriptionOptions?: string[];
   headings: { h_level: string; heading: string }[];
 }): string {
   const voice = args.narration === "first"
@@ -259,11 +261,15 @@ export function buildHeadingLocalizePrompt(args: {
 - НЕ меняй порядок, НЕ добавляй и НЕ удаляй секции. Одно переименование на заголовок. Без дублей.
 - "from" — ТОЧНАЯ текущая формулировка заголовка.
 
+- МЕТА-ТЕГИ: если Title/Description ниже не на языке ${args.language} — перепиши их на языке ${args.language} по правилам выдачи: Title 50-60 символов, главный ключ в начале, бренд в конце через « | »; Description ~150-155 символов, ценность + конкретика + CTA (для коммерческих). Если уже на языке и хороши — верни пустые массивы.
+
 H1 СЕЙЧАС: ${args.h1 || "—"}
+TITLE СЕЙЧАС: ${JSON.stringify(args.titleOptions || [])}
+DESCRIPTION СЕЙЧАС: ${JSON.stringify(args.descriptionOptions || [])}
 ЗАГОЛОВКИ: ${JSON.stringify(args.headings)}
 
 ВЕРНИ JSON строго по схеме:
-{ "h1": "новый H1 на языке ${args.language} (или текущий, если он уже хорош)", "renames": [ { "from": "", "to": "" } ] }`;
+{ "h1": "новый H1 на языке ${args.language} (или текущий, если он уже хорош)", "title_options": ["", ""], "description_options": ["", ""], "renames": [ { "from": "", "to": "" } ] }`;
 }
 
 // ─── Section enrichment (2nd pass): deepen each section's EAV detail in small batches ──
