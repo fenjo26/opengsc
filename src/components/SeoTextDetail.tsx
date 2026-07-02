@@ -147,7 +147,7 @@ export default function SeoTextDetail({ item: initial }: { item: HistoryItem }) 
                     <span style={{ marginLeft: "auto", fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "10px", background: "var(--color-bg)", color: "var(--color-text-secondary)" }}>{artHeadings.length}</span>
                   </div>
                   <button onClick={copyHeadings} style={{ ...btnGhost, width: "100%", justifyContent: "center", marginBottom: "10px", ...copiedStyle(copied === "hd") }}>{copied === "hd" ? <Check size={13} /> : <Copy size={13} />} {copied === "hd" ? t("seoCopied") : t("seoCopyAllHeadings")}</button>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "360px", overflow: "auto", borderTop: "1px solid var(--color-border)", paddingTop: "10px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "calc(100vh - 230px)", overflow: "auto", borderTop: "1px solid var(--color-border)", paddingTop: "10px" }}>
                     {artHeadings.map((h, i) => (
                       <div key={i} style={{ display: "flex", gap: "8px", alignItems: "flex-start", paddingLeft: h.level === "H3" ? "14px" : h.level === "H4" ? "26px" : 0 }}>
                         <span style={{ fontSize: "9px", fontWeight: 700, padding: "2px 5px", borderRadius: "4px", flexShrink: 0, background: h.level === "H1" ? "var(--color-bg)" : h.level === "H2" ? "rgba(41,151,255,0.12)" : "rgba(52,199,89,0.14)", color: h.level === "H1" ? "var(--color-text-secondary)" : h.level === "H2" ? "var(--color-accent-blue)" : "var(--color-accent-green)" }}>{h.level}</span>

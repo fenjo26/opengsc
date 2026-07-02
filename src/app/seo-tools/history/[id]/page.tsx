@@ -182,11 +182,13 @@ export default function TaskDetailPage() {
                     <span style={{ marginLeft: "auto", fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "10px", background: "var(--color-bg)", color: "var(--color-text-secondary)" }}>{headings.length}</span>
                   </div>
                   <button onClick={copyHeadings} style={{ ...btnGhost, width: "100%", justifyContent: "center", marginBottom: "10px" }}>{copied === "headings" ? <Check size={13} /> : <Copy size={13} />} {t("seoCopyAllHeadings")}</button>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "320px", overflow: "auto", borderTop: "1px solid var(--color-border)", paddingTop: "10px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", borderTop: "1px solid var(--color-border)", paddingTop: "10px" }}>
                     {headings.map((h, i) => (
                       <div key={i} style={{ display: "flex", gap: "8px", alignItems: "flex-start", paddingLeft: h.level === "H3" ? "16px" : h.level === "H4" ? "28px" : 0 }}>
-                        <span style={{ fontSize: "9px", fontWeight: 700, padding: "2px 5px", borderRadius: "4px", background: "var(--color-bg)", color: "var(--color-text-secondary)", flexShrink: 0 }}>{h.level}</span>
-                        <span style={{ fontSize: "12px", color: "var(--color-text-primary)", lineHeight: 1.4 }}>{h.text}</span>
+                        <span style={{ fontSize: "9px", fontWeight: 700, padding: "2px 5px", borderRadius: "4px", flexShrink: 0,
+                          background: h.level === "H1" ? "var(--color-bg)" : h.level === "H2" ? "rgba(41,151,255,0.12)" : "rgba(52,199,89,0.14)",
+                          color: h.level === "H1" ? "var(--color-text-secondary)" : h.level === "H2" ? "var(--color-accent-blue)" : "var(--color-accent-green)" }}>{h.level}</span>
+                        <span style={{ fontSize: "12px", color: h.level === "H3" || h.level === "H4" ? "var(--color-text-secondary)" : "var(--color-text-primary)", lineHeight: 1.4, fontWeight: h.level === "H1" ? 700 : h.level === "H2" ? 600 : 400 }}>{h.text}</span>
                       </div>
                     ))}
                   </div>
