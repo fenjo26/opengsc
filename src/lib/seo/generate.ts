@@ -82,17 +82,40 @@ function toWcRange(v: any): [number, number] | null {
 }
 export function normalizeWordBudgets(outline: any, target: number): boolean {
   if (!target || !Array.isArray(outline?.sections) || !outline.sections.length) return false;
-  const ranges = outline.sections.map((s: any) => toWcRange(s?.word_count_total));
-  const sum = ranges.reduce((acc: number, r: [number, number] | null) => acc + (r ? (r[0] + r[1]) / 2 : 0), 0);
+  const secs: any[] = outline.sections;
+  const depth = (s: any) => (s?.h_level === "H4" ? 4 : s?.h_level === "H3" ? 3 : 2);
+  // A parent's word_count_total conventionally INCLUDES its subsections, so summing totals
+  // across all sections double-counts. Sum each section's OWN contribution instead:
+  // childless section → total; parent → self (its intro paragraphs).
+  const hasKids = (i: number) => i + 1 < secs.length && depth(secs[i + 1]) > depth(secs[i]);
+  const own = secs.map((s: any, i: number) => {
+    const total = toWcRange(s?.word_count_total);
+    const self = toWcRange(s?.word_count_self);
+    return hasKids(i) ? (self || (total ? [Math.round(total[0] * 0.3), Math.round(total[1] * 0.3)] as [number, number] : null)) : (total || self);
+  });
+  const sum = own.reduce((acc: number, r: [number, number] | null) => acc + (r ? (r[0] + r[1]) / 2 : 0), 0);
   if (!sum) return false;
   const k = target / sum;
-  if (k > 0.7 && k < 1.25) return false; // close enough — keep the model's distribution
-  for (let i = 0; i < outline.sections.length; i++) {
-    const s = outline.sections[i]; const r = ranges[i];
-    if (!s || !r) continue;
-    s.word_count_total = [Math.round(r[0] * k), Math.round(r[1] * k)];
-    const self = toWcRange(s.word_count_self);
-    if (self) s.word_count_self = [Math.round(self[0] * k), Math.round(self[1] * k)];
+  if (k > 0.85 && k < 1.15) return false; // close enough — keep the model's distribution
+  // Scale every section's OWN budget…
+  for (let i = 0; i < secs.length; i++) {
+    const r = own[i]; if (!secs[i] || !r) continue;
+    const scaled: [number, number] = [Math.round(r[0] * k), Math.round(r[1] * k)];
+    secs[i].word_count_self = scaled;
+    if (!hasKids(i)) secs[i].word_count_total = scaled;
+  }
+  // …then rebuild parents' totals as self + descendants' totals (bottom-up).
+  for (let i = secs.length - 1; i >= 0; i--) {
+    if (!hasKids(i)) continue;
+    const self = toWcRange(secs[i].word_count_self) || [0, 0];
+    let lo = self[0], hi = self[1];
+    for (let j = i + 1; j < secs.length && depth(secs[j]) > depth(secs[i]); j++) {
+      if (depth(secs[j]) === depth(secs[i]) + 1) {
+        const t = toWcRange(secs[j].word_count_total);
+        if (t) { lo += t[0]; hi += t[1]; }
+      }
+    }
+    secs[i].word_count_total = [lo, hi];
   }
   return true;
 }
