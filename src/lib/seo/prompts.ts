@@ -203,6 +203,36 @@ export function buildOutlinePrompt(args: {
 }`;
 }
 
+// ─── Structure expansion: propose extra H3s under thin H2s (template mode & flat outlines) ──
+// Models are conservative with user templates and often return the bare skeleton. This pass
+// asks ONLY for insertions (new H3s under existing H2s), which we merge deterministically —
+// so template headings are never touched, but depth matches reference-grade outlines.
+export function buildStructureExpandPrompt(args: {
+  keyword: string;
+  language: string;
+  country: string;
+  pageGoal?: "informational" | "commercial" | "mixed";
+  paa?: string[];
+  sections: { h_level: string; heading: string }[];
+}): string {
+  const goal = args.pageGoal === "commercial" ? "коммерческая (конверсионная)" : args.pageGoal === "informational" ? "информационная (справочная)" : "смешанная";
+  const paa = args.paa?.length ? `\n- вопросы пользователей из выдачи (покрой релевантные новыми H3): ${JSON.stringify(args.paa.slice(0, 10))}` : "";
+  return `Ты — SEO-стратег. Ниже структура статьи по теме "${args.keyword}" (язык ${args.language}, регион ${args.country}, цель страницы: ${goal}). Она слишком ПЛОСКАЯ — крупным H2 не хватает H3-подсекций, покрывающих реальные под-интенты пользователей. Предложи ДОПОЛНИТЕЛЬНЫЕ H3 (только вставки — существующие заголовки НЕ трогай, НЕ переименовывай, НЕ переставляй). Верни СТРОГИЙ JSON без преамбулы и markdown-обёрток.
+
+ПРАВИЛА:
+- Для КАЖДОГО содержательного H2, у которого меньше 2 своих H3, предложи 2-4 новых H3 (для мелких/служебных H2 вроде FAQ/поддержки — можно 0-1 или пропустить).
+- H3 — конкретные под-интенты: типы/варианты/шаги/сравнения/условия (напр. для секции ставок: «Ставки Live и стриминг», «Комбинированные ставки (Build-a-Bet)», «Ставки на игроков (props)»; для казино: «Джекпоты и настольные игры», «Демо-режим»; для бонусов: «Условия отыгрыша (wagering)»).
+- Заголовки — на языке ${args.language}, с НЧ-ключами, без дублей существующих.
+- "after_heading" — ТОЧНЫЙ текст существующего H2, под который вставить.
+- word_count_total для нового H3: [80, 160].
+- Суммарно добавь 8-16 H3 по всей статье. НЕ добавляй новых H2.
+
+СТРУКТУРА СЕЙЧАС: ${JSON.stringify(args.sections)}${paa}
+
+ВЕРНИ JSON строго по схеме:
+{ "insertions": [ { "after_heading": "точный H2", "sections": [ { "h_level": "H3", "heading": "", "word_count_total": [80,160], "summary": "1-2 предложения — что раскрыть" } ] } ] }`;
+}
+
 // ─── Section enrichment (2nd pass): deepen each section's EAV detail in small batches ──
 // A single outline call compresses per-section detail when there are 15-30 sections (token
 // budget). This pass re-processes sections in batches of ~5 parallel calls, so every section
@@ -249,6 +279,7 @@ export function buildSectionEnrichPrompt(args: {
 - "copywriter_notes": 5-7 предложений в тоне «${args.tone || "нейтральный эксперт"}»${args.persona ? ` (persona: ${args.persona})` : ""}, голос: ${voice}. ОБЯЗАТЕЛЬНО включи: (1) готовое ПЕРВОЕ ПРЕДЛОЖЕНИЕ секции на языке ${args.language} в кавычках, (2) как вплести сущности и их атрибуты, (3) формат подачи («2 абзаца + маркированный список», «нумерованные шаги», «таблица сравнения»), (4) конкретные якоря для региона ${args.country} (лиги, регуляторы, платёжки, известные продукты).
 - "entity_connections": 3-5 триплетов { "subject","predicate","object","strength": 1-10 }.
 - "visual_elements": там где уместно — [{ "type":"table|infographic|list|checklist|flowchart", "title":"", "description":"" }]; иначе пустой массив.
+- ЯЗЫКИ (строго): "summary" и "copywriter_notes" — на РУССКОМ (это инструкции копирайтеру); готовое первое предложение внутри notes и все "keywords" — на языке статьи (${args.language}). Не смешивай языки внутри одного поля.
 - НЕ МЕНЯЙ: heading, h_level, word_count_total, word_count_self — верни их как есть.${goalLine}
 - ${NO_FABRICATION}
 

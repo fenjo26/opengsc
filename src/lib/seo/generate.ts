@@ -6,7 +6,7 @@ import { runSerp } from "@/lib/seo/serp";
 import { scrapeMany } from "@/lib/seo/scrape";
 import {
   buildOutlinePrompt, buildTextPrompt, buildAnalysisPrompt, buildFactScrubPrompt, buildSourceExtractPrompt,
-  buildAutoFactCleanPrompt, buildWireframePrompt, buildSectionEnrichPrompt, enforceLinkPolicy, redactBannedWords, extractJson, CompetitorInput,
+  buildAutoFactCleanPrompt, buildWireframePrompt, buildSectionEnrichPrompt, buildStructureExpandPrompt, enforceLinkPolicy, redactBannedWords, extractJson, CompetitorInput,
 } from "@/lib/seo/prompts";
 import { findRagFacts } from "@/lib/seo/rag";
 
@@ -95,6 +95,64 @@ export function normalizeWordBudgets(outline: any, target: number): boolean {
     if (self) s.word_count_self = [Math.round(self[0] * k), Math.round(self[1] * k)];
   }
   return true;
+}
+
+// ─── Structure-expansion pass: deterministically graft model-proposed H3s under thin H2s ──
+// Runs when the outline is flat (H2s with <2 child H3s) — typical with user templates, where
+// models are too conservative to add their own subsections despite instructions.
+async function expandOutlineStructure(outline: any, ctx: {
+  keyword: string; language: string; country: string; provider: string; apiKey: string;
+  model?: string; baseUrl?: string; pageGoal?: "informational" | "commercial" | "mixed"; paa?: string[];
+}): Promise<boolean> {
+  const sections: any[] = Array.isArray(outline?.sections) ? outline.sections : [];
+  if (!sections.length || sections.length >= 26) return false;
+  // Count H3 children per H2; skip expansion when the outline is already deep.
+  let thinH2 = 0, h2Count = 0;
+  for (let i = 0; i < sections.length; i++) {
+    if (sections[i]?.h_level !== "H2") continue;
+    h2Count++;
+    let kids = 0;
+    for (let j = i + 1; j < sections.length && sections[j]?.h_level !== "H2"; j++) kids++;
+    if (kids < 2) thinH2++;
+  }
+  if (!h2Count || thinH2 < Math.ceil(h2Count / 2)) return false;
+
+  const prompt = buildStructureExpandPrompt({
+    keyword: ctx.keyword, language: ctx.language, country: ctx.country,
+    pageGoal: ctx.pageGoal, paa: ctx.paa,
+    sections: sections.map((s: any) => ({ h_level: s.h_level, heading: s.heading })),
+  });
+  const raw = await fetchLLM(prompt, ctx.provider, ctx.apiKey, 4000, ctx.model, ctx.baseUrl);
+  const parsed: any = extractJson(raw);
+  const insertions: any[] = Array.isArray(parsed?.insertions) ? parsed.insertions : [];
+  if (!insertions.length) return false;
+
+  const have = new Set(sections.map((s: any) => String(s.heading || "").trim().toLowerCase()));
+  let added = 0;
+  for (const ins of insertions) {
+    const anchor = String(ins?.after_heading || "").trim().toLowerCase();
+    const idx = sections.findIndex((s: any) => String(s.heading || "").trim().toLowerCase() === anchor && s.h_level === "H2");
+    if (idx === -1) continue;
+    // Insert AFTER the anchor H2's existing H3 block (i.e. right before the next H2).
+    let at = idx + 1;
+    while (at < sections.length && sections[at]?.h_level !== "H2") at++;
+    const newbies = (Array.isArray(ins.sections) ? ins.sections : [])
+      .filter((n: any) => n?.heading && !have.has(String(n.heading).trim().toLowerCase()))
+      .slice(0, 4)
+      .map((n: any) => ({
+        h_level: "H3", heading: String(n.heading).trim(),
+        word_count_total: toWcRange(n.word_count_total) || [80, 160],
+        word_count_self: toWcRange(n.word_count_total) || [80, 160],
+        entities_to_cover: [], keywords: [], summary: String(n.summary || ""),
+        visual_elements: [], copywriter_notes: "", entity_connections: [],
+        needs_real_experience: false,
+      }));
+    newbies.forEach((n: any) => have.add(n.heading.trim().toLowerCase()));
+    sections.splice(at, 0, ...newbies);
+    added += newbies.length;
+    if (sections.length >= 34) break;
+  }
+  return added > 0;
 }
 
 // ─── Section-enrichment pass: deepen per-section EAV detail in parallel batches ────
@@ -221,6 +279,21 @@ export async function genOutline(b: any): Promise<GenResult> {
   meta.language = String(b.language ?? "en");
   if (b.narration === "first" || b.narration === "third") meta.narration = b.narration;
   if (b.structureRules && String(b.structureRules).trim()) meta.structureRules = String(b.structureRules).trim();
+  // EXPAND pass (default on): if the outline is flat (most H2s have <2 child H3s — typical
+  // with user templates), graft model-proposed H3 subsections deterministically. Runs BEFORE
+  // the volume guard so budgets are redistributed across the new sections too. Off with expand:false.
+  if (b.expand !== false) {
+    try {
+      const grown = await expandOutlineStructure(outline, {
+        keyword, language: String(b.language ?? "en"), country: String(b.country ?? "us"),
+        provider, apiKey, model, baseUrl,
+        pageGoal: b.pageGoal === "commercial" || b.pageGoal === "informational" ? b.pageGoal : "mixed",
+        paa: Array.isArray(b.paa) ? b.paa : undefined,
+      });
+      if (grown) (outline as any)._expanded = true;
+    } catch { /* expansion is best-effort */ }
+  }
+
   // Volume guard: stamp the requested target and rescale section budgets if the model
   // under-budgeted them (e.g. copied the schema's example numbers into every section).
   const targetWc = Number(b.targetWordCount) || Number(meta.target_word_count) || 0;
