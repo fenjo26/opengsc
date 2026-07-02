@@ -56,7 +56,10 @@ export default function TextGenPage() {
   const stSafePage = Math.min(stPage, stTotalPages - 1);
   const pageOutlines = filteredOutlines.slice(stSafePage * PER, stSafePage * PER + PER);
 
-  const ai = typeof window !== "undefined" ? getSeoGenCreds() : { provider: "", apiKey: "", model: "" };
+  // Read after mount only — SSR/first-render mismatch causes React #418.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+  const ai = mounted ? getSeoGenCreds() : { provider: "", apiKey: "", model: "" };
 
   const textHistory = useMemo(() => {
     let list = history.filter(h => h.type === "text");

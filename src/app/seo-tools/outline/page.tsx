@@ -95,9 +95,13 @@ export default function OutlinePage() {
   const [outline, setOutline] = useState<any>(null);
   const [article, setArticle] = useState("");
 
-  const ai = typeof window !== "undefined" ? getSeoGenCreds() : { provider: "", apiKey: "", model: "" };
-  const serpCreds = typeof window !== "undefined" ? getSerpCreds() : { provider: "", apiKey: "" };
-  const activePolicy = typeof window !== "undefined" ? (loadPolicies().find(p => p.name === getActivePolicyName()) || loadPolicies()[0]) : null;
+  // localStorage-derived values must not differ between SSR and first client render
+  // (React #418 hydration mismatch) — read them only after mount.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+  const ai = mounted ? getSeoGenCreds() : { provider: "", apiKey: "", model: "" };
+  const serpCreds = mounted ? getSerpCreds() : { provider: "", apiKey: "" };
+  const activePolicy = mounted ? (loadPolicies().find(p => p.name === getActivePolicyName()) || loadPolicies()[0]) : null;
 
   const resolveTone = () => tone === "custom" ? customTone
     : tone ? toneToPrompt(tone)

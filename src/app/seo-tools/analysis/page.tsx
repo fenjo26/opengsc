@@ -44,8 +44,11 @@ export default function AnalysisPage() {
   const [anJobId, setAnJobId] = useState<string | null>(null);
   const timer = useRef<any>(null);
 
-  const serpCreds = typeof window !== "undefined" ? getSerpCreds() : { provider: "", apiKey: "" };
-  const ai = typeof window !== "undefined" ? getSeoGenCreds() : { provider: "", apiKey: "", model: "" };
+  // Read after mount only — SSR/first-render mismatch causes React #418.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+  const serpCreds = mounted ? getSerpCreds() : { provider: "", apiKey: "" };
+  const ai = mounted ? getSeoGenCreds() : { provider: "", apiKey: "", model: "" };
   const noKeys = !serpCreds.apiKey || !ai.apiKey;
 
   useEffect(() => {
