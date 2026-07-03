@@ -419,7 +419,10 @@ export async function genOutline(b: any): Promise<GenResult> {
   }
   if (targetWc > 0) {
     meta.target_word_count = targetWc;
-    if (normalizeWordBudgets(outline, targetWc)) (outline as any)._wc_rescaled = true;
+    // FAQ answers are written ON TOP of the sections — reserve their words (~50/question)
+    // out of the section budgets, reference-tool style ("Available for Content").
+    const faqReserve = Math.min(Math.round(targetWc * 0.25), (Array.isArray((outline as any).faq) ? (outline as any).faq.length : 0) * 50);
+    if (normalizeWordBudgets(outline, Math.max(300, targetWc - faqReserve))) (outline as any)._wc_rescaled = true;
   }
 
   // ENRICH pass (default on): deepen every section's EAV detail in parallel batches —
@@ -555,7 +558,31 @@ async function writeTextInChunks(outline: any, ctx: {
     });
     const raw = await fetchLLM(prompt, ctx.provider, ctx.apiKey, 6000, ctx.model, ctx.baseUrl);
     if (!raw) return;
-    const md = raw.trim().replace(/^```(?:markdown|md)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+    let md = raw.trim().replace(/^```(?:markdown|md)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+    // Models sometimes prefix a stray H1 / meta block despite instructions — strip anything
+    // before the first H2/H3 (the assembler owns H1, TOC and meta).
+    const firstH = md.search(/^#{2,3}\s/m);
+    if (firstH > 0) md = md.slice(firstH);
+    // Per-chunk volume guard: a small chunk trims reliably (unlike a whole article). If the
+    // chunk overshot its summed budget by >25%, one scoped trim pass brings it back.
+    // The last chunk also carries the FAQ (~55 words/question) — include that in its allowance
+    // so the scoped trim doesn't squeeze the sections to make room for FAQ.
+    const hiEff = hi + (i === chunks.length - 1 ? faq.length * 55 : 0);
+    const cw = md.split(/\s+/).filter(Boolean).length;
+    if (hiEff > 0 && cw > hiEff * 1.25) {
+      try {
+        const cut = await fetchLLM(
+          buildTextTrimPrompt({ article: md, targetWords: Math.round((lo + hi) / 2), currentWords: cw, language: ctx.language }),
+          ctx.provider, ctx.apiKey, 6000, ctx.model, ctx.baseUrl,
+        );
+        if (cut) {
+          const cmd = cut.trim().replace(/^```(?:markdown|md)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+          const nw = cmd.split(/\s+/).filter(Boolean).length;
+          const heads = (s: string) => (s.match(/^#{2,3}\s/gm) || []).length;
+          if (nw < cw * 0.95 && heads(cmd) === heads(md)) md = cmd;
+        }
+      } catch { /* keep the long version */ }
+    }
     // Sanity: the chunk must contain at least its first section heading.
     const first = String(c[0]?.heading || "").trim();
     if (first && md.toLowerCase().includes(first.slice(0, Math.min(30, first.length)).toLowerCase())) parts[i] = md;
@@ -629,7 +656,8 @@ export async function genText(b: any): Promise<GenResult> {
   // silently capped at a fraction of the plan. Implausibly small targets (junk emitted
   // by the model into meta) are ignored rather than shrinking a healthy outline.
   const textTargetWc = Number(b.targetWordCount) || Number(metaSlim?.target_word_count) || 0;
-  if (textTargetWc >= 500) normalizeWordBudgets(slimOutline, textTargetWc);
+  const textFaqReserve = Math.min(Math.round(textTargetWc * 0.25), (Array.isArray(slimOutline.faq) ? slimOutline.faq.length : 0) * 50);
+  if (textTargetWc >= 500) normalizeWordBudgets(slimOutline, Math.max(300, textTargetWc - textFaqReserve));
   else if (textTargetWc > 0) (slimOutline.meta as any).target_word_count = ownBudgetSum(slimOutline) || textTargetWc;
 
   // Casino RAG: re-retrieve knowledge-base facts for the text step (fresh + full-length),
