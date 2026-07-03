@@ -559,7 +559,7 @@ async function writeTextInChunks(outline: any, ctx: {
 
   const allHeadings = specs.map((s: any) => ({ h_level: s.h_level, heading: s.heading }));
   const faq = Array.isArray(outline.faq) ? outline.faq : [];
-  const verdictRe = /verdict|вердикт|итог|conclusion|заключение|avis final|final/i;
+  const verdictRe = /verdict|вердикт|итог|conclusion|заключение|avis final|final|raisons|choisir|pourquoi|почему|avantages|преимуществ/i;
 
   const parts: (string | null)[] = new Array(chunks.length).fill(null);
   await runPool(chunks.map((c, i) => ({ c, i })), 2, async ({ c, i }) => {
@@ -741,7 +741,7 @@ export async function genText(b: any): Promise<GenResult> {
   if (b.expandText !== false && finalTargetWc >= 500) {
     const words = text.split(/\s+/).filter(Boolean).length;
     const h2 = (s: string) => (s.match(/^##\s/gm) || []).length;
-    if (words < finalTargetWc * 0.82) {
+    if (words < finalTargetWc * 0.85) {
       try {
         let expanded = await fetchLLM(
           buildTextExpandPrompt({ article: text, targetWords: finalTargetWc, currentWords: words, language: String(b.language ?? "en") }),
