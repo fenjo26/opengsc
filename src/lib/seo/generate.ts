@@ -488,13 +488,39 @@ async function writeTextInChunks(outline: any, ctx: {
   // total includes its children — passing both made models write the intro at full total
   // AND the children at theirs, overshooting the article by ~35-40%).
   const own = ownRanges(secs);
-  const specs = secs.map((s: any, i: number) => ({
+  const specs: any[] = secs.map((s: any, i: number) => ({
     h_level: s.h_level, heading: s.heading,
     word_count: own[i] || [60, 100],
     entities_to_cover: s.entities_to_cover, keywords: s.keywords, summary: s.summary,
     copywriter_notes: s.copywriter_notes, entity_connections: s.entity_connections,
     visual_elements: s.visual_elements, needs_real_experience: s.needs_real_experience,
   }));
+
+  // EDITORIAL FOLDING (reference-tool behavior): the outline is a research artifact — the
+  // article doesn't have to render every H3 as a heading. When the outline has more sections
+  // than the word target supports (~100 words/heading), the THINNEST H3s are folded into
+  // their parent as subtopics covered in prose, so headings stay meaty and volume converges.
+  const foldTarget = Number(meta.target_word_count) || 0;
+  const maxRender = foldTarget >= 500 ? Math.max(10, Math.min(34, Math.round(foldTarget / 100))) : specs.length;
+  if (specs.length > maxRender) {
+    const h3idx = specs.map((s, i) => ({ s, i })).filter(x => x.s.h_level !== "H2");
+    h3idx.sort((a, b) => (a.s.word_count?.[1] || 0) - (b.s.word_count?.[1] || 0));
+    const toFold = new Set(h3idx.slice(0, specs.length - maxRender).map(x => x.i));
+    for (let i = specs.length - 1; i >= 0; i--) {
+      if (!toFold.has(i)) continue;
+      let p = i - 1;
+      while (p >= 0 && toFold.has(p)) p--;
+      if (p < 0) continue;
+      const s = specs[i], parent = specs[p];
+      (parent.subtopics ||= []).unshift({ topic: s.heading, summary: s.summary, keywords: s.keywords });
+      parent.word_count = [
+        (parent.word_count?.[0] || 0) + (s.word_count?.[0] || 0),
+        (parent.word_count?.[1] || 0) + (s.word_count?.[1] || 0),
+      ];
+      if (Array.isArray(s.visual_elements) && s.visual_elements.length && !(parent.visual_elements || []).length) parent.visual_elements = s.visual_elements;
+      specs.splice(i, 1);
+    }
+  }
 
   // Units = H2 with its H3 children (never split a unit across chunks).
   const units: any[][] = [];
@@ -510,7 +536,7 @@ async function writeTextInChunks(outline: any, ctx: {
     else chunks.push([...u]);
   }
 
-  const allHeadings = secs.map((s: any) => ({ h_level: s.h_level, heading: s.heading }));
+  const allHeadings = specs.map((s: any) => ({ h_level: s.h_level, heading: s.heading }));
   const faq = Array.isArray(outline.faq) ? outline.faq : [];
   const verdictRe = /verdict|вердикт|итог|conclusion|заключение|avis final|final/i;
 
