@@ -525,21 +525,25 @@ async function writeTextInChunks(outline: any, ctx: {
     }
   }
 
-  // TABLE floor (reference-tool parity: 2-4 tables per article). If the outline didn't mark
-  // any table visual_elements, assign them to the most table-natural sections by heading.
+  // TABLE budget: exactly 1-2 tables per article, never one per section. Keep at most the
+  // first 2 table-marked specs (older outlines over-mark), and if none is marked — assign
+  // ONE to the most table-natural section by heading.
   const hasTableVe = (s: any) => (Array.isArray(s.visual_elements) ? s.visual_elements : [])
     .some((v: any) => typeof v === "object" ? /table/i.test(String(v?.type || "")) : /table|таблиц/i.test(String(v)));
-  if (!specs.some(hasTableVe)) {
-    const tabular = /bonus|бонус|payment|paiement|paie|dépôt|deposit|депозит|retrait|withdraw|вывод|метод|cotes|коэффициент|odds|rtp|provider|провайдер|logiciel|jeux|games|слот|slot|сравн|compar|таблиц|limit|лимит/i;
-    let assigned = 0;
-    for (const s of specs) {
-      if (assigned >= 3) break;
-      if (tabular.test(String(s.heading || ""))) {
-        s.visual_elements = [{ type: "table", title: "", description: "сводная таблица по данным секции (только реальные значения из спеки/базы знаний/источников)" }];
-        assigned++;
-      }
-    }
+  let tablesKept = 0;
+  for (const s of specs) {
+    if (!hasTableVe(s)) continue;
+    tablesKept++;
+    if (tablesKept > 2) s.visual_elements = []; // strip extras — no table spam
   }
+  if (tablesKept === 0) {
+    const tabular = /bonus|бонус|payment|paiement|paie|dépôt|deposit|депозит|retrait|withdraw|вывод|метод|cotes|коэффициент|odds|rtp|provider|провайдер|logiciel|jeux|games|слот|slot|сравн|compar|таблиц|limit|лимит/i;
+    const pick = specs.find(s => tabular.test(String(s.heading || "")));
+    if (pick) pick.visual_elements = [{ type: "table", title: "", description: "сводная таблица по данным секции (только реальные значения из спеки/базы знаний/источников)" }];
+  }
+
+  // LIST budget: ONE list per article — only the chunk with a procedural section may use it.
+  const proceduralRe = /inscri|регистрац|register|étape|шаг|s'inscrire|how to|comment|guide.*étape|verif|vérif|документ/i;
 
   // Units = H2 with its H3 children (never split a unit across chunks).
   const units: any[][] = [];
@@ -570,6 +574,7 @@ async function writeTextInChunks(outline: any, ctx: {
       faq: i === chunks.length - 1 ? faq : undefined,
       ragFacts: ctx.ragFacts, sources: ctx.sources, sourceMode: ctx.sourceMode,
       isVerdictChunk: c.some((s: any) => verdictRe.test(String(s.heading || ""))),
+      allowList: chunks.findIndex(ch => ch.some((s: any) => proceduralRe.test(String(s.heading || "")))) === i,
       chunkBudget: hi > 0 ? [lo, hi] : undefined,
     });
     const raw = await fetchLLM(prompt, ctx.provider, ctx.apiKey, 6000, ctx.model, ctx.baseUrl);
