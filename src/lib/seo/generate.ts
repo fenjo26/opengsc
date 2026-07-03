@@ -7,7 +7,8 @@ import { scrapeMany } from "@/lib/seo/scrape";
 import {
   buildOutlinePrompt, buildTextPrompt, buildAnalysisPrompt, buildFactScrubPrompt, buildSourceExtractPrompt,
   buildAutoFactCleanPrompt, buildWireframePrompt, buildSectionEnrichPrompt, buildStructureExpandPrompt,
-  buildHeadingLocalizePrompt, buildTextExpandPrompt, buildTextTrimPrompt, enforceLinkPolicy, redactBannedWords, extractJson, CompetitorInput,
+  buildHeadingLocalizePrompt, buildTextExpandPrompt, buildTextTrimPrompt, buildSectionTextPrompt,
+  enforceLinkPolicy, redactBannedWords, extractJson, CompetitorInput,
 } from "@/lib/seo/prompts";
 import { findRagFacts } from "@/lib/seo/rag";
 
@@ -462,6 +463,67 @@ export async function genOutline(b: any): Promise<GenResult> {
   return { ok: true, data: outline };
 }
 
+// ─── Chunked article writer: H2-units → chunks of ~4 sections → parallel small calls ──
+// Returns the assembled article body (H1 + sections + FAQ) or null → caller falls back to
+// the single-shot path. Each chunk sees the full article map so nothing gets duplicated.
+async function writeTextInChunks(outline: any, ctx: {
+  keyword: string; language: string; tone: string; provider: string; apiKey: string;
+  model?: string; baseUrl?: string; ragFacts?: string;
+  sources?: { title: string; snippet: string; url: string; domain: string }[];
+  sourceMode?: "off" | "facts" | "cited"; includeToc?: boolean;
+}): Promise<string | null> {
+  const secs: any[] = Array.isArray(outline?.sections) ? outline.sections : [];
+  if (!secs.length) return null;
+  const meta = outline.meta || {};
+
+  // Units = H2 with its H3 children (never split a unit across chunks).
+  const units: any[][] = [];
+  for (const s of secs) {
+    if (s.h_level === "H2" || !units.length) units.push([s]);
+    else units[units.length - 1].push(s);
+  }
+  // Greedy chunks of ~2-3 units / ≤5 sections.
+  const chunks: any[][] = [];
+  for (const u of units) {
+    const last = chunks[chunks.length - 1];
+    if (last && last.length + u.length <= 5) last.push(...u);
+    else chunks.push([...u]);
+  }
+
+  const allHeadings = secs.map((s: any) => ({ h_level: s.h_level, heading: s.heading }));
+  const faq = Array.isArray(outline.faq) ? outline.faq : [];
+  const verdictRe = /verdict|вердикт|итог|conclusion|заключение|avis final|final/i;
+
+  const parts: (string | null)[] = new Array(chunks.length).fill(null);
+  await runPool(chunks.map((c, i) => ({ c, i })), 2, async ({ c, i }) => {
+    const prompt = buildSectionTextPrompt({
+      keyword: ctx.keyword, language: ctx.language, country: meta.country,
+      tone: ctx.tone, narration: meta.narration === "first" ? "first" : meta.narration === "third" ? "third" : undefined,
+      h1: meta.h1, allHeadings, sections: c,
+      faq: i === chunks.length - 1 ? faq : undefined,
+      ragFacts: ctx.ragFacts, sources: ctx.sources, sourceMode: ctx.sourceMode,
+      isVerdictChunk: c.some((s: any) => verdictRe.test(String(s.heading || ""))),
+    });
+    const raw = await fetchLLM(prompt, ctx.provider, ctx.apiKey, 6000, ctx.model, ctx.baseUrl);
+    if (!raw) return;
+    const md = raw.trim().replace(/^```(?:markdown|md)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+    // Sanity: the chunk must contain at least its first section heading.
+    const first = String(c[0]?.heading || "").trim();
+    if (first && md.toLowerCase().includes(first.slice(0, Math.min(30, first.length)).toLowerCase())) parts[i] = md;
+  });
+  if (parts.some(p => p == null)) return null; // a chunk failed even after retries → single-shot fallback
+
+  // Deterministic assembly: H1 → (optional TOC) → sections → FAQ came with the last chunk.
+  const pick = (v: any) => Array.isArray(v) ? (v.find((x: any) => x && String(x).trim()) || "") : (v || "");
+  const h1 = pick(meta.h1) || pick(meta.title_options) || ctx.keyword;
+  const slug = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, "").trim().replace(/\s+/g, "-");
+  const tocLabel = ctx.language.startsWith("ru") ? "Содержание" : ctx.language.startsWith("uk") ? "Зміст" : ctx.language.startsWith("fr") ? "Sommaire" : "Contents";
+  const toc = ctx.includeToc
+    ? `<div class="toc"><strong>${tocLabel}</strong><ul>${secs.filter((s: any) => s.h_level === "H2").map((s: any) => `<li><a href="#${slug(String(s.heading))}">${s.heading}</a></li>`).join("")}${faq.length ? `<li><a href="#faq">FAQ</a></li>` : ""}</ul></div>\n\n`
+    : "";
+  return `# ${h1}\n\n${toc}${parts.join("\n\n")}`;
+}
+
 // ─── Article text ─────────────────────────────────────────────────────────────────
 export async function genText(b: any): Promise<GenResult> {
   if (!b.outline) return { ok: false, error: "no_outline" };
@@ -528,22 +590,40 @@ export async function genText(b: any): Promise<GenResult> {
     if (rag) ragFacts = rag.rendered;
   }
 
-  const prompt = buildTextPrompt({
-    outlineJson: slimOutline,
-    policy: b.policy,
-    tone: String(b.tone ?? "neutral, expert"),
-    language: String(b.language ?? "ru"),
-    custom: b.custom ? String(b.custom) : undefined,
-    promptType: b.promptType === "custom" ? "custom" : "service",
-    sources,
-    sourceMode: effMode,
-    includeToc: b.includeToc === true,
-    ragFacts,
-  });
   const model = b.model ? String(b.model) : undefined;
   const baseUrl = b.aiBaseUrl ? String(b.aiBaseUrl) : undefined;
 
-  let text = await fetchLLM(prompt, provider, apiKey, 12000, model, baseUrl);
+  // CHUNKED writer (default on for 10+ sections, off with chunkedText:false): the article is
+  // written 3-5 sections per call — one giant prompt degrades mid-generation (prose decays
+  // into lists, tables get invented values). Falls back to single-shot if any chunk fails.
+  let text: string | null = null;
+  const secCount = Array.isArray(slimOutline.sections) ? slimOutline.sections.length : 0;
+  if (b.chunkedText !== false && b.promptType !== "custom" && secCount >= 10) {
+    try {
+      text = await writeTextInChunks(slimOutline, {
+        keyword: keyword || String(slimOutline.meta?.keyword ?? ""),
+        language: String(b.language ?? "ru"), tone: String(b.tone ?? "neutral, expert"),
+        provider, apiKey, model, baseUrl,
+        ragFacts, sources, sourceMode: effMode, includeToc: b.includeToc === true,
+      });
+    } catch { text = null; }
+  }
+
+  if (!text) {
+    const prompt = buildTextPrompt({
+      outlineJson: slimOutline,
+      policy: b.policy,
+      tone: String(b.tone ?? "neutral, expert"),
+      language: String(b.language ?? "ru"),
+      custom: b.custom ? String(b.custom) : undefined,
+      promptType: b.promptType === "custom" ? "custom" : "service",
+      sources,
+      sourceMode: effMode,
+      includeToc: b.includeToc === true,
+      ragFacts,
+    });
+    text = await fetchLLM(prompt, provider, apiKey, 12000, model, baseUrl);
+  }
   if (!text) return { ok: false, error: "generation_failed" };
 
   const banned = [

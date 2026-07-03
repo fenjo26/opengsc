@@ -611,6 +611,62 @@ ${dateLine}${twcLine}${customLine}${metaBlock}${sourcesBlock}${ragTextBlock}
 ${JSON.stringify(args.outlineJson)}`;
 }
 
+// ─── Chunked article writing: one call writes 3-5 sections, not the whole article ─────
+// A single 30-section prompt degrades mid-generation (prose turns into lists, tables get
+// invented values). Writing in small chunks keeps every section at first-page quality.
+export function buildSectionTextPrompt(args: {
+  keyword: string;
+  language: string;
+  country?: string;
+  tone: string;
+  narration?: "first" | "third";
+  h1?: string;
+  allHeadings: { h_level: string; heading: string }[]; // full article map for context
+  sections: any[];        // the chunk to write (full specs)
+  faq?: { question: string; answer_guideline?: string }[]; // present only for the last chunk
+  ragFacts?: string;
+  sources?: { title: string; snippet: string; url: string; domain: string }[];
+  sourceMode?: "off" | "facts" | "cited";
+  isVerdictChunk?: boolean; // allow one expert blockquote here
+}): string {
+  const today = new Date().toISOString().slice(0, 10);
+  const year = today.slice(0, 4);
+  const narr = args.narration === "first" ? "ПЕРВОЕ лицо — экспертный «я»-голос (личный опыт)"
+    : args.narration === "third" ? "ТРЕТЬЕ лицо — нейтральный корпоративный голос" : "экспертный голос";
+  const rag = args.ragFacts?.trim() ? `\nБАЗА ЗНАНИЙ (проверенные факты — используй как достоверные, без ссылок):\n${args.ragFacts.trim().slice(0, 2500)}\n` : "";
+  const srcs = (args.sources || []).slice(0, 8);
+  const srcBlock = srcs.length && args.sourceMode !== "off"
+    ? `\nДАННЫЕ ИЗ ИСТОЧНИКОВ (для конкретных цифр${args.sourceMode === "cited" ? "; можно 1-2 ссылки [текст](url) на источники из списка" : "; БЕЗ ссылок и упоминаний конкурентов"}):\n${srcs.map((s, i) => `[${i + 1}] ${s.title} — ${s.snippet.slice(0, 400)} (${s.url})`).join("\n")}\n`
+    : "";
+  const faqBlock = args.faq?.length
+    ? `\nПОСЛЕ последней секции добавь секцию «## FAQ»: каждый вопрос — «### Вопрос», под ним ответ 40-60 слов по answer_guideline:\n${JSON.stringify(args.faq)}\n`
+    : "";
+  const quote = args.isVerdictChunk
+    ? "\n- Можно ОДНУ цитату-блок (строка с «> ») с личным экспертным выводом — только в секции вердикта/итога."
+    : "\n- НЕ используй цитаты-блоки (>) в этих секциях.";
+  return `Ты пишешь ФРАГМЕНТ большой статьи по теме "${args.keyword}" (язык ${args.language}${args.country ? `, регион ${args.country}` : ""}). Сегодня ${today} — используй текущий год (${year}), не устаревшие.
+Тон: ${args.tone}. Лицо: ${narr}.
+
+ПОЛНАЯ КАРТА СТАТЬИ (для понимания контекста — эти секции пишут ОТДЕЛЬНО, их содержимое НЕ дублируй и НЕ анонсируй):
+${args.allHeadings.map(h => `${h.h_level}: ${h.heading}`).join("\n")}
+
+ТВОЯ ЗАДАЧА: напиши ТОЛЬКО следующие секции (по их спецификациям ниже), в заданном порядке.
+
+ЖЁСТКИЕ ПРАВИЛА:
+- Каждая секция начинается заголовком РОВНО своего уровня: H2 → «## », H3 → «### ». Формулировки заголовков — ДОСЛОВНО из спеки. Никакого H1, мета-тегов и оглавления — они собираются отдельно.
+- ОБЪЁМ секции — строго в её word_count-диапазоне: не короче и не длиннее. Без воды и повторов.
+- ПОДАЧА: основа — связные абзацы по 2-4 предложения. Максимум ОДИН список на секцию, и только если он реально нужен. НЕ превращай прозу в маркированные обрывки.
+- ТАБЛИЦЫ: ТОЛЬКО если у секции есть visual_element типа "table" — тогда одна markdown-таблица, 3-6 строк. Значения — ТОЛЬКО из спеки секции, базы знаний или источников; НЕ создавай колонок с выдуманными оценками (проценты, маржи, «оценочные» диапазоны). Нет данных для колонки — нет колонки.${quote}
+- КОНКРЕТИКА из summary/copywriter_notes/entities переносится в текст дословно (бренды, цифры, названия). Ключи из keywords вплетай естественно, в первые абзацы секции.
+- ${NO_FABRICATION}
+- Язык — строго ${args.language}, без вкраплений других письменностей.
+${rag}${srcBlock}${faqBlock}
+СЕКЦИИ ДЛЯ НАПИСАНИЯ (JSON-спеки):
+${JSON.stringify(args.sections)}
+
+Верни ТОЛЬКО markdown этих секций (начиная с первого заголовка), без преамбулы и без \`\`\`-обёрток.`;
+}
+
 // ─── Text expansion pass: bring an under-length article up to its target volume ──────
 // Models routinely undershoot the word budget. This pass takes the finished article and
 // expands THIN sections toward their budgets with substance (facts, examples, prose) —
