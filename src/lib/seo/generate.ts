@@ -572,7 +572,7 @@ async function writeTextInChunks(outline: any, ctx: {
     if (hiEff > 0 && cw > hiEff * 1.25) {
       try {
         const cut = await fetchLLM(
-          buildTextTrimPrompt({ article: md, targetWords: Math.round((lo + hi) / 2), currentWords: cw, language: ctx.language }),
+          buildTextTrimPrompt({ article: md, targetWords: Math.round((lo + hiEff) / 2), currentWords: cw, language: ctx.language }),
           ctx.provider, ctx.apiKey, 6000, ctx.model, ctx.baseUrl,
         );
         if (cut) {
