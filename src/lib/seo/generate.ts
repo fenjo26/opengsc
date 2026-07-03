@@ -40,7 +40,7 @@ function renderExtract(j: any): string {
 // so the REDUCE stage (outline) builds from clean per-source facts instead of raw 20-page HTML.
 async function mapExtractFacts(competitors: CompetitorInput[], keyword: string, country: string, provider: string, apiKey: string, model?: string, baseUrl?: string): Promise<void> {
   const targets = competitors.filter((c) => c.text_sample && String(c.text_sample).trim().length > 80).slice(0, 12);
-  await runPool(targets, 4, async (c) => {
+  await runPool(targets, 2, async (c) => { // low concurrency — parallel bursts trip provider TPM limits (429)
     try {
       const raw = await fetchLLM(buildSourceExtractPrompt({ url: c.url, title: c.title || c.url, text: String(c.text_sample), keyword, country }), provider, apiKey, 1200, model, baseUrl);
       const j = extractJson(raw);
@@ -260,7 +260,7 @@ async function enrichOutlineSections(outline: any, ctx: {
   for (let i = 0; i < sections.length; i += BATCH) batches.push({ start: i, items: sections.slice(i, i + BATCH) });
 
   let enrichedAny = false;
-  await runPool(batches, 3, async (batch) => {
+  await runPool(batches, 2, async (batch) => { // low concurrency — parallel bursts trip provider TPM limits (429)
     try {
       const prompt = buildSectionEnrichPrompt({
         keyword: ctx.keyword, language: ctx.language, country: ctx.country,

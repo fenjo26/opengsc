@@ -18,6 +18,9 @@ function parseKieOutput(data: any): string {
   return typeof data?.output_text === 'string' ? data.output_text : '';
 }
 
+// Public entry: retries transient failures (429 rate limits, 408/5xx, network drops, timeouts)
+// with exponential backoff + jitter. The multi-pass pipeline fires parallel calls, so hitting
+// a provider's TPM/RPM limit is routine — one 429 must not sink a whole generation job.
 export async function fetchLLM(
   prompt: string,
   provider: string,
@@ -26,6 +29,27 @@ export async function fetchLLM(
   modelOverride?: string,
   baseUrl?: string,
 ): Promise<string | null> {
+  const delays = [0, 5_000, 20_000]; // 3 attempts total
+  for (let i = 0; i < delays.length; i++) {
+    if (delays[i]) await new Promise(r => setTimeout(r, delays[i] + Math.floor(Math.random() * 4_000)));
+    const r = await fetchLLMOnce(prompt, provider, apiKey, maxTokens, modelOverride, baseUrl);
+    if (r.text != null) return r.text;
+    if (!r.retryable) return null;
+    if (i < delays.length - 1) console.error(`[LLM] ${provider} transient failure — retrying (${i + 1}/${delays.length - 1})`);
+  }
+  return null;
+}
+
+const retryableStatus = (s: number) => s === 429 || s === 408 || s >= 500;
+
+async function fetchLLMOnce(
+  prompt: string,
+  provider: string,
+  apiKey: string,
+  maxTokens = 1024,
+  modelOverride?: string,
+  baseUrl?: string,
+): Promise<{ text: string | null; retryable: boolean }> {
   // Hard timeout so a stuck/over-long generation fails in minutes instead of hanging forever.
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 280_000);
@@ -40,7 +64,7 @@ export async function fetchLLM(
         headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
         body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
       });
-      if (!res.ok) { console.error('[LLM]', provider, res.status, await res.text()); return null; }
+      if (!res.ok) { console.error('[LLM]', provider, res.status, await res.text()); return { text: null, retryable: retryableStatus(res.status) }; }
       const data = await res.json();
       text = data.content?.[0]?.text ?? '';
     } else if (provider === 'openai') {
@@ -49,7 +73,7 @@ export async function fetchLLM(
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: modelOverride ?? 'gpt-4o-mini', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
       });
-      if (!res.ok) { console.error('[LLM] openai', res.status); return null; }
+      if (!res.ok) { console.error('[LLM] openai', res.status); return { text: null, retryable: retryableStatus(res.status) }; }
       const data = await res.json();
       text = data.choices?.[0]?.message?.content ?? '';
     } else if (provider === 'gemini') {
@@ -59,7 +83,7 @@ export async function fetchLLM(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
       });
-      if (!res.ok) { console.error('[LLM] gemini', res.status); return null; }
+      if (!res.ok) { console.error('[LLM] gemini', res.status); return { text: null, retryable: retryableStatus(res.status) }; }
       const data = await res.json();
       text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
     } else if (provider === 'openrouter') {
@@ -68,7 +92,7 @@ export async function fetchLLM(
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: modelOverride ?? 'anthropic/claude-3.5-haiku', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
       });
-      if (!res.ok) { console.error('[LLM] openrouter', res.status); return null; }
+      if (!res.ok) { console.error('[LLM] openrouter', res.status); return { text: null, retryable: retryableStatus(res.status) }; }
       const data = await res.json();
       text = data.choices?.[0]?.message?.content ?? '';
     } else if (provider === 'kie') {
@@ -84,27 +108,28 @@ export async function fetchLLM(
           reasoning: { effort: 'medium' },
         }),
       });
-      if (!res.ok) { console.error('[LLM] kie', res.status, await res.text().catch(() => '')); return null; }
+      if (!res.ok) { console.error('[LLM] kie', res.status, await res.text().catch(() => '')); return { text: null, retryable: retryableStatus(res.status) }; }
       const data = await res.json();
       text = parseKieOutput(data);
     } else if (provider === 'custom') {
       // Any OpenAI-compatible endpoint. baseUrl is the API root; we call /chat/completions.
       const root = (baseUrl || '').replace(/\/+$/, '');
-      if (!root) { console.error('[LLM] custom: no baseUrl'); return null; }
+      if (!root) { console.error('[LLM] custom: no baseUrl'); return { text: null, retryable: false }; }
       const url = /\/chat\/completions$/.test(root) ? root : `${root}/chat/completions`;
       const res = await fetch(url, {
         method: 'POST', signal: sig,
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: modelOverride ?? 'gpt-4o-mini', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
       });
-      if (!res.ok) { console.error('[LLM] custom', res.status, await res.text().catch(() => '')); return null; }
+      if (!res.ok) { console.error('[LLM] custom', res.status, await res.text().catch(() => '')); return { text: null, retryable: retryableStatus(res.status) }; }
       const data = await res.json();
       text = data.choices?.[0]?.message?.content ?? '';
     }
-    return text;
+    return { text, retryable: false };
   } catch (e) {
+    // AbortError = our 280s timeout; TypeError "fetch failed" = transient network — both retryable.
     console.error('[LLM] fetchLLM error:', (e as any)?.name === 'AbortError' ? 'timeout' : e);
-    return null;
+    return { text: null, retryable: true };
   } finally {
     clearTimeout(timer);
   }
