@@ -581,21 +581,25 @@ export async function genText(b: any): Promise<GenResult> {
         }
       } catch { /* expansion is best-effort */ }
     } else if (words > finalTargetWc * 1.25) {
-      try {
-        let trimmed = await fetchLLM(
-          buildTextTrimPrompt({ article: text, targetWords: finalTargetWc, currentWords: words, language: String(b.language ?? "en") }),
-          provider, apiKey, 14000, model, baseUrl,
-        );
-        if (trimmed) {
+      // Verbose models under-cut on the first pass — iterate (max 2) until within range.
+      for (let pass = 0; pass < 2; pass++) {
+        const cur = text.split(/\s+/).filter(Boolean).length;
+        if (cur <= finalTargetWc * 1.25) break;
+        try {
+          let trimmed = await fetchLLM(
+            buildTextTrimPrompt({ article: text, targetWords: finalTargetWc, currentWords: cur, language: String(b.language ?? "en") }),
+            provider, apiKey, 14000, model, baseUrl,
+          );
+          if (!trimmed) break;
           trimmed = trimmed.trim().replace(/^```(?:markdown|md)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
           const newWords = trimmed.split(/\s+/).filter(Boolean).length;
           // Accept only a real reduction that kept the structure (same H2 count ±1) and
           // didn't over-cut (still ≥70% of target).
-          if (newWords < words * 0.9 && newWords >= finalTargetWc * 0.7 && Math.abs(h2(trimmed) - h2(text)) <= 1) {
+          if (newWords < cur * 0.9 && newWords >= finalTargetWc * 0.7 && Math.abs(h2(trimmed) - h2(text)) <= 1) {
             text = stripForeignScripts(trimmed, String(b.language ?? "en"));
-          }
-        }
-      } catch { /* trim is best-effort */ }
+          } else break; // model refused to cut further / structure changed — stop iterating
+        } catch { break; }
+      }
     }
   }
 
