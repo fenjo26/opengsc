@@ -476,9 +476,21 @@ async function writeTextInChunks(outline: any, ctx: {
   if (!secs.length) return null;
   const meta = outline.meta || {};
 
+  // Per-section spec with a SINGLE word_count = the section's OWN contribution (a parent's
+  // total includes its children — passing both made models write the intro at full total
+  // AND the children at theirs, overshooting the article by ~35-40%).
+  const own = ownRanges(secs);
+  const specs = secs.map((s: any, i: number) => ({
+    h_level: s.h_level, heading: s.heading,
+    word_count: own[i] || [60, 100],
+    entities_to_cover: s.entities_to_cover, keywords: s.keywords, summary: s.summary,
+    copywriter_notes: s.copywriter_notes, entity_connections: s.entity_connections,
+    visual_elements: s.visual_elements, needs_real_experience: s.needs_real_experience,
+  }));
+
   // Units = H2 with its H3 children (never split a unit across chunks).
   const units: any[][] = [];
-  for (const s of secs) {
+  for (const s of specs) {
     if (s.h_level === "H2" || !units.length) units.push([s]);
     else units[units.length - 1].push(s);
   }
