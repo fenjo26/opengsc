@@ -7,7 +7,7 @@ import { scrapeMany } from "@/lib/seo/scrape";
 import {
   buildOutlinePrompt, buildTextPrompt, buildAnalysisPrompt, buildFactScrubPrompt, buildSourceExtractPrompt,
   buildAutoFactCleanPrompt, buildWireframePrompt, buildSectionEnrichPrompt, buildStructureExpandPrompt,
-  buildHeadingLocalizePrompt, buildTextExpandPrompt, enforceLinkPolicy, redactBannedWords, extractJson, CompetitorInput,
+  buildHeadingLocalizePrompt, buildTextExpandPrompt, buildTextTrimPrompt, enforceLinkPolicy, redactBannedWords, extractJson, CompetitorInput,
 } from "@/lib/seo/prompts";
 import { findRagFacts } from "@/lib/seo/rag";
 
@@ -557,12 +557,14 @@ export async function genText(b: any): Promise<GenResult> {
 
   text = stripForeignScripts(text, String(b.language ?? "en"));
 
-  // VOLUME guard (default on): models routinely undershoot the budget. If the article came
-  // out below ~82% of the target, run one expansion pass that thickens thin sections with
-  // substance (prose, not lists) while preserving structure. Off with expandText:false.
+  // VOLUME guard (default on, symmetric): models undershoot AND overshoot the budget.
+  // Below ~82% of target → one expansion pass (thicken thin sections with substance).
+  // Above ~125% of target → one trim pass (cut water, keep every heading/table/fact).
+  // Off with expandText:false.
   const finalTargetWc = Number(b.targetWordCount) || Number(slimOutline.meta?.target_word_count) || 0;
   if (b.expandText !== false && finalTargetWc >= 500) {
     const words = text.split(/\s+/).filter(Boolean).length;
+    const h2 = (s: string) => (s.match(/^##\s/gm) || []).length;
     if (words < finalTargetWc * 0.82) {
       try {
         let expanded = await fetchLLM(
@@ -573,12 +575,27 @@ export async function genText(b: any): Promise<GenResult> {
           expanded = expanded.trim().replace(/^```(?:markdown|md)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
           const newWords = expanded.split(/\s+/).filter(Boolean).length;
           // Accept only a real improvement that didn't mangle the structure (same H2 count ±1).
-          const h2 = (s: string) => (s.match(/^##\s/gm) || []).length;
           if (newWords > words * 1.1 && Math.abs(h2(expanded) - h2(text)) <= 1) {
             text = stripForeignScripts(expanded, String(b.language ?? "en"));
           }
         }
       } catch { /* expansion is best-effort */ }
+    } else if (words > finalTargetWc * 1.25) {
+      try {
+        let trimmed = await fetchLLM(
+          buildTextTrimPrompt({ article: text, targetWords: finalTargetWc, currentWords: words, language: String(b.language ?? "en") }),
+          provider, apiKey, 14000, model, baseUrl,
+        );
+        if (trimmed) {
+          trimmed = trimmed.trim().replace(/^```(?:markdown|md)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+          const newWords = trimmed.split(/\s+/).filter(Boolean).length;
+          // Accept only a real reduction that kept the structure (same H2 count ±1) and
+          // didn't over-cut (still ≥70% of target).
+          if (newWords < words * 0.9 && newWords >= finalTargetWc * 0.7 && Math.abs(h2(trimmed) - h2(text)) <= 1) {
+            text = stripForeignScripts(trimmed, String(b.language ?? "en"));
+          }
+        }
+      } catch { /* trim is best-effort */ }
     }
   }
 
