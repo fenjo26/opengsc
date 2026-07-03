@@ -542,8 +542,6 @@ async function writeTextInChunks(outline: any, ctx: {
     if (pick) pick.visual_elements = [{ type: "table", title: "", description: "сводная таблица по данным секции (только реальные значения из спеки/базы знаний/источников)" }];
   }
 
-  // LIST budget: ONE list per article — only the chunk with a procedural section may use it.
-  const proceduralRe = /inscri|регистрац|register|étape|шаг|s'inscrire|how to|comment|guide.*étape|verif|vérif|документ/i;
 
   // Units = H2 with its H3 children (never split a unit across chunks).
   const units: any[][] = [];
@@ -574,7 +572,6 @@ async function writeTextInChunks(outline: any, ctx: {
       faq: i === chunks.length - 1 ? faq : undefined,
       ragFacts: ctx.ragFacts, sources: ctx.sources, sourceMode: ctx.sourceMode,
       isVerdictChunk: c.some((s: any) => verdictRe.test(String(s.heading || ""))),
-      allowList: chunks.findIndex(ch => ch.some((s: any) => proceduralRe.test(String(s.heading || "")))) === i,
       chunkBudget: hi > 0 ? [lo, hi] : undefined,
     });
     const raw = await fetchLLM(prompt, ctx.provider, ctx.apiKey, 6000, ctx.model, ctx.baseUrl);
