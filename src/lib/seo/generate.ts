@@ -140,9 +140,15 @@ export function normalizeWordBudgets(outline: any, target: number): boolean {
 async function expandOutlineStructure(outline: any, ctx: {
   keyword: string; language: string; country: string; provider: string; apiKey: string;
   model?: string; baseUrl?: string; pageGoal?: "informational" | "commercial" | "mixed"; paa?: string[];
+  targetWc?: number;
 }): Promise<boolean> {
   const sections: any[] = Array.isArray(outline?.sections) ? outline.sections : [];
-  if (!sections.length || sections.length >= 26) return false;
+  // Section count is BOUND to the word target (~100 words/section): more sections than the
+  // budget supports = every section becomes a 70-word stub and the article overshoots.
+  const maxSections = ctx.targetWc && ctx.targetWc >= 500
+    ? Math.max(10, Math.min(34, Math.round(ctx.targetWc / 100)))
+    : 26;
+  if (!sections.length || sections.length >= maxSections) return false;
   // Count H3 children per H2; skip expansion when the outline is already deep.
   let thinH2 = 0, h2Count = 0;
   for (let i = 0; i < sections.length; i++) {
@@ -157,6 +163,7 @@ async function expandOutlineStructure(outline: any, ctx: {
   const prompt = buildStructureExpandPrompt({
     keyword: ctx.keyword, language: ctx.language, country: ctx.country,
     pageGoal: ctx.pageGoal, paa: ctx.paa,
+    maxAdd: maxSections - sections.length,
     sections: sections.map((s: any) => ({ h_level: s.h_level, heading: s.heading })),
   });
   const raw = await fetchLLM(prompt, ctx.provider, ctx.apiKey, 4000, ctx.model, ctx.baseUrl);
@@ -185,9 +192,9 @@ async function expandOutlineStructure(outline: any, ctx: {
         needs_real_experience: false,
       }));
     newbies.forEach((n: any) => have.add(n.heading.trim().toLowerCase()));
-    sections.splice(at, 0, ...newbies);
+    sections.splice(at, 0, ...newbies.slice(0, Math.max(0, maxSections - sections.length)));
     added += newbies.length;
-    if (sections.length >= 34) break;
+    if (sections.length >= maxSections) break;
   }
   return added > 0;
 }
@@ -380,6 +387,7 @@ export async function genOutline(b: any): Promise<GenResult> {
         provider, apiKey, model, baseUrl,
         pageGoal: b.pageGoal === "commercial" || b.pageGoal === "informational" ? b.pageGoal : "mixed",
         paa: Array.isArray(b.paa) ? b.paa : undefined,
+        targetWc: Number(b.targetWordCount) || Number(meta.target_word_count) || 0,
       });
       if (grown) (outline as any)._expanded = true;
     } catch { /* expansion is best-effort */ }
@@ -508,6 +516,8 @@ async function writeTextInChunks(outline: any, ctx: {
 
   const parts: (string | null)[] = new Array(chunks.length).fill(null);
   await runPool(chunks.map((c, i) => ({ c, i })), 2, async ({ c, i }) => {
+    const lo = c.reduce((a: number, s: any) => a + (s.word_count?.[0] || 0), 0);
+    const hi = c.reduce((a: number, s: any) => a + (s.word_count?.[1] || 0), 0);
     const prompt = buildSectionTextPrompt({
       keyword: ctx.keyword, language: ctx.language, country: meta.country,
       tone: ctx.tone, narration: meta.narration === "first" ? "first" : meta.narration === "third" ? "third" : undefined,
@@ -515,6 +525,7 @@ async function writeTextInChunks(outline: any, ctx: {
       faq: i === chunks.length - 1 ? faq : undefined,
       ragFacts: ctx.ragFacts, sources: ctx.sources, sourceMode: ctx.sourceMode,
       isVerdictChunk: c.some((s: any) => verdictRe.test(String(s.heading || ""))),
+      chunkBudget: hi > 0 ? [lo, hi] : undefined,
     });
     const raw = await fetchLLM(prompt, ctx.provider, ctx.apiKey, 6000, ctx.model, ctx.baseUrl);
     if (!raw) return;
@@ -530,8 +541,9 @@ async function writeTextInChunks(outline: any, ctx: {
   const h1 = pick(meta.h1) || pick(meta.title_options) || ctx.keyword;
   const slug = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, "").trim().replace(/\s+/g, "-");
   const tocLabel = ctx.language.startsWith("ru") ? "Содержание" : ctx.language.startsWith("uk") ? "Зміст" : ctx.language.startsWith("fr") ? "Sommaire" : "Contents";
+  const hasFaqH2 = secs.some((s: any) => s.h_level === "H2" && /^faq/i.test(String(s.heading || "").trim()));
   const toc = ctx.includeToc
-    ? `<div class="toc"><strong>${tocLabel}</strong><ul>${secs.filter((s: any) => s.h_level === "H2").map((s: any) => `<li><a href="#${slug(String(s.heading))}">${s.heading}</a></li>`).join("")}${faq.length ? `<li><a href="#faq">FAQ</a></li>` : ""}</ul></div>\n\n`
+    ? `<div class="toc"><strong>${tocLabel}</strong><ul>${secs.filter((s: any) => s.h_level === "H2").map((s: any) => `<li><a href="#${slug(String(s.heading))}">${s.heading}</a></li>`).join("")}${faq.length && !hasFaqH2 ? `<li><a href="#faq">FAQ</a></li>` : ""}</ul></div>\n\n`
     : "";
   return `# ${h1}\n\n${toc}${parts.join("\n\n")}`;
 }
