@@ -525,6 +525,22 @@ async function writeTextInChunks(outline: any, ctx: {
     }
   }
 
+  // TABLE floor (reference-tool parity: 2-4 tables per article). If the outline didn't mark
+  // any table visual_elements, assign them to the most table-natural sections by heading.
+  const hasTableVe = (s: any) => (Array.isArray(s.visual_elements) ? s.visual_elements : [])
+    .some((v: any) => typeof v === "object" ? /table/i.test(String(v?.type || "")) : /table|таблиц/i.test(String(v)));
+  if (!specs.some(hasTableVe)) {
+    const tabular = /bonus|бонус|payment|paiement|paie|dépôt|deposit|депозит|retrait|withdraw|вывод|метод|cotes|коэффициент|odds|rtp|provider|провайдер|logiciel|jeux|games|слот|slot|сравн|compar|таблиц|limit|лимит/i;
+    let assigned = 0;
+    for (const s of specs) {
+      if (assigned >= 3) break;
+      if (tabular.test(String(s.heading || ""))) {
+        s.visual_elements = [{ type: "table", title: "", description: "сводная таблица по данным секции (только реальные значения из спеки/базы знаний/источников)" }];
+        assigned++;
+      }
+    }
+  }
+
   // Units = H2 with its H3 children (never split a unit across chunks).
   const units: any[][] = [];
   for (const s of specs) {
@@ -569,7 +585,7 @@ async function writeTextInChunks(outline: any, ctx: {
     // so the scoped trim doesn't squeeze the sections to make room for FAQ.
     const hiEff = hi + (i === chunks.length - 1 ? faq.length * 55 : 0);
     const cw = md.split(/\s+/).filter(Boolean).length;
-    if (hiEff > 0 && cw > hiEff * 1.25) {
+    if (hiEff > 0 && cw > hiEff * 1.15) {
       try {
         const cut = await fetchLLM(
           buildTextTrimPrompt({ article: md, targetWords: Math.round((lo + hiEff) / 2), currentWords: cw, language: ctx.language }),
