@@ -330,15 +330,19 @@ export async function genOutline(b: any): Promise<GenResult> {
     customTemplate: b.customTemplate ? String(b.customTemplate) : undefined,
     structureRules: b.structureRules ? String(b.structureRules) : undefined,
     ragFacts: rag?.rendered,
+    // Enrichment (default on) deepens every section afterwards — keep the skeleton lean so
+    // one call fits the token budget and finishes well within the LLM timeout.
+    lightSections: b.enrich !== false,
   });
 
   let raw = await fetchLLM(prompt, provider, apiKey, 16000, model, baseUrl);
   let outline = extractJson(raw);
   if (!outline) {
-    raw = await fetchLLM(prompt + "\n\nПредыдущий ответ не распарсился. Верни ТОЛЬКО валидный JSON, без текста и без markdown-обёрток.", provider, apiKey, 16000, model, baseUrl);
+    raw = await fetchLLM(prompt + (raw ? "\n\nПредыдущий ответ не распарсился. Верни ТОЛЬКО валидный JSON, без текста и без markdown-обёрток." : ""), provider, apiKey, 16000, model, baseUrl);
     outline = extractJson(raw);
   }
-  if (!outline) return { ok: false, error: "parse_failed" };
+  // Distinguish provider failure/timeout (raw null) from an actual JSON parse problem.
+  if (!outline) return { ok: false, error: raw == null ? "generation_failed" : "parse_failed" };
 
   // Knowledge-based fact scrub: actively correct wrong/fabricated specifics baked into the outline
   // (e.g. "8-inch" → "7.9-inch", invented colors → generalized) BEFORE the text inherits them.

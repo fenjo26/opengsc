@@ -352,7 +352,7 @@ export default function LandingPage() {
           jobId={jobId}
           keyword={keyword}
           onDone={async (job) => { const rec = await importJob(job); setJobId(null); if (rec) router.push(`/seo-tools/history/${rec.id}`); }}
-          onError={(m) => { setErr(m === "parse_failed" ? t("seoErrParseJson") : m); setJobId(null); }}
+          onError={(m) => { setErr(m === "parse_failed" ? t("seoErrParseJson") : m === "generation_failed" ? t("seoErrGen") : m); setJobId(null); }}
           onCancel={() => setJobId(null)}
         />
       )}
