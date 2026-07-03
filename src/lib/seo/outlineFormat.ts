@@ -203,6 +203,9 @@ export function hasVerifiableFacts(text: string): boolean {
   if (/\b\d{1,4}\s?(km|км|m|м|mi|min|мин|h|hr|hrs?|hours?|часов?|час|kg|кг|°|am|pm)\b/i.test(text)) return true;
   if (/\b\d{1,2}[:.]\d{2}\b/.test(text)) return true; // times like 10:30
   if (/\b\d{2,}\b/.test(text)) return true;           // any number with 2+ digits
+  // Entity claims are verifiable too (licenses, operators, providers, legality, availability) —
+  // reference-grade fact-checks verify these sections even without a single digit.
+  if (/\b(licen[cs]e|licencia|лиценз|regulat|регулят|ANJ|ARJEL|UKGC|MGA|Curacao|Кюрасао|legal|легальн|operated by|оператор|owned by|владе|provider|провайдер|payment|платеж|платёж|deposit|депозит|withdraw|вывод)\w*/i.test(text)) return true;
   return false;
 }
 

@@ -30,9 +30,16 @@ export async function POST(req: Request) {
     // "Transport Modes Comparison") returns generic/off-topic pages. Prefix the main keyword
     // so sources are about the actual subject (and right country/language).
     const kw = String(b.keyword ?? "").trim();
-    const query = [kw, heading].filter(Boolean).join(" ").trim() || kw || heading;
+    // Strip first-person heading decoration («Mon Avis sur…», «Ce Que J'ai Découvert»,
+    // "My Experience with…") — noise for search; keep the topical words.
+    const cleanHeading = heading
+      .replace(/\((.*?)\)/g, " $1 ")
+      .replace(/\b(mon|ma|mes|je|j'ai|j'en|my|мой|моя|мои|avis|opinion|expérience|experience|découverts?|découvert|pense|complète|complete)\b/gi, " ")
+      .replace(/[«»"“”?!—–]/g, " ")
+      .replace(/\s+/g, " ").trim();
+    const query = [kw, cleanHeading].filter(Boolean).join(" ").trim() || kw || heading;
     const serp = await runSerp(String(b.serpProvider || "serper"), String(b.serpKey), query, {
-      gl: b.gl, hl: b.hl, num: 10, engine: (b.engine as SerpEngine) ?? "google",
+      gl: b.gl, hl: b.hl, num: 15, engine: (b.engine as SerpEngine) ?? "google",
     });
     const results = serp.results || [];
     const scrapeCount = Math.max(0, Math.min(10, Number(b.scrapeCount ?? 6)));

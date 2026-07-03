@@ -258,6 +258,11 @@ function FactCheck({ item, setItem, article, t, autoStart }: any) {
     setErr("");
     const ai = getTaskCreds("text"); const serp = getSerpCreds();
     if (!ai.apiKey) { setErr(t("seoErrNoAiKey")); return; }
+    // Region/language of the article (from the source outline) → locale-relevant sources
+    // (French regulator pages for a French article instead of generic US results).
+    const srcOutline = item.meta?.outlineId ? getHistoryItem(item.meta.outlineId) : null;
+    const gl = srcOutline?.data?.meta?.country || undefined;
+    const hl = srcOutline?.data?.meta?.language || undefined;
     let sections = splitArticleSections(article);
     if (!sections.length) { setErr("—"); return; }
     // Saver #2: only fact-check sections that actually contain verifiable facts.
@@ -297,7 +302,7 @@ function FactCheck({ item, setItem, article, t, autoStart }: any) {
       try {
         const body: any = { heading: s.heading, text: s.text, keyword: item.keyword, aiProvider: ai.provider, aiApiKey: ai.apiKey, model: ai.model || undefined, aiBaseUrl: ai.baseUrl || undefined };
         if (shared) { body.sources = shared; } // reuse-corpus mode → route skips its own SERP
-        else { body.serpProvider = serp.provider; body.serpKey = serp.apiKey; body.firecrawlKey = getFirecrawlKey() || undefined; body.scrapeCount = getFactSourceCount(); body.engine = "google"; }
+        else { body.serpProvider = serp.provider; body.serpKey = serp.apiKey; body.firecrawlKey = getFirecrawlKey() || undefined; body.scrapeCount = getFactSourceCount(); body.engine = "google"; body.gl = gl; body.hl = hl; }
         const res = await fetch("/api/seo/factcheck-section", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
