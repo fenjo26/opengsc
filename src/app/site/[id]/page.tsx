@@ -3589,16 +3589,16 @@ function NewRankingsTable({ queryRows, pageRows, blur }: { queryRows: RankRow[];
             <tbody>
               {paged.map((r, i) => (
                 <tr key={i} style={{ borderBottom: "1px solid var(--color-border)", background: i % 2 === 0 ? "rgba(255,255,255,0.03)" : "transparent" }}>
-                  <td style={{ padding: "7px 8px 7px 0", maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "12px", color: "var(--color-text-primary)" }}>
+                  <td style={{ padding: "8px 8px 8px 0", maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--color-text-primary)" }}>
                     <span style={blur ? { filter: "blur(5px)", userSelect: "none", display: "inline-block" } : {}}>
                       <span style={{ fontSize: "10px", background: "#10B981", color: "#fff", borderRadius: "4px", padding: "1px 5px", marginRight: "5px", fontWeight: 700 }}>NEW</span>
                       {r.label}
                     </span>
                   </td>
-                  <td style={{ padding: "7px 8px", fontSize: "12px", color: "var(--color-text-primary)", fontWeight: 500 }}>{r.clicks}</td>
-                  <td style={{ padding: "7px 8px", fontSize: "12px", color: "var(--color-text-secondary)" }}>{fmtK(r.impr)}</td>
-                  <td style={{ padding: "7px 8px", fontSize: "12px", color: "var(--color-text-secondary)" }}>{r.ctr}%</td>
-                  <td style={{ padding: "7px 0",  fontSize: "12px", color: "var(--color-text-secondary)" }}>{r.pos}</td>
+                  <td style={{ padding: "8px 8px", color: "var(--color-text-primary)", fontWeight: 500 }}>{r.clicks}</td>
+                  <td style={{ padding: "8px 8px", color: "var(--color-text-secondary)" }}>{fmtK(r.impr)}</td>
+                  <td style={{ padding: "8px 8px", color: "var(--color-text-secondary)" }}>{r.ctr}%</td>
+                  <td style={{ padding: "8px 0",  color: "var(--color-text-secondary)" }}>{r.pos}</td>
                 </tr>
               ))}
             </tbody>
