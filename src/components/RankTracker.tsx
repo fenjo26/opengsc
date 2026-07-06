@@ -10,7 +10,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
   ResponsiveContainer, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from "recharts";
-import { Plus, RefreshCw, Trash2, ChevronDown, ChevronUp, ExternalLink, Search, MapPin, Globe } from "lucide-react";
+import { Plus, RefreshCw, Trash2, ChevronDown, ChevronUp, ChevronsUpDown, ExternalLink, Search, MapPin, Globe } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { usePrivacy } from "@/lib/PrivacyContext";
 import { COUNTRIES, LANGUAGES } from "@/lib/seo/regions";
@@ -53,6 +53,31 @@ function PosSparkline({ history }: { history: { date: string; position: number |
     <svg width={w} height={h} style={{ display: "block" }}>
       <polyline points={xy.join(" ")} fill="none" stroke={improving ? "#10B981" : "#EF4444"} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
     </svg>
+  );
+}
+
+type SortKey = "keyword" | "position" | "best" | "gsc" | "trend" | "checked";
+
+// Clickable column header — click toggles asc/desc, switching columns resets to asc.
+function SortableTh({ label, active, dir, align = "center", onClick }: {
+  label: string; active: boolean; dir: "asc" | "desc"; align?: "left" | "center"; onClick: () => void;
+}) {
+  return (
+    <th
+      onClick={onClick}
+      style={{
+        textAlign: align, padding: "10px 12px", cursor: "pointer", userSelect: "none",
+        color: active ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+        fontWeight: 600, fontSize: "11px", letterSpacing: "0.05em", textTransform: "uppercase", whiteSpace: "nowrap",
+      }}
+    >
+      <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", justifyContent: align === "center" ? "center" : "flex-start" }}>
+        {label}
+        {active
+          ? (dir === "asc" ? <ChevronUp size={11} /> : <ChevronDown size={11} />)
+          : <ChevronsUpDown size={11} style={{ opacity: 0.35 }} />}
+      </span>
+    </th>
   );
 }
 
@@ -114,6 +139,13 @@ export default function RankTracker({ siteDbId }: { siteDbId: string; domain?: s
   const [progress, setProgress] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("position");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir(d => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir("asc"); }
+  };
 
   const load = useCallback(async () => {
     if (!siteDbId) return;
@@ -188,11 +220,48 @@ export default function RankTracker({ siteDbId }: { siteDbId: string; domain?: s
     setRows(rs => rs.filter(r => r.id !== id));
   };
 
+  // Nullable-number compare — rows with no data for the sorted column always sink to the
+  // bottom, regardless of asc/desc, so "not found yet" keywords don't clutter the top.
+  const cmpNullable = (a: number | null, b: number | null, dir: 1 | -1) => {
+    if (a === null && b === null) return 0;
+    if (a === null) return 1;
+    if (b === null) return -1;
+    return (a - b) * dir;
+  };
+
   const visible = useMemo(() => {
-    if (!search.trim()) return rows;
-    const q = search.toLowerCase();
-    return rows.filter(r => r.keyword.includes(q));
-  }, [rows, search]);
+    let list = rows;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(r => r.keyword.toLowerCase().includes(q));
+    }
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...list].sort((a, b) => {
+      switch (sortKey) {
+        case "keyword":
+          return a.keyword.localeCompare(b.keyword) * dir;
+        case "position":
+          return cmpNullable(a.position, b.position, dir);
+        case "best":
+          return cmpNullable(a.bestPosition, b.bestPosition, dir);
+        case "gsc":
+          return cmpNullable(a.gsc?.pos ?? null, b.gsc?.pos ?? null, dir);
+        case "trend": {
+          const av = a.position !== null && a.prevPosition !== null ? a.prevPosition - a.position : null;
+          const bv = b.position !== null && b.prevPosition !== null ? b.prevPosition - b.position : null;
+          return cmpNullable(av, bv, dir);
+        }
+        case "checked":
+          return cmpNullable(
+            a.lastCheckedAt ? new Date(a.lastCheckedAt).getTime() : null,
+            b.lastCheckedAt ? new Date(b.lastCheckedAt).getTime() : null,
+            dir,
+          );
+        default:
+          return 0;
+      }
+    });
+  }, [rows, search, sortKey, sortDir]);
 
   // Summary stats (dashboard-style)
   const stats = useMemo(() => {
@@ -342,9 +411,14 @@ export default function RankTracker({ siteDbId }: { siteDbId: string; domain?: s
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid var(--color-border)", background: "var(--color-bg)" }}>
-                {[t("rankColKeyword"), t("rankColPos"), t("rankColBest"), t("rankColGsc"), t("rankColUrl"), t("rankColTrend"), t("rankColChecked"), ""].map((h, i) => (
-                  <th key={i} style={{ textAlign: i >= 1 && i <= 3 ? "center" : "left", padding: "10px 12px", color: "var(--color-text-secondary)", fontWeight: 600, fontSize: "11px", letterSpacing: "0.05em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
-                ))}
+                <SortableTh label={t("rankColKeyword")} align="left" active={sortKey === "keyword"} dir={sortDir} onClick={() => toggleSort("keyword")} />
+                <SortableTh label={t("rankColPos")} active={sortKey === "position"} dir={sortDir} onClick={() => toggleSort("position")} />
+                <SortableTh label={t("rankColBest")} active={sortKey === "best"} dir={sortDir} onClick={() => toggleSort("best")} />
+                <SortableTh label={t("rankColGsc")} active={sortKey === "gsc"} dir={sortDir} onClick={() => toggleSort("gsc")} />
+                <th style={{ textAlign: "left", padding: "10px 12px", color: "var(--color-text-secondary)", fontWeight: 600, fontSize: "11px", letterSpacing: "0.05em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{t("rankColUrl")}</th>
+                <SortableTh label={t("rankColTrend")} align="left" active={sortKey === "trend"} dir={sortDir} onClick={() => toggleSort("trend")} />
+                <SortableTh label={t("rankColChecked")} align="left" active={sortKey === "checked"} dir={sortDir} onClick={() => toggleSort("checked")} />
+                <th style={{ padding: "10px 12px" }}></th>
               </tr>
             </thead>
             <tbody>
