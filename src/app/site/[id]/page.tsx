@@ -3788,11 +3788,14 @@ export default function SitePage() {
       .finally(() => setClusterLoading(false));
   };
 
-  const [syncedAt, setSyncedAt] = useState<Date | null>(() => {
-    if (typeof window === 'undefined') return null;
+  // Start null on both server and client's first render — reading localStorage in the lazy
+  // initializer would make the client's first pass diverge from the SSR-ed HTML (the "Sync"
+  // vs formatted-time text) and trigger a hydration mismatch (React #418). Load it after mount.
+  const [syncedAt, setSyncedAt] = useState<Date | null>(null);
+  useEffect(() => {
     const s = localStorage.getItem('gsc_synced_at');
-    return s ? new Date(s) : null;
-  });
+    if (s) setSyncedAt(new Date(s));
+  }, []);
 
   const handleSync = () => {
     if (syncing) return;

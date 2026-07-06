@@ -33,6 +33,31 @@ function domainOf(url: string): string {
 
 // ─── Serper.dev ────────────────────────────────────────────────────────────────
 // Docs: https://serper.dev — single POST, returns clean JSON. Cheap.
+
+type SerperPageResult =
+  | { ok: true; data: any }
+  | { ok: false; error: string };
+
+async function serperFetchPage(
+  endpoint: string, apiKey: string, keyword: string,
+  gl: string, hl: string, location: string | undefined, page: number,
+): Promise<SerperPageResult> {
+  const body: Record<string, unknown> = { q: keyword, gl, hl, num: 10, page };
+  if (location) body.location = location;
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "X-API-KEY": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!res.ok) return { ok: false, error: `serper ${res.status}: ${(await res.text()).slice(0, 200)}` };
+    return { ok: true, data: await res.json() };
+  } catch (e: any) {
+    return { ok: false, error: `сеть Serper: ${e?.cause?.code || e?.message || "fetch failed"}` };
+  }
+}
+
 async function serperSearch(
   apiKey: string,
   keyword: string,
@@ -45,44 +70,34 @@ async function serperSearch(
 
   // Serper returns one Google page (~10 organic) per call and does NOT expand via `num`.
   // To honour Top N > 10 we paginate with the `page` param and merge (dedupe by URL).
+  // Pages are fetched IN PARALLEL (not sequentially) — a cold-start rank-tracker scan
+  // (num=50 → 5 pages) used to mean 5 sequential round trips (~5-15s) per keyword; for a
+  // bulk import of dozens of new keywords that added up to a very long, "stuck"-looking wait.
   const want = opts.num || 10;
   const pages = Math.min(5, Math.max(1, Math.ceil(want / 10)));
+
+  const settled = await Promise.all(
+    Array.from({ length: pages }, (_, i) =>
+      serperFetchPage(endpoint, apiKey, keyword, opts.gl || "us", opts.hl || "en", opts.location, i + 1)),
+  );
+
+  const page1 = settled[0];
+  if (!page1.ok) return { engine, provider: "serper", keyword, results: [], error: page1.error };
+
   const seen = new Set<string>();
   const results: SerpResultItem[] = [];
-  let paa: string[] = [];
-  let related: string[] = [];
+  const paa: string[] = (page1.data.peopleAlsoAsk ?? []).map((p: any) => p.question).filter(Boolean);
+  const related: string[] = (page1.data.relatedSearches ?? []).map((p: any) => p.query).filter(Boolean);
 
-  for (let page = 1; page <= pages; page++) {
-    const body: Record<string, unknown> = { q: keyword, gl: opts.gl || "us", hl: opts.hl || "en", num: 10, page };
-    if (opts.location) body.location = opts.location;
-    let res: Response;
-    try {
-      res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "X-API-KEY": apiKey, "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(20000),
-      });
-    } catch (e: any) {
-      if (page === 1) return { engine, provider: "serper", keyword, results: [], error: `сеть Serper: ${e?.cause?.code || e?.message || "fetch failed"}` };
-      break;
-    }
-    if (!res.ok) {
-      if (page === 1) return { engine, provider: "serper", keyword, results: [], error: `serper ${res.status}: ${(await res.text()).slice(0, 200)}` };
-      break;
-    }
-    const data = await res.json();
-    if (page === 1) {
-      paa = (data.peopleAlsoAsk ?? []).map((p: any) => p.question).filter(Boolean);
-      related = (data.relatedSearches ?? []).map((p: any) => p.query).filter(Boolean);
-    }
-    const organic: any[] = data.organic ?? [];
+  for (const s of settled) {
+    if (!s.ok) break; // a failed page (rare) — trust only the contiguous run before it
+    const organic: any[] = s.data.organic ?? [];
     for (const r of organic) {
       if (!r.link || seen.has(r.link)) continue;
       seen.add(r.link);
       results.push({ position: results.length + 1, url: r.link, title: r.title ?? "", snippet: r.snippet ?? "", domain: domainOf(r.link ?? "") });
     }
-    if (organic.length < 10) break;     // Google has no further pages for this query
+    if (organic.length < 10) break;     // Google had no further pages for this query
     if (results.length >= want) break;
   }
 
