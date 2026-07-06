@@ -12,7 +12,7 @@ import { useEffect } from "react";
 import { useSession } from "next-auth/react";
 
 const EXACT_KEYS = [
-  "aiProvider", "aiApiKey", "seoProvider", "seoModel", "seoSerpProvider",
+  "aiProvider", "aiApiKey", "seoProvider", "seoModel", "seoSerpProvider", "seoSerpProvider_rank",
   "seoActivePolicy", "seoPolicies",
   "seoAutoFactcheck", "seoAutoImages", "seoHardRedact", "seoFactSources",
   "seoFactBearingOnly", "seoFactReuseCorpus",

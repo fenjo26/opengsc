@@ -26,7 +26,10 @@ export async function getUserSerpCreds(userId: string): Promise<SerpCreds | null
     const raw = rows?.[0]?.seoSettings;
     if (!raw) return null;
     const s = JSON.parse(raw);
-    const provider = s.seoSerpProvider || "serper";
+    // Rank Tracker can use its own provider override (independent from the one used for
+    // content generation/SERP analysis in SEO Tools) — set in Settings → SEO Tools; falls
+    // back to the general active provider when unset.
+    const provider = s.seoSerpProvider_rank || s.seoSerpProvider || "serper";
     const apiKey = s[`seoKey_${provider}`] || "";
     if (!apiKey) {
       // Fall back to any configured SERP key

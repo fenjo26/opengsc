@@ -297,11 +297,35 @@ function PerTaskProviders() {
   );
 }
 
+const SERP_PROVIDER_LIST: [string, string][] = [["serper", "Serper.dev"], ["dataforseo", "DataForSEO"], ["scrapingrobot", "ScrapingRobot"]];
+
+function providerPillStyle(isActive: boolean): React.CSSProperties {
+  return {
+    padding: "7px 14px", borderRadius: "8px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
+    border: `1px solid ${isActive ? "var(--color-accent-blue)" : "var(--color-border)"}`,
+    background: isActive ? "rgba(41,151,255,0.1)" : "transparent",
+    color: isActive ? "var(--color-accent-blue)" : "var(--color-text-secondary)",
+  };
+}
+
 export default function SeoToolsSettings() {
   const { t } = useLanguage();
   const [active, setActive] = useState("serper");
-  useEffect(() => { setActive(localStorage.getItem("seoSerpProvider") || "serper"); }, []);
+  // Rank Tracker can use its own SERP provider, independent from the one used for content
+  // generation/analysis (e.g. a free-tier provider for frequent daily position checks, a
+  // pricier one for occasional content research). Empty string = inherit the active provider.
+  const [rankActive, setRankActive] = useState("");
+  useEffect(() => {
+    setActive(localStorage.getItem("seoSerpProvider") || "serper");
+    setRankActive(localStorage.getItem("seoSerpProvider_rank") || "");
+  }, []);
   const setProvider = (id: string) => { setActive(id); localStorage.setItem("seoSerpProvider", id); };
+  const setRankProvider = (id: string) => {
+    setRankActive(id);
+    if (id) localStorage.setItem("seoSerpProvider_rank", id);
+    else localStorage.removeItem("seoSerpProvider_rank");
+  };
+  const activeName = SERP_PROVIDER_LIST.find(([id]) => id === active)?.[1] ?? active;
 
   return (
     <div className="panel">
@@ -319,8 +343,21 @@ export default function SeoToolsSettings() {
       <div style={{ marginBottom: "14px" }}>
         <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "7px" }}>{t("seoSetActiveProvider")}</div>
         <div style={{ display: "flex", gap: "8px" }}>
-          {[["serper", "Serper.dev"], ["dataforseo", "DataForSEO"], ["scrapingrobot", "ScrapingRobot"]].map(([id, name]) => (
-            <button key={id} onClick={() => setProvider(id)} style={{ padding: "7px 14px", borderRadius: "8px", fontSize: "12px", fontWeight: 600, cursor: "pointer", border: `1px solid ${active === id ? "var(--color-accent-blue)" : "var(--color-border)"}`, background: active === id ? "rgba(41,151,255,0.1)" : "transparent", color: active === id ? "var(--color-accent-blue)" : "var(--color-text-secondary)" }}>{name}</button>
+          {SERP_PROVIDER_LIST.map(([id, name]) => (
+            <button key={id} onClick={() => setProvider(id)} style={providerPillStyle(active === id)}>{name}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ marginBottom: "14px", paddingBottom: "16px", borderBottom: "1px solid var(--color-border)" }}>
+        <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "4px" }}>{t("seoSetRankProvider")}</div>
+        <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", margin: "0 0 8px" }}>{t("seoSetRankProviderDesc")}</p>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <button onClick={() => setRankProvider("")} style={providerPillStyle(rankActive === "")}>
+            {t("seoSetRankProviderInherit")} ({activeName})
+          </button>
+          {SERP_PROVIDER_LIST.map(([id, name]) => (
+            <button key={id} onClick={() => setRankProvider(id)} style={providerPillStyle(rankActive === id)}>{name}</button>
           ))}
         </div>
       </div>
