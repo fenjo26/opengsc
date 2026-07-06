@@ -4070,7 +4070,7 @@ export default function SitePage() {
         {/* Main chart */}
         <div style={{ background: "var(--color-card)", borderRadius: "12px", padding: "16px", border: "1px solid var(--color-border)" }}>
           <ResponsiveContainer width="100%" height={300}>
-            <ComposedChart data={chartData} margin={{ top: 8, right: 50, left: 0, bottom: 0 }}>
+            <ComposedChart data={chartData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
               <defs>
                 {(["clicks", "impressions", "ctr", "position"] as const).map(m => (
                   <linearGradient key={m} id={`sg-${m}`} x1="0" y1="0" x2="0" y2="1">
