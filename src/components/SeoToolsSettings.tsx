@@ -6,18 +6,30 @@
 // All values are localStorage-only (same keys/logic as before — just relocated).
 
 import { useEffect, useState } from "react";
-import { Globe, RefreshCw, CheckCircle, Eye, X } from "lucide-react";
+import { Globe, RefreshCw, CheckCircle, Eye, X, Sparkles } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { getConfiguredProviders, AI_PROVIDER_NAMES } from "@/lib/seo/keys";
 
-const SEO_PROVIDERS = [
+interface KeyCardProvider {
+  id: string; storageKey: string; name: string; roleKey: string; placeholder: string;
+  hintKey: string; instrKey: string; docsUrl: string; color: string; logo: string;
+}
+
+const SEO_PROVIDERS: KeyCardProvider[] = [
   { id: "serper", storageKey: "seoKey_serper", name: "Serper.dev", roleKey: "seoRoleSerp", placeholder: "Serper API key", hintKey: "seoSetHintSerper", instrKey: "seoSetInstrSerper", docsUrl: "https://serper.dev", color: "#10A37F", logo: "S" },
   { id: "dataforseo", storageKey: "seoKey_dataforseo", name: "DataForSEO", roleKey: "seoRoleDfs", placeholder: "login:password или Base64-токен", hintKey: "seoSetHintDfs", instrKey: "seoSetInstrDfs", docsUrl: "https://app.dataforseo.com/api-access", color: "#2997ff", logo: "D" },
   { id: "scrapingrobot", storageKey: "seoKey_scrapingrobot", name: "ScrapingRobot", roleKey: "seoRoleSr", placeholder: "ScrapingRobot API token", hintKey: "seoSetHintSr", instrKey: "seoSetInstrSr", docsUrl: "https://scrapingrobot.com", color: "#8B5CF6", logo: "R" },
   { id: "firecrawl", storageKey: "seoKey_firecrawl", name: "Firecrawl", roleKey: "seoRoleFc", placeholder: "fc-...", hintKey: "seoSetHintFc", instrKey: "seoSetInstrFc", docsUrl: "https://www.firecrawl.dev/app/api-keys", color: "#ff9f0a", logo: "F" },
-] as const;
+];
 
-function SeoKeyCard({ provider }: { provider: typeof SEO_PROVIDERS[number] }) {
+// AEO citation-check engines that aren't already covered by the main AI provider keys
+// (ChatGPT/Claude checks reuse aiKey_openai / aiKey_anthropic from Settings → API providers).
+const AEO_PROVIDERS: KeyCardProvider[] = [
+  { id: "perplexity", storageKey: "seoKey_perplexity", name: "Perplexity", roleKey: "seoRolePerplexity", placeholder: "pplx-...", hintKey: "seoSetHintPerplexity", instrKey: "seoSetInstrPerplexity", docsUrl: "https://docs.perplexity.ai", color: "#20808D", logo: "P" },
+  { id: "xai", storageKey: "seoKey_xai", name: "xAI (Grok)", roleKey: "seoRoleXai", placeholder: "xai-...", hintKey: "seoSetHintXai", instrKey: "seoSetInstrXai", docsUrl: "https://console.x.ai", color: "#000000", logo: "G" },
+];
+
+function SeoKeyCard({ provider }: { provider: KeyCardProvider }) {
   const { t } = useLanguage();
   const [key, setKey] = useState("");
   const [visible, setVisible] = useState(false);
@@ -368,6 +380,17 @@ export default function SeoToolsSettings() {
 
       <div style={{ marginTop: "14px", padding: "11px 14px", borderRadius: "8px", background: "rgba(16,163,127,0.06)", border: "1px solid rgba(16,163,127,0.18)", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
         💡 {t("seoSetTip")}
+      </div>
+
+      <div style={{ marginTop: "22px", paddingTop: "18px", borderTop: "1px solid var(--color-border)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
+          <Sparkles size={17} color="#8B5CF6" />
+          <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>{t("seoAeoSectionTitle")}</h2>
+        </div>
+        <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: "0 0 14px" }}>{t("seoAeoSectionDesc")}</p>
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          {AEO_PROVIDERS.map(p => <SeoKeyCard key={p.id} provider={p} />)}
+        </div>
       </div>
     </div>
   );

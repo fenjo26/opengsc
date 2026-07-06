@@ -7,5 +7,7 @@ export async function register() {
     startClarityScheduler();
     const { startRankScheduler } = await import('@/lib/rankScheduler');
     startRankScheduler();
+    const { startAeoScheduler } = await import('@/lib/aeoScheduler');
+    startAeoScheduler();
   }
 }

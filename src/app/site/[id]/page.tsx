@@ -9,6 +9,7 @@ import CtrBenchmark from "@/components/CtrBenchmark";
 import { SiteHealthPanel } from "@/components/SiteHealthPanel";
 import { ClarityPanel } from "@/components/ClarityPanel";
 import RankTracker from "@/components/RankTracker";
+import AeoTracker from "@/components/AeoTracker";
 import { ALGO_UPDATES, ALGO_UPDATE_COLORS, algoDateLabel } from "@/lib/algoUpdates";
 import { useParams, useRouter } from "next/navigation";
 import { usePrivacy } from "@/lib/PrivacyContext";
@@ -3732,7 +3733,7 @@ export default function SitePage() {
     : { transition: "filter 0.25s" };
 
   // Use index so tab state doesn't break on language change
-  const TAB_KEYS = ["dashboard", "positions", "ga4", "indexing", "backlinks", "annotations", "optimize", "health", "ux", "settings"] as const;
+  const TAB_KEYS = ["dashboard", "positions", "aeo", "ga4", "indexing", "backlinks", "annotations", "optimize", "health", "ux", "settings"] as const;
   type TabKey = typeof TAB_KEYS[number];
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [period, setPeriod]       = useState("7d");
@@ -3742,6 +3743,7 @@ export default function SitePage() {
   const TABS: { key: TabKey; label: string }[] = [
     { key: "dashboard",   label: t("tabDashboard") },
     { key: "positions",   label: t("tabPositions") },
+    { key: "aeo",         label: t("tabAeo") },
     { key: "ga4",         label: t("tabGA4") },
     { key: "indexing",    label: t("tabIndexing") },
     { key: "backlinks",   label: t("backlinksTab") },
@@ -4075,6 +4077,9 @@ export default function SitePage() {
 
       {/* ── Positions (Rank Tracker) tab ── */}
       {activeTab === "positions" && <RankTracker siteDbId={siteDbId} domain={domain} />}
+
+      {/* ── AI Visibility (AEO Tracker) tab ── */}
+      {activeTab === "aeo" && <AeoTracker siteDbId={siteDbId} domain={domain} />}
 
       {/* ── GA4 tab ── */}
       {activeTab === "ga4" && (

@@ -100,6 +100,7 @@ model Site {
   backlinks             Backlink[]
   claritySnapshots      ClaritySnapshot[]
   trackedKeywords       TrackedKeyword[]
+  trackedQuestions      TrackedQuestion[]
 
   // Microsoft Clarity integration
   clarityToken          String?   // Data Export API token (per-project in Clarity)
@@ -235,6 +236,45 @@ model RankCheck {
   keyword TrackedKeyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
 
   @@index([keywordId, checkedAt])
+}
+
+// ─── AEO Tracker (AI answer-engine citation monitoring) ──────────────────────
+// Tracked questions are checked periodically by the in-app scheduler (aeoScheduler) across
+// multiple AI engines (ChatGPT, Perplexity, Claude, Grok) — same in-app-cron pattern as
+// clarityScheduler/rankScheduler, no system cron needed. ChatGPT/Perplexity use live web
+// search (a citation URL matching the site's domain is the strongest signal); Claude/Grok
+// have no guaranteed browsing, so they fall back to text-mention matching.
+model TrackedQuestion {
+  id            String    @id @default(cuid())
+  siteId        String
+  question      String
+  createdAt     DateTime  @default(now())
+  lastCheckedAt DateTime?
+
+  // Denormalized latest per-engine state for cheap list rendering — JSON:
+  // { chatgpt: { cited, url, checkedAt }, perplexity: {...}, claude: {...}, grok: {...} }
+  lastResults   String?
+
+  site   Site       @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  checks AeoCheck[]
+
+  @@unique([siteId, question])
+  @@index([siteId])
+  @@index([lastCheckedAt])
+}
+
+model AeoCheck {
+  id         String   @id @default(cuid())
+  questionId String
+  engine     String   // "chatgpt" | "perplexity" | "claude" | "grok"
+  checkedAt  DateTime @default(now())
+  cited      Boolean
+  url        String?
+  snippet    String?
+  error      String?
+
+  question TrackedQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  @@index([questionId, checkedAt])
 }
 
 model ContentGroup {
