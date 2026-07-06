@@ -13,9 +13,7 @@ import {
 import { Plus, RefreshCw, Trash2, ChevronDown, ChevronUp, ExternalLink, Search, MapPin, Globe } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { usePrivacy } from "@/lib/PrivacyContext";
-
-const COUNTRIES = ["us","gb","de","fr","es","it","nl","pl","cz","ua","ru","kz","tr","pt","br","mx","ca","au","in","jp","gr","cy","ro","bg","hu","se","no","fi","dk","ch","at","be","ie","il","ae","sg","id","th","vn","az","ge","am"];
-const LANGS = ["en","ru","uk","de","fr","es","it","pl","cs","tr","pt","nl","el","ro","bg","hu","sv","no","fi","da","he","ar","id","th","vi","ja","kk","az","ka","hy"];
+import { COUNTRIES, LANGUAGES } from "@/lib/seo/regions";
 
 type KwRow = {
   id: string; keyword: string; country: string; lang: string; device: string;
@@ -232,7 +230,7 @@ export default function RankTracker({ siteDbId }: { siteDbId: string; domain?: s
   };
 
   return (
-    <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: "24px", maxWidth: "1400px" }}>
+    <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: "24px", width: "100%", boxSizing: "border-box" }}>
 
       {/* ── Header: title + actions ── */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
@@ -295,13 +293,19 @@ export default function RankTracker({ siteDbId }: { siteDbId: string; domain?: s
             rows={2}
             style={{ ...inputStyle, flex: "1 1 340px", minHeight: "40px", maxHeight: "120px", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }}
           />
-          <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
-            <select value={country} onChange={e => setCountry(e.target.value)} style={{ ...inputStyle, cursor: "pointer", height: "40px" }} title="Country (gl)">
-              {COUNTRIES.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
-            </select>
-            <select value={lang} onChange={e => setLang(e.target.value)} style={{ ...inputStyle, cursor: "pointer", height: "40px" }} title="Language (hl)">
-              {LANGS.map(l => <option key={l} value={l}>{l}</option>)}
-            </select>
+          <div style={{ display: "flex", gap: "8px", alignItems: "flex-end" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+              <span style={{ fontSize: "10px", color: "var(--color-text-secondary)", paddingLeft: "2px" }}>{t("rankCountryLabel")}</span>
+              <select value={country} onChange={e => setCountry(e.target.value)} style={{ ...inputStyle, cursor: "pointer", height: "40px", maxWidth: "170px" }} title="Search location (Google gl param)">
+                {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
+              </select>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+              <span style={{ fontSize: "10px", color: "var(--color-text-secondary)", paddingLeft: "2px" }}>{t("rankLangLabel")}</span>
+              <select value={lang} onChange={e => setLang(e.target.value)} style={{ ...inputStyle, cursor: "pointer", height: "40px", maxWidth: "150px" }} title="Search language (Google hl param)">
+                {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
+              </select>
+            </div>
             <button onClick={addKeywords} disabled={!kwText.trim() || !!busy}
               style={{ ...primaryBtn, height: "40px", opacity: kwText.trim() && !busy ? 1 : 0.5, cursor: kwText.trim() && !busy ? "pointer" : "not-allowed" }}>
               <Plus size={13} /> {busy === "add" ? "…" : t("rankAddBtn")}

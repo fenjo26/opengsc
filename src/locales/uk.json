@@ -1658,11 +1658,13 @@
   "wlNoData": "Недостатньо даних для порівняння періодів",
   "seoRoleSr": "SERP-скрапінг — безкоштовно 5000/міс",
   "seoSetHintSr": "Використовується для зняття позицій та аналізу видачі. Безкоштовний тариф: 5000 перевірок на місяць — той самий провайдер, що й у SerpBear.",
-  "seoSetInstrSr": "Зареєструйся на scrapingrobot.com → Dashboard → скопіюй API-токен.",
+  "seoSetInstrSr": "ScrapingRobot тепер продукт Rayobyte — реєстрація на app.rayobyte.com → Scraping API → Get Started, звідти скопіюй Token сюди.",
   "rankTitle": "Трекер позицій",
   "rankSubtitle": "Щоденне зняття позицій у видачі — реальні позиції поруч із середніми з GSC",
   "rankHintAdd": "По одному ключу на рядок. Також можна додати будь-який запит кнопкою + у таблицях Queries, Winners & Losers і Striking Distance.",
   "rankStatKeywords": "ключів",
   "rankStatAvg": "середня позиція",
-  "rankStatMoves": "рухи"
+  "rankStatMoves": "рухи",
+  "rankCountryLabel": "Регіон пошуку",
+  "rankLangLabel": "Мова пошуку"
 }
