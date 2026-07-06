@@ -79,9 +79,14 @@ function ModelSelector() {
   const [sel, setSel] = useState("");
   const [custom, setCustom] = useState("");
   const [saved, setSaved] = useState(false);
+  // Read on mount only — reading localStorage during the initial render would make the
+  // client's first pass diverge from the server-rendered (window-less) HTML and trigger
+  // a hydration mismatch (React #418).
+  const [hasProviders, setHasProviders] = useState(false);
 
   async function loadModels() {
     const providers = getConfiguredProviders();
+    setHasProviders(providers.length > 0);
     if (!providers.length) { setGroups([]); return; }
     setLoading(true); setFetchErr(false);
     const results = await Promise.all(providers.map(async (p) => {
@@ -145,7 +150,7 @@ function ModelSelector() {
       )}
 
       <div style={{ fontSize: "11px", color: "var(--color-text-tertiary)", marginTop: "6px" }}>
-        {loading ? t("seoModelLoading") : !getConfiguredProviders().length ? t("seoModelNoProviders") : fetchErr ? t("seoModelErrFetch") : t("seoModelLive")}
+        {loading ? t("seoModelLoading") : !hasProviders ? t("seoModelNoProviders") : fetchErr ? t("seoModelErrFetch") : t("seoModelLive")}
       </div>
     </div>
   );
