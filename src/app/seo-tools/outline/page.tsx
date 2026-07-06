@@ -300,7 +300,7 @@ export default function OutlinePage() {
           <AlertTriangle size={18} color="var(--color-accent-orange)" style={{ flexShrink: 0, marginTop: "1px" }} />
           <div style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>
             {t("seoNeedKeysPrefix")} {noSerpKey && <b>{t("seoSerpProviderLabel")}</b>}{noSerpKey && noAiKey && " + "}{noAiKey && <b>{t("seoAiProviderLabel")}</b>}.{" "}
-            <Link href="/seo-tools/settings" style={{ color: "var(--color-accent-blue)" }}>{t("seoOpenSettings")}</Link>
+            <Link href="/settings?tab=seo-tools" style={{ color: "var(--color-accent-blue)" }}>{t("seoOpenSettings")}</Link>
           </div>
         </div>
       )}

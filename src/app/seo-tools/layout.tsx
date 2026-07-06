@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { FileText, Search, ScrollText, Sparkles, History, PenLine, Quote, SlidersHorizontal, Globe, LayoutTemplate } from "lucide-react";
+import { FileText, Search, ScrollText, Sparkles, History, PenLine, Quote, Globe, LayoutTemplate, SlidersHorizontal } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 const TABS = [
@@ -13,7 +13,6 @@ const TABS = [
   { href: "/seo-tools/citations", key: "seoTabCitations" as const, icon: Quote },
   { href: "/seo-tools/policy", key: "seoTabPolicy" as const, icon: ScrollText },
   { href: "/seo-tools/history", key: "seoTabHistory" as const, icon: History },
-  { href: "/seo-tools/settings", key: "seoTabSettings" as const, icon: SlidersHorizontal },
 ];
 
 export default function SeoToolsLayout({ children }: { children: React.ReactNode }) {
@@ -24,22 +23,35 @@ export default function SeoToolsLayout({ children }: { children: React.ReactNode
   return (
     <div style={{ padding: "28px 32px 60px", maxWidth: "1280px", margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "6px" }}>
-        <div style={{
-          width: 38, height: 38, borderRadius: "10px",
-          background: "rgba(191,90,242,0.14)", border: "1px solid rgba(191,90,242,0.3)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <Sparkles size={20} color="var(--color-accent-purple)" />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "6px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div style={{
+            width: 38, height: 38, borderRadius: "10px",
+            background: "rgba(191,90,242,0.14)", border: "1px solid rgba(191,90,242,0.3)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <Sparkles size={20} color="var(--color-accent-purple)" />
+          </div>
+          <div>
+            <h1 style={{ fontSize: "22px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>
+              {t("seoNavTitle")}
+            </h1>
+            <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: "2px 0 0" }}>
+              {t("seoSubtitle")}
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 style={{ fontSize: "22px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>
-            {t("seoNavTitle")}
-          </h1>
-          <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: "2px 0 0" }}>
-            {t("seoSubtitle")}
-          </p>
-        </div>
+        {/* Keys/models/policies now live in project Settings — single place for all keys */}
+        <button
+          onClick={() => router.push("/settings?tab=seo-tools")}
+          style={{
+            display: "flex", alignItems: "center", gap: "6px", padding: "8px 14px", borderRadius: "8px",
+            border: "1px solid var(--color-border)", background: "var(--color-card)",
+            color: "var(--color-text-secondary)", fontSize: "12px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+          }}
+        >
+          <SlidersHorizontal size={13} /> {t("seoTabSettings")}
+        </button>
       </div>
 
       {/* Sub-tabs */}

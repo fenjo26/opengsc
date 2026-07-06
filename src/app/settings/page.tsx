@@ -5,12 +5,13 @@ import { signIn, useSession } from "next-auth/react";
 import {
   ArrowLeft, Plus, X, CheckCircle, AlertCircle,
   Users, Settings, Globe, Key, Edit2, Copy,
-  ChevronDown, Crown, Zap, Star, Eye,
+  ChevronDown, Crown, Zap, Star, Eye, Sparkles,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
+import SeoToolsSettings from "@/components/SeoToolsSettings";
 
-type NavItem = "accounts" | "teams" | "api" | "indexing-api" | "members" | "preferences" | "supersites";
+type NavItem = "accounts" | "teams" | "api" | "indexing-api" | "seo-tools" | "members" | "preferences" | "supersites";
 
 interface ConnectedAccount {
   id: string; email: string; picture: string | null; connected: boolean; gscAccess: boolean; ga4Access?: boolean;
@@ -1425,6 +1426,15 @@ export default function SettingsPage() {
 
   const defaultTeamName = user?.name ? `${user.name.split(" ")[0]}'s Team` : "My Team";
 
+  // Deep-link support (e.g. /settings?tab=seo-tools from the SEO Tools pages) — read via
+  // window.location in an effect rather than useSearchParams(), so this stays a plain client
+  // render with no SSR/hydration mismatch and no Suspense-boundary requirement.
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get("tab");
+    const valid: NavItem[] = ["accounts", "teams", "api", "indexing-api", "seo-tools", "members", "preferences", "supersites"];
+    if (tab && (valid as string[]).includes(tab)) setNav(tab as NavItem);
+  }, []);
+
   const fetchAccounts = async () => {
     setLoadingAccounts(true);
     try { const res = await fetch("/api/gsc/accounts"); const data = await res.json(); setAccounts(data.accounts || []); } catch {}
@@ -1483,6 +1493,7 @@ export default function SettingsPage() {
             <NavBtn id="teams" icon={<Users size={14} />} label={t("myTeams")} />
             <NavBtn id="api" icon={<Key size={14} />} label={t("navApiMcpKeys")} />
             <NavBtn id="indexing-api" icon={<Globe size={14} />} label={t("navIndexingApi")} />
+            <NavBtn id="seo-tools" icon={<Sparkles size={14} />} label={t("navSeoTools")} />
           </div>
 
           {/* Team */}
@@ -1514,6 +1525,7 @@ export default function SettingsPage() {
           {nav === "teams"        && <TeamsSection user={user} />}
           {nav === "api"          && <ApiSection />}
           {nav === "indexing-api" && <IndexApiSection />}
+          {nav === "seo-tools"    && <SeoToolsSettings />}
           {nav === "members"      && <MembersSection user={user} />}
           {nav === "preferences"  && <PreferencesSection user={user} />}
           {nav === "supersites"   && <SuperSitesSection />}
