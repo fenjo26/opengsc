@@ -1658,5 +1658,11 @@
   "wlNoData": "Not enough data to compare periods",
   "seoRoleSr": "SERP scraping — free 5000/mo",
   "seoSetHintSr": "Used for rank tracking and SERP analysis. Free tier: 5000 scrapes per month — the same provider SerpBear uses.",
-  "seoSetInstrSr": "Sign up at scrapingrobot.com → Dashboard → copy your API token."
+  "seoSetInstrSr": "Sign up at scrapingrobot.com → Dashboard → copy your API token.",
+  "rankTitle": "Rank Tracker",
+  "rankSubtitle": "Daily SERP position monitoring — real scraped positions next to GSC averages",
+  "rankHintAdd": "One keyword per line. You can also track any query with the + button in the Queries, Winners & Losers and Striking Distance tables.",
+  "rankStatKeywords": "keywords",
+  "rankStatAvg": "avg position",
+  "rankStatMoves": "moves"
 }

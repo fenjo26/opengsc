@@ -1658,5 +1658,11 @@
   "wlNoData": "Недостаточно данных для сравнения периодов",
   "seoRoleSr": "SERP-скрапинг — бесплатно 5000/мес",
   "seoSetHintSr": "Используется для съёма позиций и анализа выдачи. Бесплатный тариф: 5000 проверок в месяц — тот же провайдер, что у SerpBear.",
-  "seoSetInstrSr": "Зарегистрируйся на scrapingrobot.com → Dashboard → скопируй API-токен."
+  "seoSetInstrSr": "Зарегистрируйся на scrapingrobot.com → Dashboard → скопируй API-токен.",
+  "rankTitle": "Трекер позиций",
+  "rankSubtitle": "Ежедневный съём позиций в выдаче — реальные позиции рядом со средними из GSC",
+  "rankHintAdd": "По одному ключу на строку. Также можно добавить любой запрос кнопкой + в таблицах Queries, Winners & Losers и Striking Distance.",
+  "rankStatKeywords": "ключей",
+  "rankStatAvg": "средняя позиция",
+  "rankStatMoves": "движения"
 }
