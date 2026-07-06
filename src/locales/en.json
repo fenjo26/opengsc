@@ -1667,5 +1667,6 @@
   "rankStatAvg": "avg position",
   "rankStatMoves": "moves",
   "rankCountryLabel": "Search region",
-  "rankLangLabel": "Search language"
+  "rankLangLabel": "Search language",
+  "rankProviderSwitchHint": "Active SERP provider — click to change it in Settings → SEO Tools"
 }

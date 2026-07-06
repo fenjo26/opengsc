@@ -1667,5 +1667,6 @@
   "rankStatAvg": "середня позиція",
   "rankStatMoves": "рухи",
   "rankCountryLabel": "Регіон пошуку",
-  "rankLangLabel": "Мова пошуку"
+  "rankLangLabel": "Мова пошуку",
+  "rankProviderSwitchHint": "Активний SERP-провайдер — клік, щоб змінити в Налаштуваннях → SEO Tools"
 }

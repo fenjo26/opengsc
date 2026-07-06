@@ -311,9 +311,15 @@ export default function RankTracker({ siteDbId }: { siteDbId: string; domain?: s
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           {provider && (
-            <span style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "11px", fontWeight: 600, color: "var(--color-text-secondary)", padding: "6px 12px", borderRadius: "999px", border: "1px solid var(--color-border)", background: "var(--color-card)" }}>
+            <a
+              href="/settings?tab=seo-tools"
+              title={t("rankProviderSwitchHint")}
+              style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "11px", fontWeight: 600, color: "var(--color-text-secondary)", padding: "6px 12px", borderRadius: "999px", border: "1px solid var(--color-border)", background: "var(--color-card)", textDecoration: "none", cursor: "pointer" }}
+              onMouseOver={e => { e.currentTarget.style.borderColor = "#3B82F6"; e.currentTarget.style.color = "#3B82F6"; }}
+              onMouseOut={e => { e.currentTarget.style.borderColor = "var(--color-border)"; e.currentTarget.style.color = "var(--color-text-secondary)"; }}
+            >
               <Globe size={11} /> {provider}
-            </span>
+            </a>
           )}
           <button onClick={checkAll} disabled={!!busy || !rows.length}
             style={{ ...(rows.length ? primaryBtn : ghostBtn), cursor: busy || !rows.length ? "not-allowed" : "pointer", opacity: busy || !rows.length ? 0.6 : 1 }}>
