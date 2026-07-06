@@ -446,7 +446,7 @@ function CountryTable({ rows }: { rows: CountryRow[] }) {
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px", minHeight: "30px" }}>
         <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>{t("countries")}</h3>
         <button onClick={handleCSV}
           style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "4px", padding: "4px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-secondary)", fontSize: "12px", cursor: "pointer" }}>
@@ -3562,7 +3562,7 @@ function NewRankingsTable({ queryRows, pageRows, blur }: { queryRows: RankRow[];
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px", minHeight: "30px" }}>
         <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>{t("newRankings")}</h3>
         <TabBar tabs={["Queries", "Pages"]} active={tab} onChange={handleTabChange} />
         <button onClick={handleCSV} title="Export CSV"
