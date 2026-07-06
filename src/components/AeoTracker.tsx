@@ -279,7 +279,7 @@ export default function AeoTracker({ siteDbId }: { siteDbId: string; domain?: st
           <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: 0 }}>{t("aeoSubtitle")}</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <a href="/settings?tab=seo-tools" title={t("aeoEnginesHint")}
+          <a href="/settings?tab=api-keys" title={t("aeoEnginesHint")}
             style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", fontWeight: 600, color: "var(--color-text-secondary)", padding: "6px 12px", borderRadius: "999px", border: "1px solid var(--color-border)", background: "var(--color-card)", textDecoration: "none" }}>
             {ENGINES.map(e => (
               <span key={e} style={{ width: "7px", height: "7px", borderRadius: "50%", background: configuredEngines.includes(e) ? ENGINE_COLOR[e] : "var(--color-border)" }} title={ENGINE_LABEL[e]} />
@@ -298,7 +298,7 @@ export default function AeoTracker({ siteDbId }: { siteDbId: string; domain?: st
       {!loading && !hasAnyKey && (
         <div style={{ padding: "12px 16px", borderRadius: "10px", border: "1px solid rgba(245,158,11,0.35)", background: "rgba(245,158,11,0.08)", color: "#F59E0B", fontSize: "13px" }}>
           ⚠ {t("aeoNoKey")}{" "}
-          <a href="/settings?tab=seo-tools" style={{ color: "#F59E0B", fontWeight: 700, textDecoration: "underline" }}>{t("aeoNoKeyLink")}</a>
+          <a href="/settings?tab=api-keys" style={{ color: "#F59E0B", fontWeight: 700, textDecoration: "underline" }}>{t("aeoNoKeyLink")}</a>
         </div>
       )}
 

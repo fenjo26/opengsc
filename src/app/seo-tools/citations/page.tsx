@@ -65,7 +65,7 @@ export default function CitationsPage() {
 
       {!hasKey && (
         <div className={card} style={{ borderColor: "rgba(255,159,10,0.35)", background: "rgba(255,159,10,0.06)", display: "flex", gap: "10px", alignItems: "center", fontSize: "13px", color: "var(--color-text-secondary)" }}>
-          <AlertTriangle size={18} color="var(--color-accent-orange)" /> {t("seoCitNeedKey")} <Link href="/settings?tab=seo-tools" style={{ color: "var(--color-accent-blue)" }}>{t("seoSettingsShort")}</Link>
+          <AlertTriangle size={18} color="var(--color-accent-orange)" /> {t("seoCitNeedKey")} <Link href="/settings?tab=api-keys" style={{ color: "var(--color-accent-blue)" }}>{t("seoSettingsShort")}</Link>
         </div>
       )}
 

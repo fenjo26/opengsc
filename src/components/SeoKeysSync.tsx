@@ -60,10 +60,41 @@ async function pushIfChanged(): Promise<void> {
   if (res.ok) lastPushed = json;
 }
 
+function isTrackedKey(k: string): boolean {
+  return EXACT_KEYS.includes(k) || PREFIXES.some(p => k.startsWith(p));
+}
+
+let patched = false;
+let pushSoonTimer: any = null;
+
+// Debounced immediate push: fires ~600ms after the last tracked-key write, instead of
+// waiting for the 20s interval or an actual tab-hide event. This is what makes freshly
+// saved keys show up right away (e.g. the AI Visibility "configured engines" badge).
+function pushSoon() {
+  clearTimeout(pushSoonTimer);
+  pushSoonTimer = setTimeout(() => { pushIfChanged().catch(() => {}); }, 600);
+}
+
+function patchLocalStorageOnce() {
+  if (patched || typeof window === "undefined") return;
+  patched = true;
+  const origSetItem = localStorage.setItem.bind(localStorage);
+  const origRemoveItem = localStorage.removeItem.bind(localStorage);
+  localStorage.setItem = function (k: string, v: string) {
+    origSetItem(k, v);
+    if (isTrackedKey(k)) pushSoon();
+  };
+  localStorage.removeItem = function (k: string) {
+    origRemoveItem(k);
+    if (isTrackedKey(k)) pushSoon();
+  };
+}
+
 export default function SeoKeysSync() {
   const { status } = useSession();
   useEffect(() => {
     if (status !== "authenticated") return;
+    patchLocalStorageOnce();
     let timer: any;
     (async () => {
       try { await pullAndRestore(); } catch { /* offline / not migrated — silent */ }

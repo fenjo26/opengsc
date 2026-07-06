@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 import { signIn, useSession } from "next-auth/react";
 import {
   ArrowLeft, Plus, X, CheckCircle, AlertCircle,
-  Users, Settings, Globe, Key, Edit2, Copy,
+  Users, Settings, Globe, Key, KeyRound, Edit2, Copy,
   ChevronDown, Crown, Zap, Star, Eye, Sparkles,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
-import SeoToolsSettings from "@/components/SeoToolsSettings";
+import SeoToolsSettings, { SeoProviderKeysSection, AeoProviderKeysSection } from "@/components/SeoToolsSettings";
 
-type NavItem = "accounts" | "teams" | "api" | "indexing-api" | "seo-tools" | "members" | "preferences" | "supersites";
+type NavItem = "accounts" | "teams" | "api" | "api-keys" | "indexing-api" | "seo-tools" | "members" | "preferences" | "supersites";
 
 interface ConnectedAccount {
   id: string; email: string; picture: string | null; connected: boolean; gscAccess: boolean; ga4Access?: boolean;
@@ -503,8 +503,17 @@ function PreferencesSection({ user }: { user: any }) {
           </div>
         </div>
       </SectionCard>
-      <AIConfigSection />
-      <HealthApiKeysSection />
+      <SectionCard>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+          <div>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)" }}>{t("apiKeysMovedTitle")}</div>
+            <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>{t("apiKeysMovedDesc")}</div>
+          </div>
+          <a href="/settings?tab=api-keys" style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 16px", borderRadius: "8px", background: "rgba(59,130,246,0.12)", color: "#3B82F6", border: "1px solid rgba(59,130,246,0.25)", fontSize: "13px", fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap" }}>
+            <KeyRound size={14} /> {t("navApiKeys")}
+          </a>
+        </div>
+      </SectionCard>
     </div>
   );
 }
@@ -1217,6 +1226,26 @@ function HealthApiKeysSection() {
   );
 }
 
+// ─── Section: API Keys (unified) ──────────────────────────────────────────────
+// Single place for every external provider key used across the app: AI providers
+// (content generation / One Click Setup clustering), SEO Tools' SERP + AEO/AI
+// Visibility providers, and Health-check providers. Previously split across
+// Preferences and SEO Tools, which was confusing — everything lives here now.
+function ApiKeysSection() {
+  const { t } = useLanguage();
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      <div style={{ padding: "12px 16px", borderRadius: "8px", border: "1px solid rgba(59,130,246,0.25)", background: "rgba(59,130,246,0.06)", fontSize: "13px", color: "var(--color-text-secondary)" }}>
+        💡 {t("apiKeysHubDesc")}
+      </div>
+      <AIConfigSection />
+      <SectionCard><SeoProviderKeysSection /></SectionCard>
+      <SectionCard><AeoProviderKeysSection /></SectionCard>
+      <HealthApiKeysSection />
+    </div>
+  );
+}
+
 // ─── Section: Super Sites ─────────────────────────────────────────────────────
 interface GscSite { id: string; url: string; siteId: string; }
 
@@ -1431,7 +1460,7 @@ export default function SettingsPage() {
   // render with no SSR/hydration mismatch and no Suspense-boundary requirement.
   useEffect(() => {
     const tab = new URLSearchParams(window.location.search).get("tab");
-    const valid: NavItem[] = ["accounts", "teams", "api", "indexing-api", "seo-tools", "members", "preferences", "supersites"];
+    const valid: NavItem[] = ["accounts", "teams", "api", "api-keys", "indexing-api", "seo-tools", "members", "preferences", "supersites"];
     if (tab && (valid as string[]).includes(tab)) setNav(tab as NavItem);
   }, []);
 
@@ -1491,6 +1520,7 @@ export default function SettingsPage() {
             <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "10px" }}>{user?.email}</div>
             <NavBtn id="accounts" icon={<GoogleIcon size={14} />} label={t("navMyGoogleAccounts")} />
             <NavBtn id="teams" icon={<Users size={14} />} label={t("myTeams")} />
+            <NavBtn id="api-keys" icon={<KeyRound size={14} />} label={t("navApiKeys")} />
             <NavBtn id="api" icon={<Key size={14} />} label={t("navApiMcpKeys")} />
             <NavBtn id="indexing-api" icon={<Globe size={14} />} label={t("navIndexingApi")} />
             <NavBtn id="seo-tools" icon={<Sparkles size={14} />} label={t("navSeoTools")} />
@@ -1523,6 +1553,7 @@ export default function SettingsPage() {
         <div style={{ flex: 1, minWidth: 0 }}>
           {nav === "accounts"     && <AccountsSection user={user} accounts={accounts} loadingAccounts={loadingAccounts} removing={removing} onAdd={handleAdd} onRemove={handleRemove} onReauth={handleReauth} />}
           {nav === "teams"        && <TeamsSection user={user} />}
+          {nav === "api-keys"     && <ApiKeysSection />}
           {nav === "api"          && <ApiSection />}
           {nav === "indexing-api" && <IndexApiSection />}
           {nav === "seo-tools"    && <SeoToolsSettings />}

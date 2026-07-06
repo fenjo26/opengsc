@@ -15,7 +15,7 @@ interface KeyCardProvider {
   hintKey: string; instrKey: string; docsUrl: string; color: string; logo: string;
 }
 
-const SEO_PROVIDERS: KeyCardProvider[] = [
+export const SEO_PROVIDERS: KeyCardProvider[] = [
   { id: "serper", storageKey: "seoKey_serper", name: "Serper.dev", roleKey: "seoRoleSerp", placeholder: "Serper API key", hintKey: "seoSetHintSerper", instrKey: "seoSetInstrSerper", docsUrl: "https://serper.dev", color: "#10A37F", logo: "S" },
   { id: "dataforseo", storageKey: "seoKey_dataforseo", name: "DataForSEO", roleKey: "seoRoleDfs", placeholder: "login:password или Base64-токен", hintKey: "seoSetHintDfs", instrKey: "seoSetInstrDfs", docsUrl: "https://app.dataforseo.com/api-access", color: "#2997ff", logo: "D" },
   { id: "scrapingrobot", storageKey: "seoKey_scrapingrobot", name: "ScrapingRobot", roleKey: "seoRoleSr", placeholder: "ScrapingRobot API token", hintKey: "seoSetHintSr", instrKey: "seoSetInstrSr", docsUrl: "https://scrapingrobot.com", color: "#8B5CF6", logo: "R" },
@@ -24,12 +24,12 @@ const SEO_PROVIDERS: KeyCardProvider[] = [
 
 // AEO citation-check engines that aren't already covered by the main AI provider keys
 // (ChatGPT/Claude checks reuse aiKey_openai / aiKey_anthropic from Settings → API providers).
-const AEO_PROVIDERS: KeyCardProvider[] = [
+export const AEO_PROVIDERS: KeyCardProvider[] = [
   { id: "perplexity", storageKey: "seoKey_perplexity", name: "Perplexity", roleKey: "seoRolePerplexity", placeholder: "pplx-...", hintKey: "seoSetHintPerplexity", instrKey: "seoSetInstrPerplexity", docsUrl: "https://docs.perplexity.ai", color: "#20808D", logo: "P" },
   { id: "xai", storageKey: "seoKey_xai", name: "xAI (Grok)", roleKey: "seoRoleXai", placeholder: "xai-...", hintKey: "seoSetHintXai", instrKey: "seoSetInstrXai", docsUrl: "https://console.x.ai", color: "#000000", logo: "G" },
 ];
 
-function SeoKeyCard({ provider }: { provider: KeyCardProvider }) {
+export function SeoKeyCard({ provider }: { provider: KeyCardProvider }) {
   const { t } = useLanguage();
   const [key, setKey] = useState("");
   const [visible, setVisible] = useState(false);
@@ -320,6 +320,45 @@ function providerPillStyle(isActive: boolean): React.CSSProperties {
   };
 }
 
+// Exported so the unified "API Keys" settings section (Settings → API Keys) can render
+// these same key cards — keeping exactly one place in the UI where any provider key is
+// actually typed in, while this SEO Tools tab keeps only the non-key configuration
+// (model choice, active-provider pickers, fact-check behavior).
+export function SeoProviderKeysSection() {
+  const { t } = useLanguage();
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
+        <Globe size={17} color="#10A37F" />
+        <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>{t("seoSetTitle")}</h3>
+      </div>
+      <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: "0 0 14px" }}>{t("seoSetSub")}</p>
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        {SEO_PROVIDERS.map(p => <SeoKeyCard key={p.id} provider={p} />)}
+      </div>
+      <div style={{ marginTop: "14px", padding: "11px 14px", borderRadius: "8px", background: "rgba(16,163,127,0.06)", border: "1px solid rgba(16,163,127,0.18)", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+        💡 {t("seoSetTip")}
+      </div>
+    </div>
+  );
+}
+
+export function AeoProviderKeysSection() {
+  const { t } = useLanguage();
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
+        <Sparkles size={17} color="#8B5CF6" />
+        <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>{t("seoAeoSectionTitle")}</h3>
+      </div>
+      <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: "0 0 14px" }}>{t("seoAeoSectionDesc")}</p>
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        {AEO_PROVIDERS.map(p => <SeoKeyCard key={p.id} provider={p} />)}
+      </div>
+    </div>
+  );
+}
+
 export default function SeoToolsSettings() {
   const { t } = useLanguage();
   const [active, setActive] = useState("serper");
@@ -374,24 +413,17 @@ export default function SeoToolsSettings() {
         </div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-        {SEO_PROVIDERS.map(p => <SeoKeyCard key={p.id} provider={p} />)}
-      </div>
-
-      <div style={{ marginTop: "14px", padding: "11px 14px", borderRadius: "8px", background: "rgba(16,163,127,0.06)", border: "1px solid rgba(16,163,127,0.18)", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
-        💡 {t("seoSetTip")}
-      </div>
-
-      <div style={{ marginTop: "22px", paddingTop: "18px", borderTop: "1px solid var(--color-border)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
-          <Sparkles size={17} color="#8B5CF6" />
-          <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>{t("seoAeoSectionTitle")}</h2>
+      <a href="/settings?tab=api-keys" style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px",
+        padding: "14px 16px", borderRadius: "10px", border: "1px solid var(--color-border)",
+        background: "var(--color-card)", textDecoration: "none", marginBottom: "8px",
+      }}>
+        <div>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)" }}>{t("seoKeysMovedTitle")}</div>
+          <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>{t("seoKeysMovedDesc")}</div>
         </div>
-        <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: "0 0 14px" }}>{t("seoAeoSectionDesc")}</p>
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          {AEO_PROVIDERS.map(p => <SeoKeyCard key={p.id} provider={p} />)}
-        </div>
-      </div>
+        <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-accent-blue)", whiteSpace: "nowrap" }}>{t("seoKeysMovedLink")} →</span>
+      </a>
     </div>
   );
 }
