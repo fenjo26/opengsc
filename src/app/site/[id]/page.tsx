@@ -3992,58 +3992,59 @@ export default function SitePage() {
             ))}
           </nav>
         </div>
-
-        {/* Right controls — shown on Dashboard + GA4 tabs */}
-        {(activeTab === "dashboard" || activeTab === "ga4") && (
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            {/* Notes button */}
-            <NotesDd
-              onAddNote={() => setShowAddNoteModal(true)}
-              googleUpdates={googleUpdates}
-              siteNotes={siteNotesOn}
-              onToggleGoogleUpdates={() => setGoogleUpdates(v => !v)}
-              onToggleSiteNotes={() => setSiteNotesOn(v => !v)}
-            />
-            {/* Filter */}
-            <FilterDd
-              positionFilter={positionFilter} onPositionFilter={setPositionFilter}
-              filterDimension={filterDimension} filterText={filterText}
-              onDimension={setFilterDimension} onFilterText={setFilterText}
-              preset={filterPreset} onPreset={setFilterPreset}
-            />
-            {/* Metric toggles */}
-            {([
-              { m: "clicks"      as Metric, icon: <Sparkles size={13}/>, color: C.clicks,      bg: "rgba(59,130,246,0.12)"  },
-              { m: "impressions" as Metric, icon: <Eye      size={13}/>, color: C.impressions, bg: "rgba(139,92,246,0.12)"  },
-              { m: "ctr"         as Metric, icon: <Percent  size={13}/>, color: C.ctr,         bg: "rgba(16,185,129,0.12)"  },
-              { m: "position"    as Metric, icon: <MoveUp   size={13}/>, color: C.position,    bg: "rgba(245,158,11,0.12)"  },
-            ]).map(({ m, icon, color, bg }) => {
-              const on = activeMetrics.has(m);
-              return (
-                <button key={m} onClick={() => toggleMetric(m)}
-                  title={m}
-                  style={{ width: "30px", height: "30px", borderRadius: "6px", border: `1px solid ${on ? color : "var(--color-border)"}`, background: on ? bg : "var(--color-card)", color: on ? color : "var(--color-text-secondary)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "all 0.15s", opacity: on ? 1 : 0.5 }}>
-                  {icon}
-                </button>
-              );
-            })}
-            {/* Period */}
-            <PeriodDropdown period={period} onChange={setPeriod} />
-            {/* Manual sync button */}
-            <button
-              onClick={handleSync}
-              disabled={syncing}
-              title={syncedAt ? `Last synced: ${syncedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ${syncedAt.toLocaleDateString([], { month: 'short', day: 'numeric' })}` : 'Sync GSC data'}
-              style={{ display: "flex", alignItems: "center", gap: "5px", padding: "6px 11px", borderRadius: "8px", border: "1px solid var(--color-border)", background: syncing ? "rgba(59,130,246,0.08)" : "var(--color-card)", color: syncing ? "#3B82F6" : "var(--color-text-secondary)", fontSize: "12px", fontWeight: 500, cursor: syncing ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, animation: syncing ? "spin 1.2s linear infinite" : "none" }}>
-                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-              </svg>
-              {syncing ? "Syncing…" : syncedAt ? syncedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Sync"}
-            </button>
-          </div>
-        )}
       </div>
+
+      {/* Toolbar — shown on Dashboard + GA4 tabs, moved below the top nav so the tab
+          menu itself stays uncluttered (was previously crammed into the same row). */}
+      {(activeTab === "dashboard" || activeTab === "ga4") && (
+        <div style={{ borderBottom: "1px solid var(--color-border)", padding: "10px 32px", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "6px", background: "var(--color-card)" }}>
+          {/* Notes button */}
+          <NotesDd
+            onAddNote={() => setShowAddNoteModal(true)}
+            googleUpdates={googleUpdates}
+            siteNotes={siteNotesOn}
+            onToggleGoogleUpdates={() => setGoogleUpdates(v => !v)}
+            onToggleSiteNotes={() => setSiteNotesOn(v => !v)}
+          />
+          {/* Filter */}
+          <FilterDd
+            positionFilter={positionFilter} onPositionFilter={setPositionFilter}
+            filterDimension={filterDimension} filterText={filterText}
+            onDimension={setFilterDimension} onFilterText={setFilterText}
+            preset={filterPreset} onPreset={setFilterPreset}
+          />
+          {/* Metric toggles */}
+          {([
+            { m: "clicks"      as Metric, icon: <Sparkles size={13}/>, color: C.clicks,      bg: "rgba(59,130,246,0.12)"  },
+            { m: "impressions" as Metric, icon: <Eye      size={13}/>, color: C.impressions, bg: "rgba(139,92,246,0.12)"  },
+            { m: "ctr"         as Metric, icon: <Percent  size={13}/>, color: C.ctr,         bg: "rgba(16,185,129,0.12)"  },
+            { m: "position"    as Metric, icon: <MoveUp   size={13}/>, color: C.position,    bg: "rgba(245,158,11,0.12)"  },
+          ]).map(({ m, icon, color, bg }) => {
+            const on = activeMetrics.has(m);
+            return (
+              <button key={m} onClick={() => toggleMetric(m)}
+                title={m}
+                style={{ width: "30px", height: "30px", borderRadius: "6px", border: `1px solid ${on ? color : "var(--color-border)"}`, background: on ? bg : "var(--color-card)", color: on ? color : "var(--color-text-secondary)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "all 0.15s", opacity: on ? 1 : 0.5 }}>
+                {icon}
+              </button>
+            );
+          })}
+          {/* Period */}
+          <PeriodDropdown period={period} onChange={setPeriod} />
+          {/* Manual sync button */}
+          <button
+            onClick={handleSync}
+            disabled={syncing}
+            title={syncedAt ? `Last synced: ${syncedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ${syncedAt.toLocaleDateString([], { month: 'short', day: 'numeric' })}` : 'Sync GSC data'}
+            style={{ display: "flex", alignItems: "center", gap: "5px", padding: "6px 11px", borderRadius: "8px", border: "1px solid var(--color-border)", background: syncing ? "rgba(59,130,246,0.08)" : "var(--color-card)", color: syncing ? "#3B82F6" : "var(--color-text-secondary)", fontSize: "12px", fontWeight: 500, cursor: syncing ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, animation: syncing ? "spin 1.2s linear infinite" : "none" }}>
+              <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+            </svg>
+            {syncing ? "Syncing…" : syncedAt ? syncedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Sync"}
+          </button>
+        </div>
+      )}
 
       {/* ── Branded Keywords modal ── */}
       {showBrandedModal && siteDbId && (
