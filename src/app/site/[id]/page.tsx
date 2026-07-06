@@ -1301,11 +1301,12 @@ function GoogleUpdatesToggle({ on, onToggle }: { on: boolean; onToggle: () => vo
 }
 
 // ─── Filter Dropdown (Dashboard) ─────────────────────────────────────────────
-function FilterDd({ positionFilter, onPositionFilter, filterDimension, filterText, onDimension, onFilterText, preset, onPreset }: {
+function FilterDd({ positionFilter, onPositionFilter, filterDimension, filterText, onDimension, onFilterText, preset, onPreset, onApply }: {
   positionFilter: number | null; onPositionFilter: (v: number | null) => void;
   filterDimension: string | null; filterText: string;
   onDimension: (v: string | null) => void; onFilterText: (v: string) => void;
   preset: string | null; onPreset: (v: string | null) => void;
+  onApply?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -1358,8 +1359,10 @@ function FilterDd({ positionFilter, onPositionFilter, filterDimension, filterTex
           {filterDimension && filterDimension !== "device" && (
             <div style={{ padding: "4px 14px 12px" }}>
               <input autoFocus value={filterText} onChange={e => onFilterText(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && filterText.trim()) onApply?.(); }}
                 placeholder={filterDimension === "query" ? "e.g. casino, massage…" : filterDimension === "page" ? "e.g. /blog, /product…" : "e.g. gr, de, us…"}
                 style={{ width: "100%", padding: "8px 10px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "rgba(255,255,255,0.06)", color: "var(--color-text-primary)", fontSize: "12px", outline: "none", boxSizing: "border-box" }} />
+              <div style={{ fontSize: "11px", color: "var(--color-text-tertiary)", marginTop: "4px" }}>Press Enter — filters the table further down the page.</div>
             </div>
           )}
 
@@ -1367,7 +1370,7 @@ function FilterDd({ positionFilter, onPositionFilter, filterDimension, filterTex
           {filterDimension === "device" && (
             <div style={{ padding: "4px 14px 12px", display: "flex", gap: "6px", flexWrap: "wrap" }}>
               {["all", "MOBILE", "DESKTOP", "TABLET"].map(v => (
-                <button key={v} onClick={() => onFilterText(v === "all" ? "" : v)}
+                <button key={v} onClick={() => { onFilterText(v === "all" ? "" : v); onApply?.(); }}
                   style={{ padding: "4px 10px", borderRadius: "20px", fontSize: "12px", fontWeight: 500, cursor: "pointer", border: `1px solid ${filterText === (v === "all" ? "" : v) ? "#3B82F6" : "var(--color-border)"}`, background: filterText === (v === "all" ? "" : v) ? "rgba(59,130,246,0.1)" : "transparent", color: filterText === (v === "all" ? "" : v) ? "#3B82F6" : "var(--color-text-secondary)" }}>
                   {v === "all" ? "All" : v[0] + v.slice(1).toLowerCase()}
                 </button>
@@ -3715,6 +3718,12 @@ export default function SitePage() {
   const [filterDimension, setFilterDimension] = useState<string | null>(null);
   const [filterText, setFilterText] = useState("");
   const [filterPreset, setFilterPreset] = useState<string | null>(null);
+  // The Filter control only affects the Queries/Pages/Country/Device tables further down
+  // the Dashboard page — it never touches the chart or the metric summary above it. Without
+  // any feedback, applying a filter looks like nothing happened. Auto-scroll to the affected
+  // tables whenever a filter is actually applied, so the effect is visible immediately.
+  const resultsRef = useRef<HTMLDivElement>(null);
+  const scrollToResults = () => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   const [googleUpdates, setGoogleUpdatesState] = useState(true);
   useEffect(() => {
     const s = localStorage.getItem("site_google_updates");
@@ -4032,10 +4041,13 @@ export default function SitePage() {
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <GoogleUpdatesToggle on={googleUpdates} onToggle={() => setGoogleUpdates(v => !v)} />
             <FilterDd
-              positionFilter={positionFilter} onPositionFilter={setPositionFilter}
+              positionFilter={positionFilter}
+              onPositionFilter={v => { setPositionFilter(v); if (v !== null) scrollToResults(); }}
               filterDimension={filterDimension} filterText={filterText}
               onDimension={setFilterDimension} onFilterText={setFilterText}
-              preset={filterPreset} onPreset={setFilterPreset}
+              preset={filterPreset}
+              onPreset={v => { setFilterPreset(v); if (v !== null) scrollToResults(); }}
+              onApply={scrollToResults}
             />
             {([
               { m: "clicks"      as Metric, icon: <Sparkles size={13}/>, color: C.clicks,      bg: "rgba(59,130,246,0.12)"  },
@@ -4148,8 +4160,22 @@ export default function SitePage() {
           ) : null}
         </div>
 
-        {/* Queries + Pages */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "32px" }}>
+        {/* Queries + Pages — target of the Filter control above; scrolled into view
+            automatically whenever a filter is applied, since it's the only thing that
+            actually changes when you use Filter (chart/metrics above never do). */}
+        {(positionFilter || (filterDimension && filterText.trim()) || filterPreset) && (
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "var(--color-text-secondary)" }}>
+            <SlidersHorizontal size={12} color="#3B82F6" />
+            <span>
+              Filter active — {[
+                positionFilter && `Top ${positionFilter}`,
+                filterDimension && filterText.trim() && `${filterDimension}: "${filterText}"`,
+                filterPreset && (filterPreset === "paa" ? "People Also Ask" : "Long Tail Keywords"),
+              ].filter(Boolean).join(", ")} (Queries/Pages below)
+            </span>
+          </div>
+        )}
+        <div ref={resultsRef} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "32px", scrollMarginTop: "16px" }}>
           <DataTable title={t("queriesTable")} rows={queryRows} tabs={["All", "Growing", "Decaying"]} blur={blur} csvFilename="queries.csv"
             onTrack={handleTrack} tracked={trackedKws} />
           <DataTable title={t("pagesTable")}   rows={pageRows}  tabs={["All", "Growing", "Decaying"]} blur={blur} csvFilename="pages.csv" />
