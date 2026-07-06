@@ -211,52 +211,122 @@ export function parseGoogleHtml(html: string): { url: string; title: string }[] 
   return out;
 }
 
+// Endpoint from the Rayobyte dashboard (ScrapingRobot is a Rayobyte product);
+// the legacy api.scrapingrobot.com host points to the same service.
+const SR_ENDPOINT = "https://api.scraping.rayobyte.com/";
+
+// Primary path: the structured Google SERP module ("GoogleScraper") — returns parsed
+// organicResults / relatedQueries / peopleAlsoAsk. One page (~10 organic) per credit.
+async function scrapingRobotModulePage(
+  apiKey: string, keyword: string, gl: string, hl: string, page: number,
+): Promise<{ ok: boolean; results?: any; error?: string }> {
+  let res: Response;
+  try {
+    res = await fetch(`${SR_ENDPOINT}?token=${encodeURIComponent(apiKey)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: "https://www.google.com",
+        module: "GoogleScraper",
+        params: { query: keyword, countryCode: gl, languageCode: hl, ...(page > 1 ? { page } : {}) },
+      }),
+      signal: AbortSignal.timeout(120000), // SR recommends a 2-minute timeout (it retries internally)
+    });
+  } catch (e: any) {
+    return { ok: false, error: `сеть ScrapingRobot: ${e?.cause?.code || e?.message || "fetch failed"}` };
+  }
+  let data: any;
+  try { data = await res.json(); } catch { return { ok: false, error: `scrapingrobot: non-JSON response (${res.status})` }; }
+  if (!res.ok || String(data?.status).toUpperCase() !== "SUCCESS") {
+    return { ok: false, error: `scrapingrobot: ${data?.error || data?.status || res.status}` };
+  }
+  return { ok: true, results: data.result };
+}
+
+// Fallback path: plain HTML scrape of a Google SERP page + tolerant regex parsing
+// (the approach SerpBear uses).
+async function scrapingRobotHtmlPage(
+  apiKey: string, keyword: string, gl: string, hl: string, start: number,
+): Promise<{ ok: boolean; items?: { url: string; title: string }[]; error?: string }> {
+  const gUrl = `https://www.google.com/search?q=${encodeURIComponent(keyword)}&hl=${hl}&gl=${gl}&num=10${start > 0 ? `&start=${start}` : ""}`;
+  let res: Response;
+  try {
+    res = await fetch(`${SR_ENDPOINT}?token=${encodeURIComponent(apiKey)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: gUrl,
+        module: "HtmlRequestScraper",
+        params: { proxyCountry: gl.toUpperCase() },
+      }),
+      signal: AbortSignal.timeout(120000),
+    });
+  } catch (e: any) {
+    return { ok: false, error: `сеть ScrapingRobot: ${e?.cause?.code || e?.message || "fetch failed"}` };
+  }
+  let data: any;
+  try { data = await res.json(); } catch { return { ok: false, error: `scrapingrobot: non-JSON response (${res.status})` }; }
+  if (!res.ok || String(data?.status).toUpperCase() !== "SUCCESS") {
+    return { ok: false, error: `scrapingrobot: ${data?.error || data?.status || res.status}` };
+  }
+  const html = typeof data?.result === "string" ? data.result : (data?.result?.html ?? "");
+  return { ok: true, items: parseGoogleHtml(html) };
+}
+
 async function scrapingRobotSearch(
   apiKey: string,
   keyword: string,
   opts: { gl?: string; hl?: string; location?: string; num?: number; engine?: SerpEngine },
 ): Promise<SerpResponse> {
   const engine: SerpEngine = "google"; // ScrapingRobot path supports Google only
+  const gl = (opts.gl || "us").toLowerCase();
+  const hl = opts.hl || "en";
   const want = opts.num || 10;
   const pages = Math.min(5, Math.max(1, Math.ceil(want / 10)));
   const results: SerpResultItem[] = [];
   const seen = new Set<string>();
+  let paa: string[] = [];
+  let related: string[] = [];
 
-  for (let page = 0; page < pages; page++) {
-    const gUrl = `https://www.google.com/search?q=${encodeURIComponent(keyword)}&hl=${opts.hl || "en"}&gl=${opts.gl || "us"}&num=10${page > 0 ? `&start=${page * 10}` : ""}`;
-    const api = `https://api.scrapingrobot.com/?token=${encodeURIComponent(apiKey)}&proxyCountry=${(opts.gl || "us").toUpperCase()}&render=false&url=${encodeURIComponent(gUrl)}`;
-    let res: Response;
-    try {
-      res = await fetch(api, { method: "GET", signal: AbortSignal.timeout(60000) });
-    } catch (e: any) {
-      if (page === 0) return { engine, provider: "scrapingrobot", keyword, results: [], error: `сеть ScrapingRobot: ${e?.cause?.code || e?.message || "fetch failed"}` };
+  const push = (url: string, title: string, snippet = "") => {
+    if (!url || seen.has(url)) return;
+    seen.add(url);
+    results.push({ position: results.length + 1, url, title, snippet, domain: domainOf(url) });
+  };
+
+  // ── Try the structured GoogleScraper module first ─────────────────────────────
+  let moduleWorks = true;
+  for (let page = 1; page <= pages; page++) {
+    const r = await scrapingRobotModulePage(apiKey, keyword, gl, hl, page);
+    if (!r.ok) {
+      if (page === 1) { moduleWorks = false; break; } // fall back to HTML mode below
       break;
     }
-    if (!res.ok) {
-      if (page === 0) return { engine, provider: "scrapingrobot", keyword, results: [], error: `scrapingrobot ${res.status}: ${(await res.text()).slice(0, 200)}` };
-      break;
+    const organic: any[] = r.results?.organicResults ?? [];
+    for (const o of organic) push(o.url ?? "", o.title ?? "", o.description ?? "");
+    if (page === 1) {
+      paa = (r.results?.peopleAlsoAsk ?? []).map((p: any) => p.question).filter(Boolean);
+      related = (r.results?.relatedQueries ?? []).map((q: any) => q.title).filter(Boolean);
     }
-    let html = "";
-    try {
-      const data = await res.json();
-      if (data?.status && String(data.status).toUpperCase() !== "SUCCESS") {
-        if (page === 0) return { engine, provider: "scrapingrobot", keyword, results: [], error: `scrapingrobot: ${data?.error || data.status}` };
-        break;
-      }
-      html = typeof data?.result === "string" ? data.result : (data?.result?.content ?? "");
-    } catch {
-      html = ""; // non-JSON response — treat as empty page
-    }
-    const parsed = parseGoogleHtml(html);
-    for (const r of parsed) {
-      if (seen.has(r.url)) continue;
-      seen.add(r.url);
-      results.push({ position: results.length + 1, url: r.url, title: r.title, snippet: "", domain: domainOf(r.url) });
-    }
-    if (parsed.length === 0) break;      // empty/last page
     if (results.length >= want) break;
+    if (r.results?.hasNextPage === false) break;
+    if (organic.length === 0) break;
+  }
+  if (moduleWorks) {
+    return { engine, provider: "scrapingrobot", keyword, results: results.slice(0, want), peopleAlsoAsk: paa, relatedSearches: related };
   }
 
+  // ── Fallback: HTML scrape + regex parsing ─────────────────────────────────────
+  for (let page = 0; page < pages; page++) {
+    const r = await scrapingRobotHtmlPage(apiKey, keyword, gl, hl, page * 10);
+    if (!r.ok) {
+      if (page === 0) return { engine, provider: "scrapingrobot", keyword, results: [], error: r.error };
+      break;
+    }
+    for (const it of r.items ?? []) push(it.url, it.title);
+    if ((r.items ?? []).length === 0) break;
+    if (results.length >= want) break;
+  }
   return { engine, provider: "scrapingrobot", keyword, results: results.slice(0, want) };
 }
 
