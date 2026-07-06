@@ -1287,61 +1287,16 @@ function PeriodDropdown({ period, onChange }: { period: string; onChange: (p: st
   );
 }
 
-// ─── Notes Dropdown ───────────────────────────────────────────────────────────
-function NotesDd({ onAddNote, googleUpdates, siteNotes, onToggleGoogleUpdates, onToggleSiteNotes }: {
-  onAddNote: () => void;
-  googleUpdates: boolean; siteNotes: boolean;
-  onToggleGoogleUpdates: () => void; onToggleSiteNotes: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
-  const Toggle = ({ on }: { on: boolean }) => (
-    <div style={{ width: "28px", height: "16px", borderRadius: "8px", background: on ? "#3B82F6" : "var(--color-border)", position: "relative", flexShrink: 0, transition: "background 0.2s" }}>
-      <div style={{ position: "absolute", top: "2px", left: on ? "14px" : "2px", width: "12px", height: "12px", borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
-    </div>
-  );
+// ─── Google Updates toggle ────────────────────────────────────────────────────
+// Shows/hides the Google algorithm-update reference lines on the Dashboard chart.
+// (Note adding/management itself lives on the "Заметки" tab — the old dropdown
+// here duplicated that with a couple of dead, unwired buttons, so it's gone.)
+function GoogleUpdatesToggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   return (
-    <div ref={ref} style={{ position: "relative" }}>
-      <button onClick={() => setOpen(o => !o)} style={{ display: "flex", alignItems: "center", padding: "6px 8px", borderRadius: "8px", border: "1px solid var(--color-border)", background: open ? "rgba(255,255,255,0.07)" : "var(--color-card)", color: "var(--color-text-secondary)", cursor: "pointer" }}
-        title="Notes & Annotations">
-        <FileText size={14} />
-      </button>
-      {open && (
-        <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "12px", boxShadow: "0 8px 32px rgba(0,0,0,0.5)", zIndex: 300, minWidth: "210px", overflow: "hidden" }}>
-          <button onClick={() => { onAddNote(); setOpen(false); }}
-            style={{ display: "block", width: "100%", textAlign: "left", padding: "11px 16px", fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)", background: "transparent", border: "none", cursor: "pointer" }}
-            onMouseOver={e => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
-            onMouseOut={e => e.currentTarget.style.background = "transparent"}>
-            Add Note
-          </button>
-          <button style={{ display: "block", width: "100%", textAlign: "left", padding: "11px 16px", fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)", background: "transparent", border: "none", cursor: "pointer" }}
-            onMouseOver={e => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
-            onMouseOut={e => e.currentTarget.style.background = "transparent"}>
-            Manage Notes
-          </button>
-          <div style={{ height: "1px", background: "var(--color-border)", margin: "4px 0" }} />
-          <div style={{ padding: "8px 16px 4px", fontSize: "11px", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Chart Annotations</div>
-          <button onClick={() => onToggleGoogleUpdates()}
-            style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "9px 16px", fontSize: "13px", color: "var(--color-text-primary)", background: "transparent", border: "none", cursor: "pointer" }}
-            onMouseOver={e => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
-            onMouseOut={e => e.currentTarget.style.background = "transparent"}>
-            <GoogleIcon size={14} /> <span style={{ flex: 1 }}>Google Updates</span> <Toggle on={googleUpdates} />
-          </button>
-          <button onClick={() => onToggleSiteNotes()}
-            style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "9px 16px", fontSize: "13px", color: "var(--color-text-primary)", background: "transparent", border: "none", cursor: "pointer" }}
-            onMouseOver={e => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
-            onMouseOut={e => e.currentTarget.style.background = "transparent"}>
-            <FileText size={14} /> <span style={{ flex: 1 }}>Site Notes</span> <Toggle on={siteNotes} />
-          </button>
-          <div style={{ height: "8px" }} />
-        </div>
-      )}
-    </div>
+    <button onClick={onToggle} title="Google algorithm updates on chart"
+      style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 10px", borderRadius: "8px", border: `1px solid ${on ? "var(--color-accent-blue)" : "var(--color-border)"}`, background: on ? "rgba(59,130,246,0.08)" : "var(--color-card)", color: on ? "var(--color-accent-blue)" : "var(--color-text-secondary)", fontSize: "12px", fontWeight: 500, cursor: "pointer" }}>
+      <GoogleIcon size={13} />
+    </button>
   );
 }
 
@@ -3760,7 +3715,6 @@ export default function SitePage() {
   const [filterDimension, setFilterDimension] = useState<string | null>(null);
   const [filterText, setFilterText] = useState("");
   const [filterPreset, setFilterPreset] = useState<string | null>(null);
-  const [showAddNoteModal, setShowAddNoteModal] = useState(false);
   const [googleUpdates, setGoogleUpdatesState] = useState(true);
   useEffect(() => {
     const s = localStorage.getItem("site_google_updates");
@@ -3771,7 +3725,6 @@ export default function SitePage() {
     localStorage.setItem("site_google_updates", next ? "1" : "0");
     return next;
   });
-  const [siteNotesOn, setSiteNotesOn] = useState(false);
   const [showSetupModal, setShowSetupModal] = useState(false);
   const [showBrandedModal, setShowBrandedModal] = useState(false);
   const [brandedKeywords, setBrandedKeywords] = useState<string[]>([]);
@@ -3994,58 +3947,6 @@ export default function SitePage() {
         </div>
       </div>
 
-      {/* Toolbar — shown on Dashboard + GA4 tabs, moved below the top nav so the tab
-          menu itself stays uncluttered (was previously crammed into the same row). */}
-      {(activeTab === "dashboard" || activeTab === "ga4") && (
-        <div style={{ borderBottom: "1px solid var(--color-border)", padding: "10px 32px", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "6px", background: "var(--color-card)" }}>
-          {/* Notes button */}
-          <NotesDd
-            onAddNote={() => setShowAddNoteModal(true)}
-            googleUpdates={googleUpdates}
-            siteNotes={siteNotesOn}
-            onToggleGoogleUpdates={() => setGoogleUpdates(v => !v)}
-            onToggleSiteNotes={() => setSiteNotesOn(v => !v)}
-          />
-          {/* Filter */}
-          <FilterDd
-            positionFilter={positionFilter} onPositionFilter={setPositionFilter}
-            filterDimension={filterDimension} filterText={filterText}
-            onDimension={setFilterDimension} onFilterText={setFilterText}
-            preset={filterPreset} onPreset={setFilterPreset}
-          />
-          {/* Metric toggles */}
-          {([
-            { m: "clicks"      as Metric, icon: <Sparkles size={13}/>, color: C.clicks,      bg: "rgba(59,130,246,0.12)"  },
-            { m: "impressions" as Metric, icon: <Eye      size={13}/>, color: C.impressions, bg: "rgba(139,92,246,0.12)"  },
-            { m: "ctr"         as Metric, icon: <Percent  size={13}/>, color: C.ctr,         bg: "rgba(16,185,129,0.12)"  },
-            { m: "position"    as Metric, icon: <MoveUp   size={13}/>, color: C.position,    bg: "rgba(245,158,11,0.12)"  },
-          ]).map(({ m, icon, color, bg }) => {
-            const on = activeMetrics.has(m);
-            return (
-              <button key={m} onClick={() => toggleMetric(m)}
-                title={m}
-                style={{ width: "30px", height: "30px", borderRadius: "6px", border: `1px solid ${on ? color : "var(--color-border)"}`, background: on ? bg : "var(--color-card)", color: on ? color : "var(--color-text-secondary)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "all 0.15s", opacity: on ? 1 : 0.5 }}>
-                {icon}
-              </button>
-            );
-          })}
-          {/* Period */}
-          <PeriodDropdown period={period} onChange={setPeriod} />
-          {/* Manual sync button */}
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            title={syncedAt ? `Last synced: ${syncedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ${syncedAt.toLocaleDateString([], { month: 'short', day: 'numeric' })}` : 'Sync GSC data'}
-            style={{ display: "flex", alignItems: "center", gap: "5px", padding: "6px 11px", borderRadius: "8px", border: "1px solid var(--color-border)", background: syncing ? "rgba(59,130,246,0.08)" : "var(--color-card)", color: syncing ? "#3B82F6" : "var(--color-text-secondary)", fontSize: "12px", fontWeight: 500, cursor: syncing ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, animation: syncing ? "spin 1.2s linear infinite" : "none" }}>
-              <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-            </svg>
-            {syncing ? "Syncing…" : syncedAt ? syncedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Sync"}
-          </button>
-        </div>
-      )}
-
       {/* ── Branded Keywords modal ── */}
       {showBrandedModal && siteDbId && (
         <BrandedKeywordsModal
@@ -4069,12 +3970,6 @@ export default function SitePage() {
           }}
         />
       )}
-
-      {/* ── Add Note modal (triggered from toolbar Notes button) ── */}
-      {showAddNoteModal && (
-        <AddNoteModal onClose={() => setShowAddNoteModal(false)} onSave={_note => { setShowAddNoteModal(false); setActiveTab("annotations"); }} />
-      )}
-
 
       {/* ── Positions (Rank Tracker) tab ── */}
       {activeTab === "positions" && <RankTracker siteDbId={siteDbId} domain={domain} />}
@@ -4116,20 +4011,60 @@ export default function SitePage() {
       {activeTab === "dashboard" && (
       <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: "32px" }}>
 
-        {/* Metric summary */}
-        <div style={{ display: "flex", alignItems: "center", gap: "28px" }}>
-          {[
-            { icon: <Sparkles size={14} style={{ color: C.clicks }} />, val: dataLoading ? "…" : fmtK(totalClicks), chg: summary.clicks.change, invert: false },
-            { icon: <Eye size={14} style={{ color: C.impressions }} />, val: dataLoading ? "…" : fmtK(totalImpr), chg: summary.impressions.change, invert: false },
-            { icon: <Percent size={14} style={{ color: C.ctr }} />, val: dataLoading ? "…" : `${avgCtr}%`, chg: summary.ctr.change, invert: false },
-            { icon: <MoveUp size={14} style={{ color: C.position }} />, val: dataLoading ? "…" : String(avgPos), chg: summary.position.change, invert: true },
-          ].map(({ icon, val, chg, invert }, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-              {icon}
-              <span style={{ fontSize: "22px", fontWeight: 700, color: "var(--color-text-primary)" }}>{val}</span>
-              {!dataLoading && chg !== 0 && <Change pct={chg} invert={invert} />}
-            </div>
-          ))}
+        {/* Metric summary + toolbar — same row, no boxed/bordered panel, just sits
+            plainly on the page like the metrics next to it. */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "28px" }}>
+            {[
+              { icon: <Sparkles size={14} style={{ color: C.clicks }} />, val: dataLoading ? "…" : fmtK(totalClicks), chg: summary.clicks.change, invert: false },
+              { icon: <Eye size={14} style={{ color: C.impressions }} />, val: dataLoading ? "…" : fmtK(totalImpr), chg: summary.impressions.change, invert: false },
+              { icon: <Percent size={14} style={{ color: C.ctr }} />, val: dataLoading ? "…" : `${avgCtr}%`, chg: summary.ctr.change, invert: false },
+              { icon: <MoveUp size={14} style={{ color: C.position }} />, val: dataLoading ? "…" : String(avgPos), chg: summary.position.change, invert: true },
+            ].map(({ icon, val, chg, invert }, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                {icon}
+                <span style={{ fontSize: "22px", fontWeight: 700, color: "var(--color-text-primary)" }}>{val}</span>
+                {!dataLoading && chg !== 0 && <Change pct={chg} invert={invert} />}
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <GoogleUpdatesToggle on={googleUpdates} onToggle={() => setGoogleUpdates(v => !v)} />
+            <FilterDd
+              positionFilter={positionFilter} onPositionFilter={setPositionFilter}
+              filterDimension={filterDimension} filterText={filterText}
+              onDimension={setFilterDimension} onFilterText={setFilterText}
+              preset={filterPreset} onPreset={setFilterPreset}
+            />
+            {([
+              { m: "clicks"      as Metric, icon: <Sparkles size={13}/>, color: C.clicks,      bg: "rgba(59,130,246,0.12)"  },
+              { m: "impressions" as Metric, icon: <Eye      size={13}/>, color: C.impressions, bg: "rgba(139,92,246,0.12)"  },
+              { m: "ctr"         as Metric, icon: <Percent  size={13}/>, color: C.ctr,         bg: "rgba(16,185,129,0.12)"  },
+              { m: "position"    as Metric, icon: <MoveUp   size={13}/>, color: C.position,    bg: "rgba(245,158,11,0.12)"  },
+            ]).map(({ m, icon, color, bg }) => {
+              const on = activeMetrics.has(m);
+              return (
+                <button key={m} onClick={() => toggleMetric(m)}
+                  title={m}
+                  style={{ width: "30px", height: "30px", borderRadius: "6px", border: `1px solid ${on ? color : "var(--color-border)"}`, background: on ? bg : "var(--color-card)", color: on ? color : "var(--color-text-secondary)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "all 0.15s", opacity: on ? 1 : 0.5 }}>
+                  {icon}
+                </button>
+              );
+            })}
+            <PeriodDropdown period={period} onChange={setPeriod} />
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              title={syncedAt ? `Last synced: ${syncedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ${syncedAt.toLocaleDateString([], { month: 'short', day: 'numeric' })}` : 'Sync GSC data'}
+              style={{ display: "flex", alignItems: "center", gap: "5px", padding: "6px 11px", borderRadius: "8px", border: "1px solid var(--color-border)", background: syncing ? "rgba(59,130,246,0.08)" : "var(--color-card)", color: syncing ? "#3B82F6" : "var(--color-text-secondary)", fontSize: "12px", fontWeight: 500, cursor: syncing ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, animation: syncing ? "spin 1.2s linear infinite" : "none" }}>
+                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+              </svg>
+              {syncing ? "Syncing…" : syncedAt ? syncedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Sync"}
+            </button>
+          </div>
         </div>
 
         {/* Main chart */}
