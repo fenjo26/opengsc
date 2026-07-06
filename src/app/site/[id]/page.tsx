@@ -8,6 +8,8 @@ import SiteSettingsTab from "@/components/SiteSettingsTab";
 import CtrBenchmark from "@/components/CtrBenchmark";
 import { SiteHealthPanel } from "@/components/SiteHealthPanel";
 import { ClarityPanel } from "@/components/ClarityPanel";
+import RankTracker from "@/components/RankTracker";
+import { ALGO_UPDATES, ALGO_UPDATE_COLORS, algoDateLabel } from "@/lib/algoUpdates";
 import { useParams, useRouter } from "next/navigation";
 import { usePrivacy } from "@/lib/PrivacyContext";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
@@ -61,17 +63,8 @@ const PERIOD_GROUPS = [
   ["2y", "3y"],
 ];
 
-// ─── Known Google algorithm updates ──────────────────────────────────────────
-const GOOGLE_UPDATES: { date: string; label: string; color: string }[] = [
-  { date: "2023-10-05", label: "Oct 2023 Core",         color: "#F59E0B" },
-  { date: "2023-11-02", label: "Nov 2023 Core",         color: "#F59E0B" },
-  { date: "2024-03-05", label: "Mar 2024 Core",         color: "#EF4444" },
-  { date: "2024-06-20", label: "Jun 2024 Core",         color: "#F59E0B" },
-  { date: "2024-08-15", label: "Aug 2024 Core",         color: "#F59E0B" },
-  { date: "2024-11-11", label: "Nov 2024 Core",         color: "#F59E0B" },
-  { date: "2025-03-13", label: "Mar 2025 Core",         color: "#EF4444" },
-  { date: "2025-06-30", label: "Jun 2025 Core",         color: "#F59E0B" },
-];
+// Known Google algorithm updates now live in src/lib/algoUpdates.ts
+// (typed core/spam/discover list with per-type colors, sundios-style).
 
 // ─── Country code helpers (GSC returns ISO 3166-1 alpha-3 codes) ──────────────
 const ISO3_TO_ISO2: Record<string, string> = {
@@ -281,11 +274,14 @@ function Pagination({ page, total, pageSize, onChange }: { page: number; total: 
 
 type DtSortCol = "clicks" | "impr" | "ctr" | "pos";
 
-function DataTable({ title, rows, blur = false, csvFilename }: {
+function DataTable({ title, rows, blur = false, csvFilename, onTrack, tracked }: {
   title: string;
   rows: { label: string; clicks: number; impr: number; ctr: number; pos: number; cPct: number; iPct: number }[];
   blur?: boolean;
   csvFilename?: string;
+  /** Rank tracker: adds a per-row "Track" button (queries table only) */
+  onTrack?: (label: string) => void;
+  tracked?: Set<string>;
   /** @deprecated kept for call-site compatibility */
   tabs?: string[];
 }) {
@@ -361,6 +357,20 @@ function DataTable({ title, rows, blur = false, csvFilename }: {
           {paged.map((r, i) => (
             <tr key={i} style={{ borderBottom: "1px solid var(--color-border)", background: i % 2 === 0 ? "rgba(255,255,255,0.03)" : "transparent" }}>
               <td style={{ padding: "8px 8px 8px 0", color: "var(--color-text-primary)", maxWidth: "220px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {onTrack && (
+                  tracked?.has(r.label.toLowerCase()) ? (
+                    <span title={t("rankTracked")} style={{ display: "inline-flex", marginRight: "6px", color: "#10B981", verticalAlign: "middle" }}>
+                      <BookmarkCheck size={13} />
+                    </span>
+                  ) : (
+                    <button onClick={() => onTrack(r.label)} title={t("rankTrack")}
+                      style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "18px", height: "18px", marginRight: "6px", borderRadius: "4px", border: "1px solid var(--color-border)", background: "none", color: "var(--color-text-secondary)", cursor: "pointer", fontSize: "12px", lineHeight: 1, verticalAlign: "middle", padding: 0 }}
+                      onMouseEnter={e => { e.currentTarget.style.color = "#3B82F6"; e.currentTarget.style.borderColor = "#3B82F6"; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = "var(--color-text-secondary)"; e.currentTarget.style.borderColor = "var(--color-border)"; }}>
+                      +
+                    </button>
+                  )
+                )}
                 <span style={blur ? { filter: "blur(5px)", userSelect: "none", transition: "filter 0.25s", display: "inline-block" } : { transition: "filter 0.25s" }}>
                   {r.label}
                 </span>
@@ -3630,6 +3640,86 @@ function StubTab({ label }: { label: string }) {
   );
 }
 
+// ─── Winners & Losers (idea from sundios/SEO-Dashboard Traffic Insights) ──────
+// Top queries/pages by click growth/decline between the current and previous period,
+// with a contribution bar showing each row's share of the total change.
+type WlItem = { label: string; curr: number; prev: number; delta: number };
+type WlData = { queries: { winners: WlItem[]; losers: WlItem[] }; pages: { winners: WlItem[]; losers: WlItem[] } };
+
+function WlList({ items, positive, blur, onTrack, tracked }: {
+  items: WlItem[]; positive: boolean; blur: boolean;
+  onTrack?: (label: string) => void; tracked?: Set<string>;
+}) {
+  const { t } = useLanguage();
+  const maxAbs = Math.max(1, ...items.map(x => Math.abs(x.delta)));
+  const color = positive ? "#10B981" : "#EF4444";
+  if (!items.length) {
+    return <div style={{ padding: "24px", fontSize: "12px", color: "var(--color-text-secondary)", textAlign: "center" }}>{t("wlNoData")}</div>;
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+      {items.map((x, i) => (
+        <div key={i} style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px" }}>
+          {onTrack && (
+            tracked?.has(x.label.toLowerCase()) ? (
+              <span title={t("rankTracked")} style={{ color: "#10B981", display: "inline-flex", flexShrink: 0 }}><BookmarkCheck size={12} /></span>
+            ) : (
+              <button onClick={() => onTrack(x.label)} title={t("rankTrack")}
+                style={{ width: "16px", height: "16px", borderRadius: "4px", border: "1px solid var(--color-border)", background: "none", color: "var(--color-text-secondary)", cursor: "pointer", fontSize: "11px", lineHeight: 1, padding: 0, flexShrink: 0 }}>+</button>
+            )
+          )}
+          <span title={x.label} style={{ flex: "0 1 40%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--color-text-primary)", ...(blur ? { filter: "blur(5px)", userSelect: "none" as const } : {}) }}>
+            {x.label}
+          </span>
+          <div style={{ flex: 1, height: "8px", background: "var(--color-border)", borderRadius: "4px", overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${Math.round((Math.abs(x.delta) / maxAbs) * 100)}%`, background: color, borderRadius: "4px" }} />
+          </div>
+          <span style={{ width: "70px", textAlign: "right", fontWeight: 700, color, flexShrink: 0 }}>
+            {positive ? "+" : "−"}{Math.abs(x.delta)}
+          </span>
+          <span style={{ width: "70px", textAlign: "right", color: "var(--color-text-secondary)", flexShrink: 0 }}>
+            {x.prev} → {x.curr}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function WinnersLosers({ data, blur, onTrack, tracked }: {
+  data?: WlData; blur: boolean;
+  onTrack?: (label: string) => void; tracked?: Set<string>;
+}) {
+  const { t } = useLanguage();
+  const [dim, setDim] = useState<"queries" | "pages">("queries");
+  const d = data?.[dim];
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "14px" }}>
+        <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>{t("wlTitle")}</h3>
+        <div style={{ display: "flex", gap: "4px" }}>
+          {(["queries", "pages"] as const).map(k => (
+            <button key={k} onClick={() => setDim(k)}
+              style={{ padding: "4px 12px", borderRadius: "6px", fontSize: "12px", fontWeight: dim === k ? 600 : 400, cursor: "pointer", border: `1px solid ${dim === k ? "#3B82F6" : "var(--color-border)"}`, background: dim === k ? "rgba(59,130,246,0.12)" : "var(--color-card)", color: dim === k ? "#3B82F6" : "var(--color-text-secondary)" }}>
+              {k === "queries" ? t("wlQueries") : t("wlPages")}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
+        <div style={{ background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "12px", padding: "16px" }}>
+          <div style={{ fontSize: "12px", fontWeight: 700, color: "#10B981", marginBottom: "10px", letterSpacing: "0.04em", textTransform: "uppercase" }}>▲ {t("wlWinners")}</div>
+          <WlList items={d?.winners ?? []} positive blur={blur} onTrack={dim === "queries" ? onTrack : undefined} tracked={tracked} />
+        </div>
+        <div style={{ background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "12px", padding: "16px" }}>
+          <div style={{ fontSize: "12px", fontWeight: 700, color: "#EF4444", marginBottom: "10px", letterSpacing: "0.04em", textTransform: "uppercase" }}>▼ {t("wlLosers")}</div>
+          <WlList items={d?.losers ?? []} positive={false} blur={blur} onTrack={dim === "queries" ? onTrack : undefined} tracked={tracked} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function SitePage() {
   const { t } = useLanguage();
@@ -3642,7 +3732,7 @@ export default function SitePage() {
     : { transition: "filter 0.25s" };
 
   // Use index so tab state doesn't break on language change
-  const TAB_KEYS = ["dashboard", "ga4", "indexing", "backlinks", "annotations", "optimize", "health", "ux", "settings"] as const;
+  const TAB_KEYS = ["dashboard", "positions", "ga4", "indexing", "backlinks", "annotations", "optimize", "health", "ux", "settings"] as const;
   type TabKey = typeof TAB_KEYS[number];
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [period, setPeriod]       = useState("7d");
@@ -3651,6 +3741,7 @@ export default function SitePage() {
 
   const TABS: { key: TabKey; label: string }[] = [
     { key: "dashboard",   label: t("tabDashboard") },
+    { key: "positions",   label: t("tabPositions") },
     { key: "ga4",         label: t("tabGA4") },
     { key: "indexing",    label: t("tabIndexing") },
     { key: "backlinks",   label: t("backlinksTab") },
@@ -3668,7 +3759,16 @@ export default function SitePage() {
   const [filterText, setFilterText] = useState("");
   const [filterPreset, setFilterPreset] = useState<string | null>(null);
   const [showAddNoteModal, setShowAddNoteModal] = useState(false);
-  const [googleUpdates, setGoogleUpdates] = useState(false);
+  const [googleUpdates, setGoogleUpdatesState] = useState(true);
+  useEffect(() => {
+    const s = localStorage.getItem("site_google_updates");
+    if (s !== null) setGoogleUpdatesState(s === "1");
+  }, []);
+  const setGoogleUpdates = (fn: (v: boolean) => boolean) => setGoogleUpdatesState(v => {
+    const next = fn(v);
+    localStorage.setItem("site_google_updates", next ? "1" : "0");
+    return next;
+  });
   const [siteNotesOn, setSiteNotesOn] = useState(false);
   const [showSetupModal, setShowSetupModal] = useState(false);
   const [showBrandedModal, setShowBrandedModal] = useState(false);
@@ -3759,6 +3859,41 @@ export default function SitePage() {
       return { date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }), clicks: 0, impressions: 0, ctr: 0, position: 0, clicksC: 0, impressionsC: 0, ctrC: 0, positionC: 0 };
     });
   }, [siteData]);
+
+  // Google updates that fall inside the visible chart window
+  const visibleAlgoUpdates = useMemo(() => {
+    const start = siteData?.chartData?.[0]?.dateIso;
+    const end   = siteData?.chartData?.[siteData.chartData.length - 1]?.dateIso;
+    if (!start || !end) return [];
+    return ALGO_UPDATES.filter(u => u.date >= start && u.date <= end);
+  }, [siteData]);
+
+  // ── Rank tracker: which queries are already tracked (for Track buttons) ──────
+  const [trackedKws, setTrackedKws] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!siteDbId) return;
+    fetch(`/api/rank/keywords?siteId=${encodeURIComponent(siteDbId)}`)
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d.keywords)) setTrackedKws(new Set(d.keywords.map((k: any) => String(k.keyword).toLowerCase())));
+      })
+      .catch(() => {});
+  }, [siteDbId]);
+
+  const handleTrack = (label: string) => {
+    const kw = label.trim().toLowerCase();
+    if (!kw || trackedKws.has(kw) || !siteDbId) return;
+    setTrackedKws(prev => new Set(prev).add(kw));
+    fetch("/api/rank/keywords", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ siteId: siteDbId, keywords: [kw] }),
+    })
+      .then(() => fetch("/api/rank/check", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId: siteDbId }),
+      }))
+      .catch(() => {});
+  };
 
   const applyPreset = (rows: any[]) => {
     if (filterPreset === "paa")      return rows.filter((r: any) => r.label?.includes("?"));
@@ -3935,6 +4070,9 @@ export default function SitePage() {
       )}
 
 
+      {/* ── Positions (Rank Tracker) tab ── */}
+      {activeTab === "positions" && <RankTracker siteDbId={siteDbId} domain={domain} />}
+
       {/* ── GA4 tab ── */}
       {activeTab === "ga4" && (
         <GA4Tab domain={domain} period={period} setPeriod={setPeriod} periodOptions={periodOptions} />
@@ -4010,15 +4148,12 @@ export default function SitePage() {
               {activeMetrics.has("impressions") && <Area yAxisId="right" type="monotone" dataKey="impressions" stroke={C.impressions}   strokeWidth={2}   fill={`url(#sg-impressions)`} dot={false} />}
               {activeMetrics.has("ctr")         && <Line yAxisId="left"  type="monotone" dataKey="ctr"         stroke={C.ctr}           strokeWidth={1.5} dot={false} />}
               {activeMetrics.has("position")    && <Line yAxisId="left"  type="monotone" dataKey="position"    stroke={C.position}      strokeWidth={1.5} dot={false} />}
-              {/* Google Update markers */}
-              {googleUpdates && GOOGLE_UPDATES
-                .filter(u => chartData.some((d: any) => d.date === u.date))
-                .map(u => (
-                  <ReferenceLine key={u.date} x={u.date} yAxisId="left"
-                    stroke={u.color} strokeWidth={1.5} strokeDasharray="3 3"
-                    label={{ value: u.label, position: "top", fontSize: 9, fill: u.color, fontWeight: 600 }} />
-                ))
-              }
+              {/* Google algorithm update markers (core / spam / discover) */}
+              {googleUpdates && visibleAlgoUpdates.map(u => (
+                <ReferenceLine key={`${u.name}-${u.date}`} x={algoDateLabel(u.date)} yAxisId="left"
+                  stroke={ALGO_UPDATE_COLORS[u.type]} strokeWidth={1.5} strokeDasharray="3 3"
+                  label={{ value: u.name, position: "top", fontSize: 9, fill: ALGO_UPDATE_COLORS[u.type], fontWeight: 600 }} />
+              ))}
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -4071,9 +4206,13 @@ export default function SitePage() {
 
         {/* Queries + Pages */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "32px" }}>
-          <DataTable title={t("queriesTable")} rows={queryRows} tabs={["All", "Growing", "Decaying"]} blur={blur} csvFilename="queries.csv" />
+          <DataTable title={t("queriesTable")} rows={queryRows} tabs={["All", "Growing", "Decaying"]} blur={blur} csvFilename="queries.csv"
+            onTrack={handleTrack} tracked={trackedKws} />
           <DataTable title={t("pagesTable")}   rows={pageRows}  tabs={["All", "Growing", "Decaying"]} blur={blur} csvFilename="pages.csv" />
         </div>
+
+        {/* Winners & Losers (click delta vs previous period) */}
+        <WinnersLosers data={siteData?.winnersLosers} blur={blur} onTrack={handleTrack} tracked={trackedKws} />
 
         {/* Branded + Query Counting */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>

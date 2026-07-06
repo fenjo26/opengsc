@@ -13,6 +13,7 @@ import { getConfiguredProviders, AI_PROVIDER_NAMES } from "@/lib/seo/keys";
 const SEO_PROVIDERS = [
   { id: "serper", storageKey: "seoKey_serper", name: "Serper.dev", roleKey: "seoRoleSerp", placeholder: "Serper API key", hintKey: "seoSetHintSerper", instrKey: "seoSetInstrSerper", docsUrl: "https://serper.dev", color: "#10A37F", logo: "S" },
   { id: "dataforseo", storageKey: "seoKey_dataforseo", name: "DataForSEO", roleKey: "seoRoleDfs", placeholder: "login:password или Base64-токен", hintKey: "seoSetHintDfs", instrKey: "seoSetInstrDfs", docsUrl: "https://app.dataforseo.com/api-access", color: "#2997ff", logo: "D" },
+  { id: "scrapingrobot", storageKey: "seoKey_scrapingrobot", name: "ScrapingRobot", roleKey: "seoRoleSr", placeholder: "ScrapingRobot API token", hintKey: "seoSetHintSr", instrKey: "seoSetInstrSr", docsUrl: "https://scrapingrobot.com", color: "#8B5CF6", logo: "R" },
   { id: "firecrawl", storageKey: "seoKey_firecrawl", name: "Firecrawl", roleKey: "seoRoleFc", placeholder: "fc-...", hintKey: "seoSetHintFc", instrKey: "seoSetInstrFc", docsUrl: "https://www.firecrawl.dev/app/api-keys", color: "#ff9f0a", logo: "F" },
 ] as const;
 
@@ -27,7 +28,7 @@ function SeoKeyCard({ provider }: { provider: typeof SEO_PROVIDERS[number] }) {
 
   const save = () => {
     localStorage.setItem(provider.storageKey, key.trim());
-    if (key.trim() && (provider.id === "serper" || provider.id === "dataforseo")) {
+    if (key.trim() && (provider.id === "serper" || provider.id === "dataforseo" || provider.id === "scrapingrobot")) {
       if (!localStorage.getItem("seoSerpProvider")) localStorage.setItem("seoSerpProvider", provider.id);
     }
     setSaved(true); setTimeout(() => setSaved(false), 2000);
@@ -313,7 +314,7 @@ export default function SeoToolsSettings() {
       <div style={{ marginBottom: "14px" }}>
         <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "7px" }}>{t("seoSetActiveProvider")}</div>
         <div style={{ display: "flex", gap: "8px" }}>
-          {[["serper", "Serper.dev"], ["dataforseo", "DataForSEO"]].map(([id, name]) => (
+          {[["serper", "Serper.dev"], ["dataforseo", "DataForSEO"], ["scrapingrobot", "ScrapingRobot"]].map(([id, name]) => (
             <button key={id} onClick={() => setProvider(id)} style={{ padding: "7px 14px", borderRadius: "8px", fontSize: "12px", fontWeight: 600, cursor: "pointer", border: `1px solid ${active === id ? "var(--color-accent-blue)" : "var(--color-border)"}`, background: active === id ? "rgba(41,151,255,0.1)" : "transparent", color: active === id ? "var(--color-accent-blue)" : "var(--color-text-secondary)" }}>{name}</button>
           ))}
         </div>

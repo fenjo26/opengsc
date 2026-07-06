@@ -107,10 +107,35 @@ function InfoBlock({
 }
 
 // ─── Table ─────────────────────────────────────────────────────────────────────
-function KeywordsTable({ data, loading }: { data: StrikingKeyword[]; loading: boolean }) {
+function KeywordsTable({ data, loading, siteDbId }: { data: StrikingKeyword[]; loading: boolean; siteDbId: string }) {
   const { t } = useLanguage();
   const [search,  setSearch]  = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("impressions");
+
+  // Rank tracker integration: one-click "Track" per keyword
+  const [tracked, setTracked] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!siteDbId) return;
+    fetch(`/api/rank/keywords?siteId=${encodeURIComponent(siteDbId)}`)
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d.keywords)) setTracked(new Set(d.keywords.map((k: any) => String(k.keyword).toLowerCase()))); })
+      .catch(() => {});
+  }, [siteDbId]);
+
+  const track = (query: string) => {
+    const kw = query.trim().toLowerCase();
+    if (!kw || tracked.has(kw) || !siteDbId) return;
+    setTracked(prev => new Set(prev).add(kw));
+    fetch("/api/rank/keywords", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ siteId: siteDbId, keywords: [kw] }),
+    })
+      .then(() => fetch("/api/rank/check", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId: siteDbId }),
+      }))
+      .catch(() => {});
+  };
 
   const filtered = useMemo(() =>
     data
@@ -204,8 +229,18 @@ function KeywordsTable({ data, loading }: { data: StrikingKeyword[]; loading: bo
                 alignItems: "center", fontSize: "13px",
               }}>
                 {/* Query */}
-                <div style={{ fontWeight: 600, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.query}>
-                  {item.query}
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", overflow: "hidden" }}>
+                  {tracked.has(item.query.toLowerCase()) ? (
+                    <span title={t("rankTracked")} style={{ color: "#10B981", flexShrink: 0, fontSize: "12px" }}>✓</span>
+                  ) : (
+                    <button onClick={() => track(item.query)} title={t("rankTrack")}
+                      style={{ width: "17px", height: "17px", borderRadius: "4px", border: "1px solid var(--color-border)", background: "none", color: "var(--color-text-secondary)", cursor: "pointer", fontSize: "12px", lineHeight: 1, padding: 0, flexShrink: 0 }}
+                      onMouseEnter={e => { e.currentTarget.style.color = "#3B82F6"; e.currentTarget.style.borderColor = "#3B82F6"; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = "var(--color-text-secondary)"; e.currentTarget.style.borderColor = "var(--color-border)"; }}>+</button>
+                  )}
+                  <span style={{ fontWeight: 600, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.query}>
+                    {item.query}
+                  </span>
                 </div>
                 {/* Page */}
                 <div style={{ display: "flex", alignItems: "center", gap: "4px", overflow: "hidden" }}>
@@ -280,7 +315,7 @@ export default function StrikingDistanceKeywords({ siteDbId }: { siteDbId: strin
         </div>
       )}
       <InfoBlock posFrom={posFrom} setPosFrom={setPosFrom} posTo={posTo} setPosTo={setPosTo} days={days} setDays={setDays} />
-      <KeywordsTable data={keywords} loading={loading} />
+      <KeywordsTable data={keywords} loading={loading} siteDbId={siteDbId} />
     </div>
   );
 }

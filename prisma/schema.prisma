@@ -99,6 +99,7 @@ model Site {
   indexingOperations    IndexingOperation[]
   backlinks             Backlink[]
   claritySnapshots      ClaritySnapshot[]
+  trackedKeywords       TrackedKeyword[]
 
   // Microsoft Clarity integration
   clarityToken          String?   // Data Export API token (per-project in Clarity)
@@ -193,6 +194,47 @@ model DailyMetric {
   @@index([siteId, date])
   @@index([url])
   @@index([query])
+}
+
+// ─── Rank Tracker (SERP position monitoring) ─────────────────────────────────
+// Tracked keywords are checked daily by the in-app scheduler (rankScheduler) via the
+// user's configured SERP provider (Serper.dev / DataForSEO — same keys as SEO Tools).
+model TrackedKeyword {
+  id            String    @id @default(cuid())
+  siteId        String
+  keyword       String
+  device        String    @default("desktop") // reserved: "desktop" | "mobile"
+  country       String    @default("us")      // gl code (2-letter)
+  lang          String    @default("en")      // hl code
+  createdAt     DateTime  @default(now())
+  lastCheckedAt DateTime?
+
+  // Denormalized latest state for cheap list rendering
+  lastPosition  Int?      // null = not found in scanned depth
+  prevPosition  Int?      // position from the previous check
+  bestPosition  Int?
+  lastUrl       String?   // ranking URL found on the last check
+
+  site   Site        @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  checks RankCheck[]
+
+  @@unique([siteId, keyword, device, country])
+  @@index([siteId])
+  @@index([lastCheckedAt])
+}
+
+model RankCheck {
+  id        String   @id @default(cuid())
+  keywordId String
+  checkedAt DateTime @default(now())
+  position  Int?     // null = not found
+  url       String?
+  depth     Int?     // how many results were scanned
+  error     String?
+
+  keyword TrackedKeyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  @@index([keywordId, checkedAt])
 }
 
 model ContentGroup {

@@ -144,6 +144,7 @@ export async function GET(req: Request) {
     const comp = prevMap.get(compDate.toISOString().split('T')[0]);
     return {
       date:         new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      dateIso:      new Date(r.date).toISOString().split('T')[0],
       clicks:       r.clicks,
       impressions:  r.impressions,
       ctr:          +((r.ctr * 100).toFixed(2)),
@@ -277,6 +278,29 @@ export async function GET(req: Request) {
     };
   });
 
+  // ── Winners & Losers: click delta between the two periods ────────────────────
+  // Union of current + previous rows, so queries that dropped to zero still show up.
+  const computeWinnersLosers = (curr: GscRow[], pm: Map<string | undefined, GscRow>) => {
+    const currMap = new Map(curr.map(r => [r.keys?.[0], r]));
+    const keys = new Set([...currMap.keys(), ...pm.keys()]);
+    const deltas: { label: string; curr: number; prev: number; delta: number }[] = [];
+    for (const k of keys) {
+      if (!k) continue;
+      const c = currMap.get(k)?.clicks ?? 0;
+      const p = pm.get(k)?.clicks ?? 0;
+      if (c === p) continue;
+      deltas.push({ label: k, curr: c, prev: p, delta: c - p });
+    }
+    const winners = deltas.filter(d => d.delta > 0).sort((a, b) => b.delta - a.delta).slice(0, 20);
+    const losers  = deltas.filter(d => d.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, 20);
+    return { winners, losers };
+  };
+
+  const winnersLosers = {
+    queries: computeWinnersLosers(queryRows, prevQueryMap),
+    pages:   computeWinnersLosers(pageRows,  prevPageMap),
+  };
+
   // ── Position buckets (from all fetched queries) ───────────────────────────────
   const positionBuckets = { '1-3': 0, '4-10': 0, '11-20': 0, '21+': 0 };
   for (const r of queryRows) {
@@ -298,6 +322,7 @@ export async function GET(req: Request) {
     newQueries,
     newPages,
     positionBuckets,
+    winnersLosers,
     hasData: currRows.length > 0,
   });
 }

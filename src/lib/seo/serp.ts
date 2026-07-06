@@ -164,6 +164,102 @@ async function dataForSeoSearch(
   return { engine, provider: "dataforseo", keyword, results, peopleAlsoAsk: paa, relatedSearches: related };
 }
 
+// ─── ScrapingRobot ───────────────────────────────────────────────────────────
+// Free tier: 5000 scrapes/month (the same provider SerpBear uses for its free mode).
+// Returns raw Google SERP HTML — we extract organic results with tolerant regexes.
+
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, " ");
+}
+
+function stripTags(s: string): string {
+  return decodeEntities(s.replace(/<[^>]*>/g, "")).trim();
+}
+
+const GOOGLE_INTERNAL = /(^|\.)google\.[a-z.]+$|(^|\.)(gstatic|googleusercontent|youtube)\.com$/;
+
+// Extract organic results from a Google SERP HTML page (both classic non-JS layout
+// with /url?q= anchors and the h3-inside-anchor desktop layout).
+export function parseGoogleHtml(html: string): { url: string; title: string }[] {
+  const out: { url: string; title: string }[] = [];
+  const seen = new Set<string>();
+  const push = (url: string, title: string) => {
+    try {
+      const u = new URL(url);
+      const host = u.hostname.replace(/^www\./, "");
+      if (GOOGLE_INTERNAL.test(host)) return;
+      if (seen.has(u.origin + u.pathname)) return;
+      seen.add(u.origin + u.pathname);
+      out.push({ url, title });
+    } catch { /* skip malformed */ }
+  };
+
+  // Layout A: <a href="https://..."> … <h3>Title</h3>
+  const reH3 = /<a[^>]+href="(https?:\/\/[^"]+)"[^>]*>[\s\S]{0,400}?<h3[^>]*>([\s\S]*?)<\/h3>/g;
+  let m: RegExpExecArray | null;
+  while ((m = reH3.exec(html)) !== null) push(decodeEntities(m[1]), stripTags(m[2]));
+
+  // Layout B (non-JS): <a href="/url?q=https://...&sa=...">Title</a>
+  const reQ = /<a[^>]+href="\/url\?q=(https?:\/\/[^"&]+)[^"]*"[^>]*>([\s\S]*?)<\/a>/g;
+  while ((m = reQ.exec(html)) !== null) {
+    const title = stripTags(m[2]);
+    if (title.length < 3) continue;
+    push(decodeURIComponent(decodeEntities(m[1])), title);
+  }
+  return out;
+}
+
+async function scrapingRobotSearch(
+  apiKey: string,
+  keyword: string,
+  opts: { gl?: string; hl?: string; location?: string; num?: number; engine?: SerpEngine },
+): Promise<SerpResponse> {
+  const engine: SerpEngine = "google"; // ScrapingRobot path supports Google only
+  const want = opts.num || 10;
+  const pages = Math.min(5, Math.max(1, Math.ceil(want / 10)));
+  const results: SerpResultItem[] = [];
+  const seen = new Set<string>();
+
+  for (let page = 0; page < pages; page++) {
+    const gUrl = `https://www.google.com/search?q=${encodeURIComponent(keyword)}&hl=${opts.hl || "en"}&gl=${opts.gl || "us"}&num=10${page > 0 ? `&start=${page * 10}` : ""}`;
+    const api = `https://api.scrapingrobot.com/?token=${encodeURIComponent(apiKey)}&proxyCountry=${(opts.gl || "us").toUpperCase()}&render=false&url=${encodeURIComponent(gUrl)}`;
+    let res: Response;
+    try {
+      res = await fetch(api, { method: "GET", signal: AbortSignal.timeout(60000) });
+    } catch (e: any) {
+      if (page === 0) return { engine, provider: "scrapingrobot", keyword, results: [], error: `сеть ScrapingRobot: ${e?.cause?.code || e?.message || "fetch failed"}` };
+      break;
+    }
+    if (!res.ok) {
+      if (page === 0) return { engine, provider: "scrapingrobot", keyword, results: [], error: `scrapingrobot ${res.status}: ${(await res.text()).slice(0, 200)}` };
+      break;
+    }
+    let html = "";
+    try {
+      const data = await res.json();
+      if (data?.status && String(data.status).toUpperCase() !== "SUCCESS") {
+        if (page === 0) return { engine, provider: "scrapingrobot", keyword, results: [], error: `scrapingrobot: ${data?.error || data.status}` };
+        break;
+      }
+      html = typeof data?.result === "string" ? data.result : (data?.result?.content ?? "");
+    } catch {
+      html = ""; // non-JSON response — treat as empty page
+    }
+    const parsed = parseGoogleHtml(html);
+    for (const r of parsed) {
+      if (seen.has(r.url)) continue;
+      seen.add(r.url);
+      results.push({ position: results.length + 1, url: r.url, title: r.title, snippet: "", domain: domainOf(r.url) });
+    }
+    if (parsed.length === 0) break;      // empty/last page
+    if (results.length >= want) break;
+  }
+
+  return { engine, provider: "scrapingrobot", keyword, results: results.slice(0, want) };
+}
+
 export async function runSerp(
   provider: string,
   apiKey: string,
@@ -175,6 +271,7 @@ export async function runSerp(
   }
   try {
     if (provider === "dataforseo") return await dataForSeoSearch(apiKey, keyword, opts);
+    if (provider === "scrapingrobot") return await scrapingRobotSearch(apiKey, keyword, opts);
     return await serperSearch(apiKey, keyword, opts); // default: serper
   } catch (e: any) {
     return { engine: opts.engine ?? "google", provider, keyword, results: [], error: String(e?.message ?? e) };
