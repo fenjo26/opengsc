@@ -3526,15 +3526,37 @@ function NewRankingsTable({ queryRows, pageRows, blur }: { queryRows: RankRow[];
   const { t } = useLanguage();
   const [tab, setTab] = useState<"Queries" | "Pages">("Queries");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
+  const [sortCol, setSortCol] = useState<DtSortCol>("clicks");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const rows = tab === "Queries" ? queryRows : pageRows;
-  const paged = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const handleSort = (col: DtSortCol) => {
+    if (sortCol === col) setSortDir(d => d === "desc" ? "asc" : "desc");
+    else { setSortCol(col); setSortDir(col === "pos" ? "asc" : "desc"); }
+    setPage(1);
+  };
+
+  const sorted = [...rows].sort((a, b) => (a[sortCol] - b[sortCol]) * (sortDir === "desc" ? -1 : 1));
+  const paged = sorted.slice((page - 1) * pageSize, page * pageSize);
 
   const handleTabChange = (v: string) => { setTab(v as "Queries" | "Pages"); setPage(1); };
 
   const handleCSV = () => {
     exportCSV(`new-rankings-${tab.toLowerCase()}.csv`,
       [tab === "Queries" ? "Query" : "Page", "Clicks", "Impressions", "CTR%", "Position"],
-      rows.map(r => [r.label, r.clicks, r.impr, r.ctr, r.pos])
+      sorted.map(r => [r.label, r.clicks, r.impr, r.ctr, r.pos])
+    );
+  };
+
+  const SortTh = ({ col, label, color }: { col: DtSortCol; label: string; color: string }) => {
+    const active = sortCol === col;
+    const arrow = active ? (sortDir === "desc" ? " ↓" : " ↑") : " ↕";
+    return (
+      <th onClick={() => handleSort(col)}
+        style={{ textAlign: "left", padding: "8px 8px", color: active ? color : "var(--color-text-secondary)", fontWeight: active ? 700 : 500, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap", fontSize: "11px", letterSpacing: "0.04em" }}>
+        {label.toUpperCase()}<span style={{ opacity: active ? 1 : 0.35, marginLeft: "2px" }}>{arrow}</span>
+      </th>
     );
   };
 
@@ -3558,10 +3580,10 @@ function NewRankingsTable({ queryRows, pageRows, blur }: { queryRows: RankRow[];
             <thead>
               <tr style={{ borderBottom: "1px solid var(--color-border)" }}>
                 <th style={{ textAlign: "left", padding: "8px 0", color: "var(--color-text-secondary)", fontWeight: 500 }}></th>
-                <th style={{ textAlign: "left", padding: "8px 8px", color: C.clicks,      fontWeight: 600, fontSize: "12px" }}>{t("clicks")}</th>
-                <th style={{ textAlign: "left", padding: "8px 8px", color: C.impressions, fontWeight: 600, fontSize: "12px" }}>{t("impressions")}</th>
-                <th style={{ textAlign: "left", padding: "8px 8px", color: C.ctr,         fontWeight: 600, fontSize: "12px" }}>CTR</th>
-                <th style={{ textAlign: "left", padding: "8px 0",  color: C.position,     fontWeight: 600, fontSize: "12px" }}>{t("position")}</th>
+                <SortTh col="clicks" label={t("clicks")}      color={C.clicks} />
+                <SortTh col="impr"   label={t("impressions")} color={C.impressions} />
+                <SortTh col="ctr"    label="CTR"              color={C.ctr} />
+                <SortTh col="pos"    label={t("position")}    color={C.position} />
               </tr>
             </thead>
             <tbody>
@@ -3581,7 +3603,16 @@ function NewRankingsTable({ queryRows, pageRows, blur }: { queryRows: RankRow[];
               ))}
             </tbody>
           </table>
-          <Pagination page={page} total={rows.length} pageSize={PAGE_SIZE} onChange={setPage} />
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginTop: "10px", gap: "16px" }}>
+            <Pagination page={page} total={sorted.length} pageSize={pageSize} onChange={setPage} />
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "var(--color-text-secondary)" }}>
+              <span>{t("rowsPerPage")}</span>
+              <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
+                style={{ fontSize: "12px", padding: "3px 6px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-primary)", cursor: "pointer" }}>
+                {[10, 50, 100, 500].map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+          </div>
         </>
       )}
     </div>
