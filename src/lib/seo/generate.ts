@@ -474,6 +474,31 @@ export async function genOutline(b: any): Promise<GenResult> {
   return { ok: true, data: outline };
 }
 
+// ─── TOC heading label per language (deterministic — never trust the model for this fixed
+// string: the one-shot prompt used to show a literal Russian example `<strong>Содержание</strong>`
+// and models copied it verbatim regardless of article language; even the old chunked-path list
+// only covered ru/uk/fr). Extend this map rather than relying on the LLM to translate one word.
+const TOC_LABELS: Record<string, string> = {
+  ru: "Содержание", uk: "Зміст", fr: "Sommaire", es: "Índice", de: "Inhalt", it: "Indice",
+  pt: "Índice", pl: "Spis treści", tr: "İçindekiler", nl: "Inhoud", ro: "Cuprins", cs: "Obsah",
+  sk: "Obsah", hu: "Tartalom", bg: "Съдържание", el: "Περιεχόμενα", ar: "المحتويات",
+  ja: "目次", ko: "목차", zh: "目录", sv: "Innehåll", da: "Indhold", no: "Innhold", fi: "Sisällys",
+};
+function tocLabelFor(language: string): string {
+  const lang = String(language || "").toLowerCase();
+  for (const code of Object.keys(TOC_LABELS)) if (lang.startsWith(code)) return TOC_LABELS[code];
+  return "Contents";
+}
+
+// Guarantee the TOC heading is in the article's own language, whatever the writer produced and
+// whatever any later pass (expand/trim/fact-clean) did to it. Runs as a final deterministic
+// override, same idea as ensureMetaBlock below.
+export function ensureTocLabel(text: string, language: string): string {
+  if (!text || !/<div class="toc">/i.test(text)) return text;
+  const label = tocLabelFor(language);
+  return text.replace(/(<div class="toc">\s*<strong>)([^<]*)(<\/strong>)/i, (_m, pre, _old, post) => `${pre}${label}${post}`);
+}
+
 // ─── Chunked article writer: H2-units → chunks of ~4 sections → parallel small calls ──
 // Returns the assembled article body (H1 + sections + FAQ) or null → caller falls back to
 // the single-shot path. Each chunk sees the full article map so nothing gets duplicated.
@@ -617,7 +642,7 @@ async function writeTextInChunks(outline: any, ctx: {
   const pick = (v: any) => Array.isArray(v) ? (v.find((x: any) => x && String(x).trim()) || "") : (v || "");
   const h1 = pick(meta.h1) || pick(meta.title_options) || ctx.keyword;
   const slug = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, "").trim().replace(/\s+/g, "-");
-  const tocLabel = ctx.language.startsWith("ru") ? "Содержание" : ctx.language.startsWith("uk") ? "Зміст" : ctx.language.startsWith("fr") ? "Sommaire" : "Contents";
+  const tocLabel = tocLabelFor(ctx.language);
   const hasFaqH2 = secs.some((s: any) => s.h_level === "H2" && /^faq/i.test(String(s.heading || "").trim()));
   const toc = ctx.includeToc
     ? `<div class="toc"><strong>${tocLabel}</strong><ul>${secs.filter((s: any) => s.h_level === "H2").map((s: any) => `<li><a href="#${slug(String(s.heading))}">${s.heading}</a></li>`).join("")}${faq.length && !hasFaqH2 ? `<li><a href="#faq">FAQ</a></li>` : ""}</ul></div>\n\n`
@@ -822,6 +847,9 @@ export async function genText(b: any): Promise<GenResult> {
 
   // Guarantee the SEO meta block is present (deterministic — don't trust the model to emit it).
   text = ensureMetaBlock(text, b.outline?.meta);
+  // Guarantee the TOC label matches the article's language (deterministic — the writer, or any
+  // later expand/trim/fact-clean pass, could otherwise leave/reintroduce a wrong-language word).
+  text = ensureTocLabel(text, String(b.language ?? "en"));
 
   return { ok: true, data: { text, usedSources: sources.length, redacted, autoCleaned } };
 }
