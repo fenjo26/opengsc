@@ -527,7 +527,13 @@ async function writeTextInChunks(outline: any, ctx: {
 
   // TABLE budget: exactly 1-2 tables per article, never one per section. Keep at most the
   // first 2 table-marked specs (older outlines over-mark), and if none is marked — assign
-  // ONE to the most table-natural section by heading.
+  // ONE to the most table-natural section by heading. FAQ is Q&A format, not tabular — never
+  // let it carry a table, whether the mark came from the enrich pass (which just picks the
+  // "most tabular" headings and doesn't know to skip FAQ) or from the keyword fallback below
+  // (whose regex includes words like "bonus"/"limit"/"retrait" that commonly appear IN an FAQ
+  // heading too, e.g. "FAQ — Bonus & Retraits").
+  const isFaqHeading = (h: any) => /\bfaq\b|frequently asked/i.test(String(h || "").trim());
+  for (const s of specs) if (isFaqHeading(s.heading)) s.visual_elements = [];
   const hasTableVe = (s: any) => (Array.isArray(s.visual_elements) ? s.visual_elements : [])
     .some((v: any) => typeof v === "object" ? /table/i.test(String(v?.type || "")) : /table|таблиц/i.test(String(v)));
   let tablesKept = 0;
@@ -538,7 +544,7 @@ async function writeTextInChunks(outline: any, ctx: {
   }
   if (tablesKept === 0) {
     const tabular = /bonus|бонус|payment|paiement|paie|dépôt|deposit|депозит|retrait|withdraw|вывод|метод|cotes|коэффициент|odds|rtp|provider|провайдер|logiciel|jeux|games|слот|slot|сравн|compar|таблиц|limit|лимит/i;
-    const pick = specs.find(s => tabular.test(String(s.heading || "")));
+    const pick = specs.find(s => !isFaqHeading(s.heading) && tabular.test(String(s.heading || "")));
     if (pick) pick.visual_elements = [{ type: "table", title: "", description: "сводная таблица по данным секции (только реальные значения из спеки/базы знаний/источников)" }];
   }
 
