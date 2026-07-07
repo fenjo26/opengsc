@@ -619,6 +619,59 @@ async function writeTextInChunks(outline: any, ctx: {
   return `# ${h1}\n\n${toc}${parts.join("\n\n")}`;
 }
 
+// ─── Volume guard (final word on article length) ──────────────────────────────────
+// Models undershoot AND overshoot the target, and the auto-fact-clean pass can also nudge
+// length while correcting numbers — so this MUST run after every other content-shaping pass,
+// never before. Below ~85% of target → one expansion pass. Above ~115% (the plan's own ±15%
+// tolerance, tightened from the previous 1.25x which was looser than what users are told to
+// expect) → iterative trim passes, looping until within range or the model stops cooperating.
+async function enforceVolumeTarget(text: string, targetWc: number, ctx: {
+  language: string; provider: string; apiKey: string; model?: string; baseUrl?: string;
+}): Promise<string> {
+  if (!targetWc || targetWc < 500 || !text) return text;
+  const h2 = (s: string) => (s.match(/^##\s/gm) || []).length;
+  const words = text.split(/\s+/).filter(Boolean).length;
+  if (words < targetWc * 0.85) {
+    try {
+      let expanded = await fetchLLM(
+        buildTextExpandPrompt({ article: text, targetWords: targetWc, currentWords: words, language: ctx.language }),
+        ctx.provider, ctx.apiKey, 14000, ctx.model, ctx.baseUrl,
+      );
+      if (expanded) {
+        expanded = expanded.trim().replace(/^```(?:markdown|md)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+        const newWords = expanded.split(/\s+/).filter(Boolean).length;
+        // Accept only a real improvement that didn't mangle the structure (same H2 count ±1).
+        if (newWords > words * 1.1 && Math.abs(h2(expanded) - h2(text)) <= 1) {
+          text = stripForeignScripts(expanded, ctx.language);
+        }
+      }
+    } catch { /* expansion is best-effort */ }
+  } else if (words > targetWc * 1.15) {
+    // Verbose models under-cut on the first pass — iterate (max 3, up from 2) until within
+    // range. Per-pass acceptance loosened from ≥10% to ≥5% reduction so the guard doesn't give
+    // up after one modest cut and ship an article that's still well over budget.
+    for (let pass = 0; pass < 3; pass++) {
+      const cur = text.split(/\s+/).filter(Boolean).length;
+      if (cur <= targetWc * 1.15) break;
+      try {
+        let trimmed = await fetchLLM(
+          buildTextTrimPrompt({ article: text, targetWords: targetWc, currentWords: cur, language: ctx.language }),
+          ctx.provider, ctx.apiKey, 14000, ctx.model, ctx.baseUrl,
+        );
+        if (!trimmed) break;
+        trimmed = trimmed.trim().replace(/^```(?:markdown|md)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+        const newWords = trimmed.split(/\s+/).filter(Boolean).length;
+        // Accept any real reduction that kept the structure (same H2 count ±1) and didn't
+        // over-cut (still ≥70% of target).
+        if (newWords < cur * 0.95 && newWords >= targetWc * 0.7 && Math.abs(h2(trimmed) - h2(text)) <= 1) {
+          text = stripForeignScripts(trimmed, ctx.language);
+        } else break; // model refused to cut further / structure changed — stop iterating
+      } catch { break; }
+    }
+  }
+  return text;
+}
+
 // ─── Article text ─────────────────────────────────────────────────────────────────
 export async function genText(b: any): Promise<GenResult> {
   if (!b.outline) return { ok: false, error: "no_outline" };
@@ -733,55 +786,13 @@ export async function genText(b: any): Promise<GenResult> {
 
   text = stripForeignScripts(text, String(b.language ?? "en"));
 
-  // VOLUME guard (default on, symmetric): models undershoot AND overshoot the budget.
-  // Below ~82% of target → one expansion pass (thicken thin sections with substance).
-  // Above ~125% of target → one trim pass (cut water, keep every heading/table/fact).
-  // Off with expandText:false.
-  const finalTargetWc = Number(b.targetWordCount) || Number(slimOutline.meta?.target_word_count) || 0;
-  if (b.expandText !== false && finalTargetWc >= 500) {
-    const words = text.split(/\s+/).filter(Boolean).length;
-    const h2 = (s: string) => (s.match(/^##\s/gm) || []).length;
-    if (words < finalTargetWc * 0.85) {
-      try {
-        let expanded = await fetchLLM(
-          buildTextExpandPrompt({ article: text, targetWords: finalTargetWc, currentWords: words, language: String(b.language ?? "en") }),
-          provider, apiKey, 14000, model, baseUrl,
-        );
-        if (expanded) {
-          expanded = expanded.trim().replace(/^```(?:markdown|md)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
-          const newWords = expanded.split(/\s+/).filter(Boolean).length;
-          // Accept only a real improvement that didn't mangle the structure (same H2 count ±1).
-          if (newWords > words * 1.1 && Math.abs(h2(expanded) - h2(text)) <= 1) {
-            text = stripForeignScripts(expanded, String(b.language ?? "en"));
-          }
-        }
-      } catch { /* expansion is best-effort */ }
-    } else if (words > finalTargetWc * 1.25) {
-      // Verbose models under-cut on the first pass — iterate (max 2) until within range.
-      for (let pass = 0; pass < 2; pass++) {
-        const cur = text.split(/\s+/).filter(Boolean).length;
-        if (cur <= finalTargetWc * 1.25) break;
-        try {
-          let trimmed = await fetchLLM(
-            buildTextTrimPrompt({ article: text, targetWords: finalTargetWc, currentWords: cur, language: String(b.language ?? "en") }),
-            provider, apiKey, 14000, model, baseUrl,
-          );
-          if (!trimmed) break;
-          trimmed = trimmed.trim().replace(/^```(?:markdown|md)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
-          const newWords = trimmed.split(/\s+/).filter(Boolean).length;
-          // Accept only a real reduction that kept the structure (same H2 count ±1) and
-          // didn't over-cut (still ≥70% of target).
-          if (newWords < cur * 0.9 && newWords >= finalTargetWc * 0.7 && Math.abs(h2(trimmed) - h2(text)) <= 1) {
-            text = stripForeignScripts(trimmed, String(b.language ?? "en"));
-          } else break; // model refused to cut further / structure changed — stop iterating
-        } catch { break; }
-      }
-    }
-  }
-
   // AUTO fact-clean: verify the finished article against the facts bank and fix contradictions /
   // fabrications / number mismatches in one pass — so the article ships clean (fact-check then just
-  // confirms). Best-effort: if it fails, keep the original text. Toggle off with autoFactCheck:false.
+  // confirms). Runs BEFORE the volume guard (moved from after it): fact-clean can add clarifying
+  // words while correcting numbers, and previously ran last with only a floor check on character
+  // length (>85%) — nothing stopped it from silently re-inflating an article the guard had just
+  // trimmed back to budget. The guard now always gets the last word on length. Best-effort: if it
+  // fails, keep the original text. Toggle off with autoFactCheck:false.
   let autoCleaned = false;
   const bank = Array.isArray(b.outline?.meta?.facts_bank) ? b.outline.meta.facts_bank : [];
   if (b.autoFactCheck !== false && bank.length && text) {
@@ -794,6 +805,13 @@ export async function genText(b: any): Promise<GenResult> {
         autoCleaned = true;
       }
     } catch { /* keep original text */ }
+  }
+
+  // VOLUME guard (default on, symmetric) — see enforceVolumeTarget() above. Runs LAST, after
+  // fact-clean, so it's the final word on article length. Off with expandText:false.
+  const finalTargetWc = Number(b.targetWordCount) || Number(slimOutline.meta?.target_word_count) || 0;
+  if (b.expandText !== false && finalTargetWc >= 500) {
+    text = await enforceVolumeTarget(text, finalTargetWc, { language: String(b.language ?? "en"), provider, apiKey, model, baseUrl });
   }
 
   // Guarantee the SEO meta block is present (deterministic — don't trust the model to emit it).
