@@ -1,7 +1,7 @@
 // Core SEO generation logic, factored out of the API routes so it can be reused by both
 // the synchronous routes and the background-job runner. No HTTP / auth here — pure work.
 
-import { fetchLLM } from "@/lib/llm";
+import { fetchLLM, fetchLLMDetailed } from "@/lib/llm";
 import { runSerp } from "@/lib/seo/serp";
 import { scrapeMany } from "@/lib/seo/scrape";
 import {
@@ -802,7 +802,13 @@ export async function genText(b: any): Promise<GenResult> {
       includeToc: b.includeToc === true,
       ragFacts,
     });
-    text = await fetchLLM(prompt, provider, apiKey, 12000, model, baseUrl);
+    // Detailed variant here (not the plain fetchLLM used elsewhere): this is the last-resort
+    // single-shot attempt — if it also fails, its error detail (e.g. a provider content-policy
+    // rejection like z.ai's "potentially unsafe or sensitive content") is what we surface below,
+    // instead of a bare "generation_failed" that sends users digging through server logs.
+    const r = await fetchLLMDetailed(prompt, provider, apiKey, 12000, model, baseUrl);
+    text = r.text;
+    if (!text) return { ok: false, error: r.error ? `generation_failed: ${r.error}` : "generation_failed" };
   }
   if (!text) return { ok: false, error: "generation_failed" };
 

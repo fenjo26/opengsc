@@ -29,18 +29,49 @@ export async function fetchLLM(
   modelOverride?: string,
   baseUrl?: string,
 ): Promise<string | null> {
+  return (await fetchLLMDetailed(prompt, provider, apiKey, maxTokens, modelOverride, baseUrl)).text;
+}
+
+// Same retry loop as fetchLLM, but also surfaces the provider's error detail (status + message)
+// from the LAST attempt when every attempt failed — so a caller that finally gives up (e.g.
+// genText's "generation_failed" path) can report something actionable, like "z.ai 400: System
+// detected potentially unsafe or sensitive content" instead of a bare generic string that sends
+// users spelunking through `pm2 logs` to find out their whole niche got flagged by the provider's
+// own content-moderation filter.
+export async function fetchLLMDetailed(
+  prompt: string,
+  provider: string,
+  apiKey: string,
+  maxTokens = 1024,
+  modelOverride?: string,
+  baseUrl?: string,
+): Promise<{ text: string | null; error?: string }> {
   const delays = [0, 5_000, 20_000]; // 3 attempts total
+  let lastError: string | undefined;
   for (let i = 0; i < delays.length; i++) {
     if (delays[i]) await new Promise(r => setTimeout(r, delays[i] + Math.floor(Math.random() * 4_000)));
     const r = await fetchLLMOnce(prompt, provider, apiKey, maxTokens, modelOverride, baseUrl);
-    if (r.text != null) return r.text;
-    if (!r.retryable) return null;
+    if (r.text != null) return { text: r.text };
+    lastError = r.errorDetail;
+    if (!r.retryable) return { text: null, error: lastError };
     if (i < delays.length - 1) console.error(`[LLM] ${provider} transient failure — retrying (${i + 1}/${delays.length - 1})`);
   }
-  return null;
+  return { text: null, error: lastError };
 }
 
 const retryableStatus = (s: number) => s === 429 || s === 408 || s >= 500;
+
+// Best-effort extraction of a short, human-readable reason from a failed provider response —
+// tries the common `{error:{message|type}}` JSON shape used by most providers, else falls back
+// to the raw body (truncated). Prefixed with provider+status so it's unambiguous in job.error.
+function extractErrorDetail(provider: string, status: number, bodyText: string): string {
+  let msg: string = bodyText;
+  try {
+    const j = JSON.parse(bodyText);
+    msg = j?.error?.message || j?.error?.type || j?.message || bodyText;
+  } catch { /* not JSON — keep raw body */ }
+  return `${provider} ${status}: ${String(msg || "").slice(0, 300)}`;
+}
 
 async function fetchLLMOnce(
   prompt: string,
@@ -49,7 +80,7 @@ async function fetchLLMOnce(
   maxTokens = 1024,
   modelOverride?: string,
   baseUrl?: string,
-): Promise<{ text: string | null; retryable: boolean }> {
+): Promise<{ text: string | null; retryable: boolean; errorDetail?: string }> {
   // Hard timeout so a stuck/over-long generation fails in minutes instead of hanging forever.
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 280_000);
@@ -64,7 +95,11 @@ async function fetchLLMOnce(
         headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
         body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
       });
-      if (!res.ok) { console.error('[LLM]', provider, res.status, await res.text()); return { text: null, retryable: retryableStatus(res.status) }; }
+      if (!res.ok) {
+        const bodyText = await res.text().catch(() => '');
+        console.error('[LLM]', provider, res.status, bodyText);
+        return { text: null, retryable: retryableStatus(res.status), errorDetail: extractErrorDetail(provider, res.status, bodyText) };
+      }
       const data = await res.json();
       text = data.content?.[0]?.text ?? '';
     } else if (provider === 'openai') {
@@ -73,7 +108,11 @@ async function fetchLLMOnce(
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: modelOverride ?? 'gpt-4o-mini', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
       });
-      if (!res.ok) { console.error('[LLM] openai', res.status); return { text: null, retryable: retryableStatus(res.status) }; }
+      if (!res.ok) {
+        const bodyText = await res.text().catch(() => '');
+        console.error('[LLM] openai', res.status, bodyText);
+        return { text: null, retryable: retryableStatus(res.status), errorDetail: extractErrorDetail('openai', res.status, bodyText) };
+      }
       const data = await res.json();
       text = data.choices?.[0]?.message?.content ?? '';
     } else if (provider === 'gemini') {
@@ -83,7 +122,11 @@ async function fetchLLMOnce(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
       });
-      if (!res.ok) { console.error('[LLM] gemini', res.status); return { text: null, retryable: retryableStatus(res.status) }; }
+      if (!res.ok) {
+        const bodyText = await res.text().catch(() => '');
+        console.error('[LLM] gemini', res.status, bodyText);
+        return { text: null, retryable: retryableStatus(res.status), errorDetail: extractErrorDetail('gemini', res.status, bodyText) };
+      }
       const data = await res.json();
       text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
     } else if (provider === 'openrouter') {
@@ -92,7 +135,11 @@ async function fetchLLMOnce(
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: modelOverride ?? 'anthropic/claude-3.5-haiku', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
       });
-      if (!res.ok) { console.error('[LLM] openrouter', res.status); return { text: null, retryable: retryableStatus(res.status) }; }
+      if (!res.ok) {
+        const bodyText = await res.text().catch(() => '');
+        console.error('[LLM] openrouter', res.status, bodyText);
+        return { text: null, retryable: retryableStatus(res.status), errorDetail: extractErrorDetail('openrouter', res.status, bodyText) };
+      }
       const data = await res.json();
       text = data.choices?.[0]?.message?.content ?? '';
     } else if (provider === 'kie') {
@@ -108,28 +155,37 @@ async function fetchLLMOnce(
           reasoning: { effort: 'medium' },
         }),
       });
-      if (!res.ok) { console.error('[LLM] kie', res.status, await res.text().catch(() => '')); return { text: null, retryable: retryableStatus(res.status) }; }
+      if (!res.ok) {
+        const bodyText = await res.text().catch(() => '');
+        console.error('[LLM] kie', res.status, bodyText);
+        return { text: null, retryable: retryableStatus(res.status), errorDetail: extractErrorDetail('kie', res.status, bodyText) };
+      }
       const data = await res.json();
       text = parseKieOutput(data);
     } else if (provider === 'custom') {
       // Any OpenAI-compatible endpoint. baseUrl is the API root; we call /chat/completions.
       const root = (baseUrl || '').replace(/\/+$/, '');
-      if (!root) { console.error('[LLM] custom: no baseUrl'); return { text: null, retryable: false }; }
+      if (!root) { console.error('[LLM] custom: no baseUrl'); return { text: null, retryable: false, errorDetail: 'custom: no baseUrl configured' }; }
       const url = /\/chat\/completions$/.test(root) ? root : `${root}/chat/completions`;
       const res = await fetch(url, {
         method: 'POST', signal: sig,
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: modelOverride ?? 'gpt-4o-mini', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
       });
-      if (!res.ok) { console.error('[LLM] custom', res.status, await res.text().catch(() => '')); return { text: null, retryable: retryableStatus(res.status) }; }
+      if (!res.ok) {
+        const bodyText = await res.text().catch(() => '');
+        console.error('[LLM] custom', res.status, bodyText);
+        return { text: null, retryable: retryableStatus(res.status), errorDetail: extractErrorDetail('custom', res.status, bodyText) };
+      }
       const data = await res.json();
       text = data.choices?.[0]?.message?.content ?? '';
     }
     return { text, retryable: false };
   } catch (e) {
     // AbortError = our 280s timeout; TypeError "fetch failed" = transient network — both retryable.
-    console.error('[LLM] fetchLLM error:', (e as any)?.name === 'AbortError' ? 'timeout' : e);
-    return { text: null, retryable: true };
+    const isTimeout = (e as any)?.name === 'AbortError';
+    console.error('[LLM] fetchLLM error:', isTimeout ? 'timeout' : e);
+    return { text: null, retryable: true, errorDetail: isTimeout ? `${provider}: request timed out (280s)` : `${provider}: ${String((e as any)?.message ?? e)}`.slice(0, 300) };
   } finally {
     clearTimeout(timer);
   }
