@@ -37,7 +37,7 @@ export async function POST(req: Request) {
   const userId = await uid();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const b = await req.json().catch(() => ({}));
-  const domains: string[] = [...new Set((Array.isArray(b.domains) ? b.domains : []).map((d: any) => norm(String(d))).filter((d: string) => d.includes(".")))].slice(0, 200);
+  const domains: string[] = ([...new Set((Array.isArray(b.domains) ? b.domains : []).map((d: any) => norm(String(d))).filter((d: string) => d.includes(".")))] as string[]).slice(0, 200);
   if (!domains.length) return NextResponse.json({ error: "no_domains" }, { status: 400 });
   let added = 0;
   for (const d of domains) {
