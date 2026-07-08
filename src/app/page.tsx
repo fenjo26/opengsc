@@ -513,6 +513,9 @@ export default function PortfolioPage() {
   const { blur } = usePrivacy();
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [hidden, setHidden] = useState<Set<string>>(new Set());
+  // Ahrefs Domain Rating per domain (free public API, server-cached). License requires
+  // visible "Domain Rating by Ahrefs" attribution wherever DR is shown.
+  const [drMap, setDrMap] = useState<Record<string, number>>({});
   const [siteTags, setSiteTags] = useState<Record<string, string[]>>({});
   const tagsInitialized = useRef(false);
   const [exportSite, setExportSite] = useState<string | null>(null);
@@ -705,6 +708,25 @@ export default function PortfolioPage() {
     branded !== "all",
     filterDimension !== null && filterText.trim() !== "",
   ].filter(Boolean).length;
+
+  // Fetch Ahrefs DR for all dashboard domains (chunked; server caches 7 days).
+  useEffect(() => {
+    if (!sites.length) return;
+    const domains = [...new Set(sites.map(s => getDomain(s.url).toLowerCase().replace(/^www\./, "")).filter(d => d.includes(".")))];
+    (async () => {
+      for (let i = 0; i < domains.length; i += 100) {
+        try {
+          const res = await fetch(`/api/dr?domains=${encodeURIComponent(domains.slice(i, i + 100).join(","))}`);
+          if (!res.ok) continue;
+          const d = await res.json();
+          const add: Record<string, number> = {};
+          Object.entries(d.ratings || {}).forEach(([k, v]: [string, any]) => { add[k] = Number(v.dr); });
+          setDrMap(prev => ({ ...prev, ...add }));
+        } catch { /* best-effort */ }
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sites.length]);
 
   const filtered = sitesWithData
     .filter(s => {
@@ -1117,6 +1139,11 @@ export default function PortfolioPage() {
             <a href={`https://${domain}`} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} style={{color:"var(--color-text-secondary)",flexShrink:0}}>
               <ExternalLink size={10}/>
             </a>
+            {drMap[domain.toLowerCase().replace(/^www\./,"")] != null && (
+              <span title="Domain Rating by Ahrefs (ahrefs.com)" style={{fontSize:"10px",fontWeight:700,padding:"2px 6px",borderRadius:"6px",flexShrink:0,background:"rgba(58,87,252,0.12)",color:"#3A57FC",filter:blur?"blur(4px)":"none",transition:"filter 0.25s"}}>
+                DR {Math.round(drMap[domain.toLowerCase().replace(/^www\./,"")])}
+              </span>
+            )}
             {/* Health dot */}
             {healthStatus && (
               <span
@@ -1450,7 +1477,14 @@ export default function PortfolioPage() {
             </section>
           )}
           <section>
-            <div style={{fontSize:"11px",color:"var(--color-text-secondary)",fontWeight:600,marginBottom:"12px",textTransform:"uppercase",letterSpacing:"0.07em"}}>{t("allSitesSection")} (<span style={{filter:blur?"blur(4px)":"none",transition:"filter 0.25s"}}>{restSites.length}</span>)</div>
+            <div style={{fontSize:"11px",color:"var(--color-text-secondary)",fontWeight:600,marginBottom:"12px",textTransform:"uppercase",letterSpacing:"0.07em",display:"flex",alignItems:"center",gap:"8px"}}>
+              <span>{t("allSitesSection")} (<span style={{filter:blur?"blur(4px)":"none",transition:"filter 0.25s"}}>{restSites.length}</span>)</span>
+              {Object.keys(drMap).length > 0 && (
+                <span style={{marginLeft:"auto",fontWeight:400,textTransform:"none",letterSpacing:0}}>
+                  Domain Rating by <a href="https://ahrefs.com/" target="_blank" rel="noreferrer" style={{color:"var(--color-accent-blue)"}}>Ahrefs</a>
+                </span>
+              )}
+            </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:"12px"}}>
               {restSites.map((s,i)=><SiteCard key={s.id||i} site={s}/>)}
             </div>

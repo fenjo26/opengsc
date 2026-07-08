@@ -3721,6 +3721,17 @@ export default function SitePage() {
     ? { filter: "blur(6px)", userSelect: "none", transition: "filter 0.25s" }
     : { transition: "filter 0.25s" };
 
+  // Ahrefs Domain Rating (free public API, server-cached; attribution required by license).
+  const [drValue, setDrValue] = useState<number | null>(null);
+  useEffect(() => {
+    fetch(`/api/dr?domains=${encodeURIComponent(domain)}`).then(r => r.ok ? r.json() : null).then(d => {
+      const key = domain.toLowerCase().replace(/^www\./, "");
+      const v = d?.ratings?.[key]?.dr;
+      if (typeof v === "number") setDrValue(v);
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [domain]);
+
   // Use index so tab state doesn't break on language change
   const TAB_KEYS = ["dashboard", "positions", "aeo", "ga4", "indexing", "backlinks", "annotations", "optimize", "health", "ux", "settings"] as const;
   type TabKey = typeof TAB_KEYS[number];
@@ -3970,6 +3981,12 @@ export default function SitePage() {
               onMouseLeave={e => (e.currentTarget.style.color = "var(--color-text-secondary)")}>
               <ExternalLink size={12} />
             </a>
+            {drValue != null && (
+              <span style={{ display: "flex", alignItems: "center", gap: "4px", flexShrink: 0 }}>
+                <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 7px", borderRadius: "6px", background: "rgba(58,87,252,0.12)", color: "#3A57FC", ...blurStyle }}>DR {Math.round(drValue)}</span>
+                <a href="https://ahrefs.com/" target="_blank" rel="noreferrer" style={{ fontSize: "10px", color: "var(--color-text-tertiary)", textDecoration: "none" }} title="Domain Rating by Ahrefs">by Ahrefs</a>
+              </span>
+            )}
           </div>
           <span style={{ margin: "0 24px", color: "var(--color-border)" }}>|</span>
           {/* Tab nav */}

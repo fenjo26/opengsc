@@ -451,6 +451,14 @@ model RagSlot {
   @@index([provider])
 }
 
+// Cached Ahrefs Domain Rating (free public API, 7-day TTL). Attribution required in UI:
+// "Domain Rating by Ahrefs" → https://ahrefs.com/ (see ahrefs.com/legal/domain-rating-license).
+model DrCache {
+  domain    String   @id
+  dr        Float
+  checkedAt DateTime @default(now())
+}
+
 model RagCasino {
   id          String @id @default(cuid())
   name        String
