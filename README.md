@@ -1,140 +1,304 @@
-# OpenGSC — Personal GSC Dashboard
+<div align="center">
 
-Личная панель управления Google Search Console. Все сайты со всех Google аккаунтов — в одном месте. Устанавливается на VPS одной командой.
+<img src="logo.svg" alt="OpenGSC" width="88" />
 
----
+# OpenGSC
 
-## Что умеет
+**Your Google Search Console, all in one place — plus an AI SEO content suite and a private indexing network.**
 
-**Дашборд**
-- **Единый дашборд** — все сайты со всех Google аккаунтов на одном экране
-- **Блок аккаунтов** — все подключённые Google-аккаунты отображаются сверху с общим числом сайтов
-- **Мини-графики трафика** — спарклайн для каждого сайта, сразу видно динамику
-- **Быстрый выбор периода** — инлайн-кнопки 7д / 28д / 3м / 6м / 12м / 16м без открытия дропдауна
-- **Сравнение периодов** — Previous / Year over Year / Custom
-- **Метрики с подписями** — ✦ Клики / ◉ Показы / % CTR / ↑ Позиции как текстовые тоглы (понятно без иконок)
-- **Итоговая статистика** — Всего кликов, показов, средний CTR и позиция по всем видимым сайтам; пересчитывается при фильтрации по тегу
-- **Теги и сортировка по тегу** — клик на тег поднимает все сайты с этим тегом наверх; активный тег отображается как чип-фильтр
-- **Запоминание сортировки** — выбранный метод сортировки сохраняется между сессиями
-- **Открытие в новой вкладке** — правый клик на карточку → «Открыть в новой вкладке»
-- **Privacy Blur** — размытие данных для скриншотов: аккаунты, email, числа в статистике, домены на карточках
-- **Поиск** — быстро найти нужный домен или тег среди сотен сайтов
-- **Избранное** — закрепить важные проекты наверху
-- **Скрытие сайтов** — убрать неактивные из общего списка
-- **Экспорт в CSV** — выгрузка с выбором измерений
+Self-hosted on your own VPS. No subscriptions, no seat limits, no third party touching your data.
 
-**Детальная страница сайта**
-- Графики кликов, показов, CTR, позиции по периодам
-- Запросы, страницы, страны, устройства
-- **Striking Distance Keywords** — запросы на позициях 4–20, готовые к продвижению
-- **Keyword Cannibalization** — запросы, по которым конкурируют несколько страниц
-- **Content Decay Map** — тепловая карта страниц, теряющих трафик
-- **CTR Benchmark** — сравнение фактического CTR с отраслевыми стандартами
-- **Indexing Status** — статус индексации топовых страниц через Google Search Console API
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue?logo=typescript)](https://www.typescriptlang.org/)
+![Self-hosted](https://img.shields.io/badge/deploy-self--hosted%20VPS-2ea44f)
+[![GitHub stars](https://img.shields.io/github/stars/fenjo26/opengsc?style=flat)](https://github.com/fenjo26/opengsc/stargazers)
+[![GitHub issues](https://img.shields.io/github/issues/fenjo26/opengsc)](https://github.com/fenjo26/opengsc/issues)
 
-**Приватная ботоферма (Индексатор)**
-- **Собственная сеть дорвеев** — подключение сеток доменов для быстрой и бесплатной индексации проектов.
-- **Интеграция с GSC** — отправка карт сайтов (Sitemaps) ваших проектов напрямую в очередь перелинковки ботофермы.
-- **Точная верификация (Double DNS Verification)** — защита от раскрытия сети конкурентами: автоматическая проверка подлинности ботов Google, Yandex, Bing и Mail.ru через обратные DNS-запросы. Люди и фейковые боты перенаправляются на целевой сайт.
-- **Панель статистики сканирования** — детальный дашборд логов с разделением обычных заходов и ответов `304 Not Modified` для отслеживания краулингового лимита.
-- **Интегрированный генератор скриптов** — готовый защищенный PHP-скрипт клоакинга, копируемый прямо из настроек.
-- Подробное руководство по настройке: [docs/INDEXER-SETUP.md](docs/INDEXER-SETUP.md).
+[Website](https://opengsc.org) · [Install](#-installation) · [Features](#-features) · [SEO Tools](#-ai-seo-content-suite-seo-tools) · [Indexer](#-private-indexer-network) · [Docs](docs/)
 
-**AI-функции** (нужен API-ключ)
-- Автоматическая генерация тематических кластеров запросов
-- Автоматическая группировка контента по URL-структуре
-- Определение брендовых ключевых слов
-- Поддержка: Anthropic, OpenAI, Gemini, OpenRouter — используешь свой ключ
+</div>
 
-**Интерфейс**
-- **Privacy Blur** — размыть домены для скриншотов и записи экрана
-- **Dark / Light Mode** — переключение темы
-- Широкий и стандартный layout
-
----
-
-## Требования
-
-| Параметр | Минимум | Рекомендуется |
-|---|---|---|
-| **ОС** | Ubuntu 22.04 LTS | Ubuntu 22.04 / 24.04 LTS |
-| **CPU** | 1 vCPU | 2 vCPU |
-| **RAM** | 1 GB | 2 GB |
-| **Диск** | 10 GB SSD | 20 GB SSD |
-| **Домен** | **Обязателен** | С SSL (Let's Encrypt) |
-
-> Node.js, PM2, Nginx и все зависимости устанавливаются **автоматически** скриптом. Ничего ставить руками не нужно.
-
-> ⚠️ **Домен обязателен.** Google OAuth не работает с IP-адресами — только с доменами. Привяжи домен к IP сервера до установки.
-
-Протестировано на **Ubuntu 22.04 LTS**. Другие Debian-based дистрибутивы тоже работают. CentOS / RHEL — не поддерживаются.
-
----
-
-## Установка
-
-### 1. Подготовь Google OAuth приложение (~5 минут)
-
-До установки нужны Google OAuth credentials.
-
-**Шаг 1 — Создай проект**
-
-Открой [Google Cloud Console](https://console.cloud.google.com/) и создай новый проект (или используй существующий).
-
-**Шаг 2 — Включи Search Console API**
-
-APIs & Services → Library → найди **Google Search Console API** → Enable.
-
-**Шаг 3 — Создай OAuth Client ID**
-
-APIs & Services → Credentials → Create Credentials → **OAuth 2.0 Client ID**, тип: **Web application**.
-
-Заполни поля:
-
-| Поле | Значение |
-|---|---|
-| Authorized JavaScript origins | `http://твой-домен.com` (или `https://` если будет SSL) |
-| Authorized redirect URIs | `http://твой-домен.com/api/auth/callback/google` (или `https://` если будет SSL) |
-
-**Шаг 4 — Скопируй Client ID и Client Secret** — установщик их запросит.
-
-### 2. Запусти установщик одной командой
+<br/>
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/fenjo26/opengsc/main/install.sh | sudo bash
 ```
 
-Скрипт сам склонирует репозиторий в `/root/opengsc`, затем задаст несколько вопросов:
-- Домен (например: `seo.example.com`)
-- Устанавливать ли Nginx (рекомендуется — да)
-- Настраивать ли SSL через Let's Encrypt (рекомендуется — да)
-- Email для SSL-сертификата
-- Google Client ID и Client Secret
+<br/>
 
-После этого автоматически:
-- Клонирует репозиторий в `/root/opengsc`
-- Установит Node.js 20 LTS
-- Установит PM2 и запустит приложение как системный сервис
-- Настроит Nginx как reverse proxy
-- Выпустит SSL-сертификат через Certbot
-- Настроит UFW firewall (порты 22, 80, 443)
+<div align="center">
+<img src="screenshot/main%20dashbord.png" alt="OpenGSC main dashboard" width="90%" />
+</div>
 
-### 3. Открой в браузере
+<br/>
 
-```
-https://твой-домен.com
-```
+## Why OpenGSC
 
-Войди через Google. Первый аккаунт становится владельцем дашборда. В **Settings → My Google Accounts** добавь остальные аккаунты — их сайты появятся на дашборде автоматически.
+Tools like seogets.com charge **$19–$79/month** to show you the Google Search Console data you already own, aggregated across sites. OpenGSC gives you the same core analytics — clicks, impressions, CTR, position, striking-distance keywords, content decay, cannibalization — for the cost of a $5/month VPS, because it *is* the VPS: one install script, your own SQLite database, your own domain, your own Google OAuth app. Nothing about your Search Console data ever passes through a third-party server.
 
----
+On top of that dashboard, OpenGSC ships two things most GSC tools don't: a full **AI-powered SEO content generation suite** (`/seo-tools` — competitor research, entity-driven outlines, full articles, GEO/AI-search-citation audits, brand sentiment tracking) and a **private indexing network** (`/indexer` — your own doorway-domain infrastructure with cloaked bot verification, for operators who need fast, free indexing outside of Search Console's normal discovery flow).
 
-## Ручная установка
+| | OpenGSC | Typical SaaS GSC dashboard |
+|---|---|---|
+| Price | Free forever | $19–$79/month |
+| Hosting | Your own VPS | Their cloud |
+| Data privacy | 100% private | Stored on their servers |
+| Sites / Google accounts | Unlimited | Plan-limited |
+| AI SEO content suite | ✓ included, your own API key | Rarely included |
+| Private indexing network | ✓ included | Not offered |
+| Open source | ✓ | ✗ |
+| Setup time | ~5 minutes, one command | Instant sign-up |
 
-Если хочешь настроить всё самостоятельно без скрипта:
+**Trade-offs, honestly:** you need a VPS and a domain (Google OAuth won't work against a bare IP), you run your own updates (`git pull && npm run build && pm2 restart`), and there's no built-in team/white-label layer. If that's an acceptable trade for owning your data and never paying a subscription, read on.
+
+<br/>
+
+## 📑 Table of Contents
+
+- [Features](#-features)
+  - [Unified GSC Dashboard](#unified-gsc-dashboard)
+  - [Site Detail & Advanced SEO Analytics](#site-detail--advanced-seo-analytics)
+  - [Google Analytics 4 & Microsoft Clarity](#google-analytics-4--microsoft-clarity)
+  - [Rank Tracker](#rank-tracker)
+  - [AEO Tracker — AI Answer Engine Visibility](#aeo-tracker--ai-answer-engine-visibility)
+  - [Backlinks Checker](#backlinks-checker)
+  - [Site Health Checks](#site-health-checks)
+  - [Indexing Status Tools](#indexing-status-tools)
+- [🧠 AI SEO Content Suite (`/seo-tools`)](#-ai-seo-content-suite-seo-tools)
+- [🕸️ Private Indexer Network](#-private-indexer-network)
+- [Requirements](#requirements)
+- [Installation](#-installation)
+- [Manual Installation](#manual-installation)
+- [Environment Variables](#environment-variables)
+- [Managing the App](#managing-the-app)
+- [Connecting Google Analytics 4](#connecting-google-analytics-4)
+- [Setting Up the Indexer](#setting-up-the-indexer)
+- [Troubleshooting](#troubleshooting)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Documentation](#documentation)
+- [Disclaimer](#disclaimer)
+- [Contributing](#contributing)
+- [License](#license)
+
+<br/>
+
+## ✨ Features
+
+### Unified GSC Dashboard
+
+- **One dashboard, every account** — every site from every connected Google account, on one screen, with a sparkline traffic chart per site.
+- **Fast period controls** — inline 7d / 28d / 3m / 6m / 12m / 16m buttons, plus Previous-period, Year-over-Year, or a fully custom range comparison.
+- **Clicks / Impressions / CTR / Position** shown as labeled toggles, with an aggregate summary across every visible site that recalculates instantly when you filter by tag.
+- **Tags, favorites, sorting, hiding** — organize hundreds of sites, remember your last sort order between sessions, pin the important projects, hide the dead ones.
+- **Privacy Blur** — one click blurs every account name, email, domain, and metric — safe to screen-share or screenshot.
+- **CSV export** with selectable dimensions, and **right-click → open in new tab** on any site card.
+
+<div align="center">
+<img src="screenshot/site%20dashbord.png" alt="Site dashboard" width="80%" />
+</div>
+
+### Site Detail & Advanced SEO Analytics
+
+Every site gets its own deep-dive page with clicks/impressions/CTR/position trends, and four analyses that a stock GSC UI doesn't give you:
+
+- **Striking Distance Keywords** — queries ranking position 4–20 with real impression volume: your fastest wins to page 1.
+- **Keyword Cannibalization** — queries where multiple URLs on your own site compete against each other, with a clear winner/loser breakdown.
+- **Content Decay Map** — a heatmap of pages losing traffic over time, so you catch decay before it's a crisis.
+- **CTR Benchmark** — your actual click-through rate vs. industry-standard CTR curves by position, surfacing pages where a better title/meta could unlock clicks you're currently leaving on the table.
+
+<div align="center">
+<img src="screenshot/data%20on%20site%20dashbord.png" alt="Site detail analytics" width="80%" /><br/>
+<img src="screenshot/full%20analitics%20for%20contres.png" alt="Country breakdown analytics" width="80%" />
+</div>
+
+### Google Analytics 4 & Microsoft Clarity
+
+Link a GA4 property to any site (sessions, engagement, key events, revenue with period-over-period deltas) and a Microsoft Clarity project (session recordings / heatmap stats, aggregated over 30 days) — both optional, both configured once per Google account, both fully documented in [`docs/GA4-SETUP.md`](docs/GA4-SETUP.md).
+
+<div align="center">
+<img src="screenshot/integration%20GA4%20and%20Clarity.png" alt="GA4 and Clarity integration" width="80%" />
+</div>
+
+### Rank Tracker
+
+Track keyword rankings (country/language/device-aware) via your configured SERP provider (Serper, DataForSEO, or ScrapingRobot), checked on demand or daily, overlaid against real GSC average position, clicks, and impressions for the same query — so you can see whether a rank change actually moved traffic.
+
+### AEO Tracker — AI Answer Engine Visibility
+
+"Answer Engine Optimization": tracks whether **your site gets cited when real questions are asked to AI assistants** — ChatGPT and Perplexity via live web-search citation matching, Claude and Grok via brand-mention detection — building a per-engine, per-question cited/not-cited history over time. Needs the API key(s) of whichever engines you want to track.
+
+### Backlinks Checker
+
+A curated backlink inventory per site with liveness checks (is the link still there?) and indexed-status checks via XML River, rolled up into total / alive / dead / indexed counts.
+
+### Site Health Checks
+
+One panel per site combining SSL certificate inspection (expiry, issuer, grade), a **Google Safe Browsing** blacklist check, a **VirusTotal** reputation check, and **Core Web Vitals** via the PageSpeed Insights API (mobile) — the latter three need their own free API keys, configured once in Settings.
+
+### Indexing Status Tools
+
+Inside each site's "Indexing" tab: real sitemap discovery and sync (recursive, sitemap-index aware, up to 20k URLs), a searchable per-URL status table, genuine **Google URL Inspection API** checks through your own OAuth token, and three optional paid accelerators for URLs that need a push — **2index.ninja** submission, **NeuralIndexer** (queued slow/fast/Yandex indexing with balance/job polling), and **XML River** index-status verification. Each accelerator is opt-in and needs its own account/API key.
+
+<br/>
+
+## 🧠 AI SEO Content Suite (`/seo-tools`)
+
+A full competitor-research-to-published-article pipeline, plus AI-search-visibility auditing — all under one settings screen for your AI/SERP/scraping keys. Everything here is optional and needs **your own** API key (Anthropic, Z.AI, OpenAI, Gemini, OpenRouter, kie.ai, or any custom OpenAI-compatible endpoint) — pay-per-use at cost, no markup.
+
+<div align="center">
+<img src="screenshot/seo%20tools.png" alt="SEO Tools suite" width="80%" />
+</div>
+
+<details open>
+<summary><b>Outline Generator</b> — competitor-grounded content briefs</summary>
+<br/>
+
+Enter a keyword, target country/language, and search engine (Google or Bing). OpenGSC runs a live SERP query, classifies every ranking page by site type (official store, monobrand, aggregator, forum/UGC, editorial) and intent (buy / info / review / listicle / use-case), lets you pick which competitors to analyze, scrapes them (direct fetch, falling back to Firecrawl on anti-bot pages), and runs a multi-pass pipeline:
+
+1. **MAP** — extract compact, verified facts from each competitor separately (specs, prices, entities, headings covered).
+2. **REDUCE** — build one Entity-Attribute-Value (EAV) outline from those facts: headings, per-section word budgets, weighted entities with roles, keywords, FAQ, visual-element suggestions (tables/infographics/checklists).
+3. **Fact-scrub** — an LLM pass actively corrects fabricated-looking specifics (wrong screen size, invented colors, wrong dates) *before* they can leak into the article.
+4. **Structure-expand** — grafts extra H3 subsections under headings that came back too flat.
+5. **Heading-localize** — translates/styles template headings into the article's actual language and narration voice.
+6. **Volume-normalize** — rescales every section's word budget so they actually sum to your target length.
+7. **Section-enrich** — deepens every section's entities/summary/copywriter-notes in parallel batches, so the outline reads like a real creative brief, not a skeleton.
+
+Optional: a **Casino RAG** toggle grounds igaming-niche outlines (slots, casino brands) against a verified knowledge base of RTP/volatility/provider/launch-date facts, virtually eliminating hallucinated specs in that niche.
+</details>
+
+<details open>
+<summary><b>Text Generator</b> — full articles from an outline</summary>
+<br/>
+
+Takes any outline from History and writes the complete article as a background job (close the tab, come back later). Long outlines are written in small chunks (3–5 sections per model call, run in parallel) rather than one giant prompt — this keeps prose quality consistent instead of degrading into bullet-point sludge halfway through a 3,000-word article. Supports tone/persona, an editorial Policy, a table of contents, and three source-grounding modes: off, facts-only (real numbers, no competitor names/links), or cited (real numbers with inline source links, rate-limited to one link per 1-2 paragraphs).
+
+A **volume guard** keeps the final word count within your target (±15%): expand thin drafts, iteratively trim bloated ones — and it runs as the *very last* step, after fact-checking, so a fact-correction pass can never silently re-inflate an article that was already trimmed to length. Failures surface a real reason (e.g. a provider's content-policy rejection) instead of a bare "generation failed."
+</details>
+
+<details open>
+<summary><b>Content Gap Analysis</b> — what your page is missing</summary>
+<br/>
+
+Point it at a keyword and (optionally) your existing URL. It pulls the SERP, scrapes the competitors you pick, and returns a structured gap report: topics, entities, and whole sections competitors cover that your page doesn't — each gap tagged with a recommendation (add / expand / merge / skip) and the specific competitor URLs that justify it. For improving a page you already have, rather than starting from zero.
+</details>
+
+<details open>
+<summary><b>Landing Page Builder</b> — briefs, wireframes, and text for commercial pages</summary>
+<br/>
+
+The same SERP → select → scrape research flow as Outline, aimed at conversion pages instead of articles. Four structuring strategies: mirror the SERP consensus, copy your own existing page 1:1, a hybrid of both, or an "SEO-block" layout (conversion blocks up top, a deep SEO text block underneath). Generates a technical brief (ТЗ), the brief plus full text, or a complete block-by-block wireframe (hero / USP bar / comparison table / FAQ / CTA, etc.). Distinctive: you can import your own page's structure either from its live HTML or — for non-technical users — from **a screenshot**, read by a vision-capable model.
+</details>
+
+<details open>
+<summary><b>GEO Audit</b> — Generative Engine Optimization</summary>
+<br/>
+
+Traditional rank tracking tells you nothing about whether an AI assistant recommends you. GEO Audit sends a real user question to an AI model with **live web-search tool-use enabled** and mines the model's own search trace and citations to answer: which brands/domains actually get surfaced and cited for this query, what "selection factors" drove the answer (pricing, support, feature breadth…), which source types dominate (official sites, marketplaces, review aggregators, forums, Wikipedia, editorial), and where your own coverage gaps are. Output is a brand leaderboard, a per-domain trust-signal table, a source-type breakdown, and narrative insight into what a brand needs to do to get cited. Runs on OpenAI or kie.ai only — no separate SERP key needed, since search happens inside the model's own tool call. Full history is persisted server-side.
+</details>
+
+<details open>
+<summary><b>Citation & Sentiment Tracker</b> — brand mentions across the web</summary>
+<br/>
+
+Not to be confused with GEO's AI-citation tracking — this tracks classic web-wide brand/keyword mentions and their sentiment, via DataForSEO's Content Analysis API: polarity (positive/neutral/negative), six emotion dimensions (anger, happiness, love, sadness, share, fun), a monthly mention trend, and the top citing domains. Needs only a DataForSEO key.
+</details>
+
+<details open>
+<summary><b>Editorial Policy</b> — one style guide, applied everywhere</summary>
+<br/>
+
+Define — or have AI draft, grounded in your own brand pages — a reusable editorial policy: brand description and values, audience profile, voice/tone/formality, structural rules (headings, paragraph length, lists vs. tables), quality bar (citation style, E-E-A-T notes, fact-checking behavior), and hard restrictions (banned words/topics, compliance rules like "never fabricate a license — leave a placeholder instead"). Save up to 10, mark one active, and it's applied automatically across Outline, Text, and Landing generation.
+</details>
+
+<details open>
+<summary><b>History</b> — every generation, resumable</summary>
+<br/>
+
+A unified log across Outline, Text, Analysis, and Landing runs. Generation jobs run server-side and fire-and-forget, so you can close the tab; History polls for completed jobs, auto-imports them, and auto-fails anything stuck "processing" for more than 20 minutes so nothing spins forever.
+</details>
+
+<br/>
+
+## 🕸️ Private Indexer Network
+
+A self-hosted **doorway-domain network** for operators who need pages indexed fast and for free, outside the normal discovery flow Search Console relies on. You bring the domains; OpenGSC gives you the management console, the cloaking script, and the crawl-analytics to run them safely.
+
+- **Domains** — register a doorway domain, pick a generated-content template (Ecommerce / Directory / Blog / Portfolio), set the real "money site" redirect target, choose which bots are allowed in (Google / Bing / Yandex), and get a unique API key per domain.
+- **Queue** — bulk-paste the money-site URLs that should be woven as internal links into the next batch of generated doorway pages.
+- **Dictionary** — a keyword pool that seasons generated content, built manually or AI-generated per niche (ecommerce / crypto / finance / general).
+- **Links** — a visual cross-linking planner: pick a topology (ring / mesh / pyramid) across your owned domains, see an SVG node graph, export the HTML link snippet.
+- **Settings** — the deployment hub: generates ready-to-paste code in four flavors — dynamic PHP doorway, static PHP wrapper, an Astro SSR middleware, or an Nginx config that routes bots to `index.php` while serving humans static files directly.
+- **Stats** — a 30-day dashboard: hits by bot (Google / Yandex / Bing / Mail.ru / other / redirected humans), a stacked area chart, per-domain Google-hit-share, and a `304 Not Modified` breakdown that tells you how efficiently each bot is re-checking pages without burning crawl budget. CSV export included.
+- **Logs** — a raw, filterable, optionally live-polling crawl log (time, domain, path, IP, detected bot, HTTP status).
+
+**How the cloaking works:** the deployed script identifies bots by user-agent, then — if strict verification is on — runs a **double DNS lookup**: a reverse lookup of the visitor's IP must resolve to a known suffix (`googlebot.com`, `yandex.ru`, `search.msn.com`, `mail.ru`), and a forward lookup of *that* hostname must resolve back to the exact same IP. This defeats spoofed user-agents, since an attacker can't fake a PTR record inside Google's or Yandex's own IP ranges. Verified bots get a generated page (with ETag-based `304` short-circuiting on repeat crawls) and a logging ping; everyone else — humans and fake bots alike — gets redirected straight to the real site, so the doorway is invisible to anyone outside the whitelisted crawlers. Full setup walkthrough: [`docs/INDEXER-SETUP.md`](docs/INDEXER-SETUP.md).
+
+> ⚠️ See [Disclaimer](#disclaimer) — doorway/cloaking techniques sit outside major search engines' webmaster guidelines. This is a power-user tool; understand the risk to a domain before pointing it at anything you can't afford to lose.
+
+<br/>
+
+## Requirements
+
+| Parameter | Minimum | Recommended |
+|---|---|---|
+| **OS** | Ubuntu 22.04 LTS | Ubuntu 22.04 / 24.04 LTS |
+| **CPU** | 1 vCPU | 2 vCPU |
+| **RAM** | 1 GB | 2 GB |
+| **Disk** | 10 GB SSD | 20 GB SSD |
+| **Domain** | **Required** | With SSL (Let's Encrypt) |
+
+> Node.js, PM2, Nginx, and every dependency are installed **automatically** by the script — nothing to set up by hand.
+
+> ⚠️ **A domain is required.** Google OAuth does not work against a bare IP address. Point a domain at your server's IP before installing.
+
+Tested on **Ubuntu 22.04 LTS**; other Debian-based distros also work. CentOS/RHEL and Windows are not supported.
+
+<br/>
+
+## 🚀 Installation
+
+### 1. Create a Google OAuth app (~5 minutes)
+
+1. Open [Google Cloud Console](https://console.cloud.google.com/) and create a project (or reuse one).
+2. **APIs & Services → Library** → find **Google Search Console API** → Enable.
+3. **APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID**, type **Web application**.
+4. Fill in:
+
+   | Field | Value |
+   |---|---|
+   | Authorized JavaScript origins | `https://your-domain.com` |
+   | Authorized redirect URIs | `https://your-domain.com/api/auth/callback/google` |
+
+5. Copy the **Client ID** and **Client Secret** — the installer asks for both.
+
+### 2. Run the one-line installer
 
 ```bash
-# Клонируй репозиторий
+curl -fsSL https://raw.githubusercontent.com/fenjo26/opengsc/main/install.sh | sudo bash
+```
+
+The script clones the repo into `/root/opengsc`, then asks for: your domain, whether to install Nginx (recommended), whether to set up SSL via Let's Encrypt (recommended), an email for the SSL cert, and your Google Client ID/Secret. It then automatically installs Node.js 20 LTS, installs PM2 and runs the app as a managed service, configures Nginx as a reverse proxy, issues an SSL certificate via Certbot, and configures the UFW firewall (ports 22/80/443).
+
+### 3. Open it
+
+```
+https://your-domain.com
+```
+
+Sign in with Google — the **first account becomes the dashboard owner**. Add more Google accounts under **Settings → My Google Accounts**; their sites appear on the dashboard automatically.
+
+<br/>
+
+## Manual Installation
+
+<details>
+<summary>Prefer to set everything up yourself? Click to expand.</summary>
+<br/>
+
+```bash
+# Clone
 git clone https://github.com/fenjo26/opengsc.git
 cd opengsc
 
@@ -145,55 +309,56 @@ sudo apt-get install -y nodejs
 # PM2
 npm install -g pm2
 
-# Зависимости проекта
+# Project dependencies
 npm install
 
-# .env — скопируй шаблон и заполни
+# .env — copy the template and fill it in
 cp .env.template .env
 nano .env
 
-# База данных и сборка
+# Database & build
 npx prisma generate
 npx prisma db push
 npm run build
 
-# Запуск
+# Run
 pm2 start npm --name opengsc -- start
 pm2 save
 pm2 startup
 ```
+</details>
 
----
+<br/>
 
-## Переменные окружения
+## Environment Variables
 
-| Переменная | Описание | Пример |
+| Variable | Description | Example |
 |---|---|---|
-| `DATABASE_URL` | Путь к SQLite базе данных | `file:/root/opengsc/data/prod.db` |
-| `NEXTAUTH_SECRET` | Случайный секрет для шифрования сессий | `openssl rand -base64 32` |
-| `NEXTAUTH_URL` | Полный URL приложения с доменом | `https://твой-домен.com` |
-| `GOOGLE_CLIENT_ID` | Из Google Cloud Console | `123...apps.googleusercontent.com` |
-| `GOOGLE_CLIENT_SECRET` | Из Google Cloud Console | `GOCSPX-...` |
+| `DATABASE_URL` | Path to the SQLite database | `file:/root/opengsc/data/prod.db` |
+| `NEXTAUTH_SECRET` | Random secret used to encrypt sessions | `openssl rand -base64 32` |
+| `NEXTAUTH_URL` | The app's full URL, including domain | `https://your-domain.com` |
+| `GOOGLE_CLIENT_ID` | From Google Cloud Console | `123...apps.googleusercontent.com` |
+| `GOOGLE_CLIENT_SECRET` | From Google Cloud Console | `GOCSPX-...` |
 
-> `NEXTAUTH_URL` должен **точно совпадать** с Authorized redirect URI в Google Console — вплоть до `http://` vs `https://`. Несовпадение = ошибка `redirect_uri_mismatch`.
+> `NEXTAUTH_URL` must **exactly match** the Authorized redirect URI in Google Console, down to `http://` vs `https://`. A mismatch causes `redirect_uri_mismatch`.
 
-Сгенерировать секрет:
+Generate a secret:
 ```bash
 openssl rand -base64 32
 ```
 
----
+<br/>
 
-## Управление приложением
+## Managing the App
 
 ```bash
-pm2 logs opengsc       # просмотр логов
-pm2 restart opengsc    # перезапуск
-pm2 stop opengsc       # остановка
-pm2 status             # статус всех процессов
+pm2 logs opengsc       # view logs
+pm2 restart opengsc    # restart
+pm2 stop opengsc       # stop
+pm2 status             # status of all processes
 ```
 
-### Обновление до новой версии
+### Updating to a new version
 
 ```bash
 cd /root/opengsc
@@ -204,137 +369,180 @@ npm run build
 pm2 restart opengsc
 ```
 
----
+<br/>
 
-## Подключение Google Analytics 4 (GA4)
+## Connecting Google Analytics 4
 
-Вкладка **GA4** на карточке сайта показывает реальные данные из Google Analytics — Сеансы, Вовлечённость, Ключевые события и Доход с графиком и динамикой к прошлому периоду. Это **опциональная** функция: дашборд и GSC работают без неё. Настройка разовая.
+The **GA4** tab on a site card shows real Google Analytics data — sessions, engagement, key events, and revenue, with period-over-period trends. It's fully optional: the dashboard and GSC work without it. If the GA4 tab is empty, the app shows an in-context step-by-step guide with buttons to enable the right APIs — the same steps are detailed in [`docs/GA4-SETUP.md`](docs/GA4-SETUP.md), including common errors like `insufficient authentication scopes` and `API has not been used in project ... or it is disabled`.
 
-> Если на вкладке GA4 пусто, приложение само покажет пошаговый гайд и кнопки для включения API. Эти же шаги — ниже. Подробный гайд с разбором ошибок: [docs/GA4-SETUP.md](docs/GA4-SETUP.md).
+Short version: enable the **Google Analytics Data API** and **Google Analytics Admin API** in the same Google Cloud project as your OAuth client, reconnect your Google account under **Settings → My Google Accounts** so it picks up the new `analytics.readonly` scope, make sure that account has at least Viewer access to the GA4 property in question, then link the property from the site's **GA4** tab.
 
-### 1. Включи два Google API
+<br/>
 
-GA4 использует два API, которых нет у Search Console. Открой **Google Cloud Console** в **том же проекте**, где лежит твой OAuth Client ID, и включи оба:
+## Setting Up the Indexer
 
-| API | Ссылка (нажми Enable) |
-|---|---|
-| **Google Analytics Data API** | `https://console.cloud.google.com/apis/library/analyticsdata.googleapis.com` |
-| **Google Analytics Admin API** | `https://console.cloud.google.com/apis/library/analyticsadmin.googleapis.com` |
+The Indexer ships disabled by default — it's an advanced, opt-in module. Full walkthrough (domain setup, script deployment for PHP/Astro/Nginx, DNS verification behavior, and safe operating practices) lives in [`docs/INDEXER-SETUP.md`](docs/INDEXER-SETUP.md).
 
-> API включаются **на проект, а не на аккаунт**. Один раз — и это покрывает все подключённые Google-аккаунты. После включения подожди 1–2 минуты на propagation.
+<br/>
 
-### 2. Переподключи Google-аккаунты
+## Troubleshooting
 
-В приложении добавлен OAuth-доступ `analytics.readonly`. Чтобы существующие аккаунты его получили, их нужно переавторизовать: **Settings → My Google Accounts**, повторно войти под аккаунтом. На экране согласия Google должна стоять галочка про Google Analytics.
+<details>
+<summary><b>GA4 tab is empty with <code>... API has not been used in project ... or it is disabled</code></b></summary>
+<br/>
+The required Google API isn't enabled. Enable <b>Google Analytics Data API</b> and <b>Google Analytics Admin API</b> in the same Google Cloud project as your OAuth Client ID (links in <a href="#connecting-google-analytics-4">Connecting Google Analytics 4</a>), wait 1–2 minutes, and refresh.
+</details>
 
-Проверить можно там же: напротив каждого аккаунта виден статус **GSC ✓** и **GA4 ✓**. Зелёная галочка GA4 = доступ выдан.
+<details>
+<summary><b>GA4 tab shows <code>insufficient authentication scopes</code></b></summary>
+<br/>
+The account hasn't been granted Analytics access. Reconnect it under <b>Settings → My Google Accounts</b> — after re-authenticating, the account shows a <b>GA4 ✓</b> badge.
+</details>
 
-> Это касается только инстансов, которые обновляются со старой версии. На свежей установке скоуп запрашивается сразу при первом входе.
+<details>
+<summary><b>GA4 property list is empty even though the APIs are enabled and access is granted</b></summary>
+<br/>
+That Google account doesn't have access to the GA4 property itself. Add its email under <b>Google Analytics → Admin → Property Access Management</b> with at least the Viewer role.
+</details>
 
-### 3. Дай аккаунту доступ к ресурсу GA4
+<details>
+<summary><b><code>redirect_uri_mismatch</code> when signing in with Google</b></summary>
+<br/>
+<code>NEXTAUTH_URL</code> in <code>.env</code> doesn't match the Authorized redirect URI in Google Console. They must be identical, including <code>http://</code> vs <code>https://</code>. The redirect URI must be <code>https://your-domain.com/api/auth/callback/google</code>.
+</details>
 
-Property появится в списке, только если подключённый Google-аккаунт имеет доступ к ресурсу GA4 этого сайта. Если доступа нет — добавь email аккаунта в **Google Analytics → Администратор → Управление доступом к ресурсу** хотя бы с ролью **Читатель (Viewer)**.
+<details>
+<summary><b>Infinite redirect to <code>/login</code> after signing in</b></summary>
+<br/>
+Check <code>NEXTAUTH_URL</code> in <code>.env</code> — it must match your domain and protocol exactly, and the SSL certificate must be valid.
+</details>
 
-### 4. Привяжи ресурс
+<details>
+<summary><b>Database disappeared after a restart</b></summary>
+<br/>
+Use an absolute path in <code>DATABASE_URL</code>, not a relative one. The installer sets this automatically (<code>file:/root/opengsc/data/prod.db</code>); on a manual install, set it explicitly.
+</details>
 
-Открой карточку сайта → вкладка **GA4** → выбери ресурс в списке → **Link Property**. Привязка сохраняется отдельно для каждого сайта; отвязать можно в любой момент ссылкой **Unlink GA4**.
+<details>
+<summary><b><code>pm2 restart opengsc</code> doesn't pick up changes after <code>git pull</code></b></summary>
+<br/>
+Rebuild first:
 
-> **Режим OAuth-приложения.** Скоуп `analytics.readonly` относится к «sensitive». В режиме **Testing** он работает только для аккаунтов из списка Test users. В режиме **Production (Опубликовано)** — для любого аккаунта (без верификации Google будет экран «приложение не проверено» → «Перейти всё равно», это нормально для self-hosted).
-
----
-
-## Частые проблемы
-
-**На вкладке GA4 пусто и ошибка `... API has not been used in project ... or it is disabled`**
-
-Не включён нужный Google API. Включи **Google Analytics Data API** и **Google Analytics Admin API** в том же проекте Google Cloud, что и OAuth Client ID (ссылки — в разделе «Подключение Google Analytics 4»), подожди 1–2 минуты и обнови страницу.
-
-**На вкладке GA4 ошибка `insufficient authentication scopes`**
-
-Аккаунту не выдан доступ к Analytics. Переподключи его в **Settings → My Google Accounts** — после повторного входа напротив аккаунта загорится **GA4 ✓**.
-
-**Список GA4-ресурсов пустой, хотя API включены и доступ выдан**
-
-У этого Google-аккаунта нет доступа к ресурсу GA4. Добавь его email в **Google Analytics → Администратор → Управление доступом к ресурсу** с ролью Viewer.
-
-**Ошибка `redirect_uri_mismatch` при входе через Google**
-
-`NEXTAUTH_URL` в `.env` не совпадает с Authorized redirect URI в Google Console. Должны быть идентичны — включая протокол (`http://` vs `https://`). Redirect URI должен быть `https://твой-домен.com/api/auth/callback/google`.
-
-**Бесконечный редирект на `/login` после входа**
-
-Проверь `NEXTAUTH_URL` в `.env` — должен совпадать с доменом и протоколом. Убедись что SSL-сертификат действителен.
-
-**База данных пропала после перезапуска**
-
-Используй абсолютный путь в `DATABASE_URL`, не относительный. Установщик делает это автоматически: `file:/root/opengsc/data/prod.db`. При ручной установке задай путь явно.
-
-**`pm2 restart opengsc` не помогает после `git pull`**
-
-После обновления нужно пересобрать проект:
 ```bash
 npm run build && pm2 restart opengsc
 ```
+</details>
 
-**Логотип не отображается на странице входа**
+<details>
+<summary><b>Text generation fails with <code>generation_failed</code></b></summary>
+<br/>
+Check <code>pm2 logs opengsc</code> for a line starting with <code>[LLM]</code> — it carries the real provider status/error (invalid key, exhausted quota, a context-length limit on a very large outline, or the provider's own content-policy filter rejecting the topic). As of the latest version this reason is also surfaced directly in the job's error in History, so you shouldn't need to check server logs for most failures.
+</details>
 
-Убедись что используешь актуальную версию `src/middleware.ts` из репозитория.
+<br/>
 
----
+## Tech Stack
 
-## Стек
+- **[Next.js 16](https://nextjs.org/)** (App Router) + **React 19** + **TypeScript**
+- **Prisma 7** + **SQLite** (single-file database, zero external DB server)
+- **NextAuth v4** — Google OAuth authentication
+- **Recharts** — charts and graphs
+- **Google Search Console API** / **Google Analytics Data & Admin APIs** — first-party data sources
+- **Anthropic / Z.AI / OpenAI / Gemini / OpenRouter / kie.ai** — pluggable AI providers for the SEO Tools suite
+- **Serper / DataForSEO / ScrapingRobot** — SERP data providers; **Firecrawl** — scraping fallback
+- **PM2** — process manager · **Nginx** — reverse proxy · **Let's Encrypt** — SSL · **UFW** — firewall
 
-- **Next.js 16** (App Router)
-- **Prisma 5** + SQLite
-- **NextAuth v4** — авторизация через Google OAuth
-- **Recharts** — графики
-- **Google Search Console API** — источник данных
-- **PM2** — процесс-менеджер
-- **Nginx** — reverse proxy
+<br/>
 
----
-
-## Структура проекта
+## Project Structure
 
 ```
 src/
   app/
-    page.tsx                    # Главный дашборд — все сайты
-    site/[id]/page.tsx          # Детальная страница сайта
-    login/page.tsx              # Страница входа
-    settings/page.tsx           # Настройки, AI-ключи, аккаунты
-    indexer/                    # Модуль приватной ботофермы (Индексатор)
-      stats/page.tsx            # Детальная статистика обходов
-      domains/page.tsx          # Управление доменами дорвеев (CRUD)
-      queue/page.tsx            # Очередь URL для перелинковки
-      dictionary/page.tsx       # Словари ключевых слов
-      settings/page.tsx         # Копирование PHP-скрипта клоакинга
+    page.tsx                     # Main dashboard — every site, every account
+    site/[id]/page.tsx           # Site detail: analytics, indexing status, health, backlinks, GA4, Clarity
+    login/page.tsx
+    settings/page.tsx            # Global settings — Google accounts, AI/SERP/API keys
+    seo-tools/                   # AI SEO Content Suite
+      outline/page.tsx           # Outline Generator
+      text/page.tsx              # Text Generator
+      analysis/page.tsx          # Content Gap Analysis
+      landing/page.tsx           # Landing Page Builder (TZ / wireframe / text)
+      geo/page.tsx                # GEO Audit (Generative Engine Optimization)
+      citations/page.tsx         # Citation & Sentiment Tracker
+      policy/page.tsx            # Editorial Policy builder
+      history/page.tsx           # Unified generation history
+      settings/page.tsx          # Redirects to global Settings
+    indexer/                     # Private Indexer Network
+      domains/page.tsx           # Doorway domain management
+      queue/page.tsx             # Internal-link queue
+      dictionary/page.tsx        # Content keyword pools
+      links/page.tsx             # Cross-linking topology planner
+      stats/page.tsx             # 30-day crawl analytics
+      logs/page.tsx              # Raw crawl log
+      settings/page.tsx          # Script generator (PHP / Astro / Nginx)
     api/
-      auth/                     # NextAuth
-      gsc/sites/                # Получение сайтов из GSC
-      gsc/accounts/             # Управление Google аккаунтами
-      gsc/setup/                # AI-генерация кластеров и групп
-      gsc/clusters/             # CRUD тематических кластеров
-      gsc/groups/               # CRUD групп контента
-      gsc/striking/             # Striking Distance Keywords
-      gsc/cannibalization/      # Keyword Cannibalization
-      gsc/decay/                # Content Decay Map
-      gsc/ctr/                  # CTR Benchmark
-      gsc/inspect/              # URL Indexing Status
-      gsc/branded/              # AI-определение брендовых ключей
-  components/
-    StrikingDistanceKeywords.tsx
-    KeywordCannibalization.tsx
-    ContentDecayMap.tsx
-    CtrBenchmark.tsx
-    SiteSettingsTab.tsx
+      auth/                      # NextAuth
+      gsc/                       # Sites, accounts, sync, striking distance, cannibalization,
+                                  # decay, CTR benchmark, URL inspection, health, branded keywords
+      ga4/                       # Property linking & reporting
+      clarity/                   # Microsoft Clarity snapshots
+      rank/                      # Rank Tracker
+      aeo/                       # AEO Tracker (AI answer-engine citations)
+      backlinks/                 # Backlink inventory & liveness/index checks
+      indexing/                  # Sitemap sync/inspection + 2index.ninja / NeuralIndexer / XML River
+      indexer/                   # Doorway domains, queue, dictionary, stats, logs, webhook
+      seo/                       # Outline, text, analysis, landing, geo, citations, policy,
+                                  # background jobs, images, keyword data, model lists
   lib/
-    auth.ts                     # Конфигурация NextAuth
-    prisma.ts                   # Prisma клиент
-    PrivacyContext.tsx           # Глобальный Privacy Blur
-    ThemeContext.tsx             # Тема (dark / light)
-    LayoutContext.tsx            # Layout (wide / default)
+    auth.ts                      # NextAuth configuration
+    prisma.ts                    # Prisma client
+    llm.ts                       # Multi-provider LLM client (retry/backoff, error surfacing)
+    seo/
+      generate.ts                # Outline/text/analysis generation pipelines, volume guard
+      prompts.ts                 # All LLM prompt builders
+      rag.ts                     # Casino RAG knowledge base lookups
+      serp.ts / scrape.ts        # SERP + competitor scraping providers
+      history.ts / jobs.ts       # Client-side History + server-side background jobs
+    PrivacyContext.tsx / ThemeContext.tsx / LayoutContext.tsx
+  components/
+    StrikingDistanceKeywords.tsx / KeywordCannibalization.tsx / ContentDecayMap.tsx / CtrBenchmark.tsx
+    RankTracker.tsx / AeoTracker.tsx / ClarityPanel.tsx / SiteSettingsTab.tsx
 prisma/
-  schema.prisma                 # Схема БД
-install.sh                      # Установщик для VPS (Ubuntu/Debian)
+  schema.prisma                  # Full data model
+install.sh                       # One-command VPS installer (Ubuntu/Debian)
+docs/
+  GA4-SETUP.md
+  INDEXER-SETUP.md
+  ARCHITECTURE.md
 ```
+
+<br/>
+
+## Documentation
+
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — how the app is built: the background job system, the multi-pass SEO generation pipeline, the multi-provider LLM abstraction, the indexer's cloaking/verification mechanism, and the full data model.
+- **[docs/GA4-SETUP.md](docs/GA4-SETUP.md)** — connecting Google Analytics 4, step by step.
+- **[docs/INDEXER-SETUP.md](docs/INDEXER-SETUP.md)** — deploying and operating the private indexer network.
+
+<br/>
+
+## Disclaimer
+
+The **Private Indexer Network** implements doorway pages and user-agent/DNS-based cloaking — techniques that sit outside the webmaster guidelines of Google, Bing, and Yandex, and can result in penalties up to and including deindexing for domains that use them. This module is provided as infrastructure tooling for users who understand and accept that risk; it is **not** enabled or required for any other part of OpenGSC. You are solely responsible for how you use it and for compliance with the terms of service of any search engine, hosting provider, or jurisdiction that applies to you. See also [opengsc.org/disclaimer](https://opengsc.org/disclaimer/).
+
+<br/>
+
+## Contributing
+
+Issues and PRs are welcome — this is a self-hosted, community-run project with no roadmap gatekeeping. If you're adding a feature, a short description of the use case in the issue/PR helps a lot; if you're fixing a bug, a `pm2 logs opengsc` excerpt or a reproduction is the fastest way to get it looked at.
+
+<br/>
+
+## License
+
+[MIT](LICENSE) — free for personal and commercial use. Attribution appreciated but not required.
+
+<div align="center">
+<sub>Built with ❤️ — free forever. Self-host it on your own VPS.</sub>
+</div>
