@@ -29,6 +29,26 @@ function UserAvatar({ email, picture, size = 36 }: { email: string; picture?: st
   );
 }
 
+// Ahrefs API key (stored browser-side like other SEO keys; auto-backed-up by SeoKeysSync).
+function AhrefsKeyField() {
+  const [val, setVal] = useState("");
+  const [saved, setSaved] = useState(false);
+  useEffect(() => { setVal(localStorage.getItem("seoKey_ahrefs") || ""); }, []);
+  return (
+    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+      <input
+        type="password" value={val} onChange={e => { setVal(e.target.value); setSaved(false); }}
+        placeholder="Ahrefs API key"
+        style={{ width: "260px", padding: "8px 11px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "13px", outline: "none" }}
+      />
+      <button onClick={() => { val.trim() ? localStorage.setItem("seoKey_ahrefs", val.trim()) : localStorage.removeItem("seoKey_ahrefs"); setSaved(true); }}
+        style={{ padding: "8px 14px", borderRadius: "8px", border: "1px solid var(--color-border)", background: saved ? "rgba(52,199,89,0.12)" : "var(--color-bg)", color: saved ? "var(--color-accent-green)" : "var(--color-text-primary)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
+        {saved ? "✓" : "Save"}
+      </button>
+    </div>
+  );
+}
+
 function SectionCard({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
     <div style={{ background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "12px", padding: "24px", ...style }}>
@@ -1073,17 +1093,17 @@ function IndexApiSection() {
         </div>
       </SectionCard>
 
-      {/* ── Ahrefs (coming soon) ── */}
+      {/* ── Ahrefs API (Link Monitor + paid endpoints) ── */}
       <SectionCard>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <div style={{ width: 28, height: 28, borderRadius: "6px", background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 800, color: "#8B5CF6" }}>AH</div>
             <div>
-              <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-secondary)" }}>Ahrefs API</span>
+              <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>Ahrefs API</span>
               <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>{t("ahrefsDesc")}</p>
             </div>
           </div>
-          <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 8px", borderRadius: "6px", background: "rgba(139,92,246,0.12)", color: "#8B5CF6", border: "1px solid rgba(139,92,246,0.25)" }}>{t("comingSoon")}</span>
+          <AhrefsKeyField />
         </div>
       </SectionCard>
 

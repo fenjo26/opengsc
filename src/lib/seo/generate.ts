@@ -110,7 +110,7 @@ export function normalizeWordBudgets(outline: any, target: number): boolean {
   const sum = own.reduce((acc: number, r: [number, number] | null) => acc + (r ? (r[0] + r[1]) / 2 : 0), 0);
   if (!sum) return false;
   const k = target / sum;
-  if (k > 0.85 && k < 1.15) return false; // close enough — keep the model's distribution
+  if (k > 0.98 && k < 1.02) return false; // close enough
   // Scale every section's OWN budget…
   for (let i = 0; i < secs.length; i++) {
     const r = own[i]; if (!secs[i] || !r) continue;
@@ -747,12 +747,58 @@ export async function genText(b: any): Promise<GenResult> {
   const full = (b.outline || {}) as any;
   const { sources: _carried, facts_bank: _bank, ...metaSlim } = (full.meta || {});
   void _carried; void _bank;
+  
+  // Deep-copy to avoid mutating cached memory
   const slimOutline = {
-    meta: metaSlim,
-    sections: full.sections,
-    faq: full.faq,
+    meta: metaSlim ? JSON.parse(JSON.stringify(metaSlim)) : {},
+    sections: full.sections ? JSON.parse(JSON.stringify(full.sections)) : [],
+    faq: full.faq ? JSON.parse(JSON.stringify(full.faq)) : [],
     price_table_template: full.price_table_template,
   };
+
+  const secsList: any[] = slimOutline.sections;
+  const depth = (s: any) => (s?.h_level === "H4" ? 4 : s?.h_level === "H3" ? 3 : 2);
+  const hasKids = (i: number) => i + 1 < secsList.length && depth(secsList[i + 1]) > depth(secsList[i]);
+
+  // 1. Convert FAQ list to H3 sections under the H2 FAQ section
+  const faqList = Array.isArray(slimOutline.faq) ? slimOutline.faq : [];
+  if (faqList.length > 0) {
+    let faqH2Idx = secsList.findIndex((s: any) => s.h_level === "H2" && (/\bfaq\b|frequently asked|questions\s+fréquentes|часто\s+задаваемые/i.test(s.heading)));
+    if (faqH2Idx === -1) {
+      const faqTitle = "FAQ";
+      secsList.push({
+        h_level: "H2",
+        heading: faqTitle,
+        word_count_self: [30, 50],
+        word_count_total: [30, 50],
+        summary: "Section de foire aux questions.",
+        copywriter_notes: "Introduire brièvement la section FAQ."
+      });
+      faqH2Idx = secsList.length - 1;
+    }
+    
+    const faqSubsections = faqList.map((f: any) => ({
+      h_level: "H3",
+      heading: f.question,
+      word_count_self: [40, 60],
+      word_count_total: [40, 60],
+      summary: f.answer_guideline || "Répondre à la question.",
+      copywriter_notes: `Répondre à la question de manière concise en 40-60 mots.`
+    }));
+    
+    secsList.splice(faqH2Idx + 1, 0, ...faqSubsections);
+    slimOutline.faq = [];
+  }
+
+  // 2. Trim parent H2 summaries to prevent duplicate text generation and word count overshoot
+  for (let i = 0; i < secsList.length; i++) {
+    const s = secsList[i];
+    if (s.h_level === "H2" && hasKids(i)) {
+      s.summary = "Короткое вводное предложение (1-2 предложения) для перехода к подразделам.";
+      s.copywriter_notes = "Напиши ровно один короткий вводный абзац (1-2 предложения), чтобы плавно ввести читателя в тему и подготовить переход к подразделам. Не раскрывай конкретные детали подразделов здесь, пиши максимально лаконично.";
+    }
+  }
+
   // Volume guard for outlines saved before this fix (or edited by hand): if the sum of
   // section budgets is far below the target word count, rescale so the writer isn't
   // silently capped at a fraction of the plan. Implausibly small targets (junk emitted

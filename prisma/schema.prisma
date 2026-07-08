@@ -459,6 +459,34 @@ model DrCache {
   checkedAt DateTime @default(now())
 }
 
+// ─── Link Monitor (Ahrefs API v3) — track fresh quality backlinks to watched brands ──
+model LinkWatchBrand {
+  id        String   @id @default(cuid())
+  userId    String
+  domain    String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, domain])
+}
+
+model LinkMention {
+  id         String   @id @default(cuid())
+  userId     String
+  brand      String   // watched brand domain
+  urlFrom    String
+  domainFrom String
+  title      String   @default("")
+  anchor     String   @default("")
+  drFrom     Float    @default(0)
+  firstSeen  String   @default("")
+  urlTo      String   @default("")
+  dofollow   Boolean  @default(true)
+  fetchedAt  DateTime @default(now())
+
+  @@index([userId, brand])
+  @@index([userId, domainFrom])
+}
+
 model RagCasino {
   id          String @id @default(cuid())
   name        String
