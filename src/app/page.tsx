@@ -1128,32 +1128,34 @@ export default function PortfolioPage() {
       <div onClick={() => router.push(`/site/${encodeURIComponent(domain)}`)} className="card" style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:"8px",cursor:"pointer",textDecoration:"none",color:"inherit",...declineBorder}}>
         {/* Header */}
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:"8px"}}>
-          {/* Domain */}
-          <div style={{display:"flex",alignItems:"center",gap:"6px",minWidth:0}}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`/api/favicon?domain=${domain}`} width={16} height={16} alt=""
-              style={{borderRadius:"3px",flexShrink:0,filter:blur?"blur(5px)":"none",transition:"filter 0.25s"}} onError={e=>((e.target as HTMLImageElement).style.display="none")} />
-            <span style={{fontWeight:500,fontSize:"13px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",filter:blur?"blur(5px)":"none",transition:"filter 0.25s"}}>
-              {domain}
-            </span>
-            <a href={`https://${domain}`} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} style={{color:"var(--color-text-secondary)",flexShrink:0}}>
-              <ExternalLink size={10}/>
-            </a>
+          {/* Domain (name row + DR line underneath — the badge no longer squeezes the name) */}
+          <div style={{display:"flex",flexDirection:"column",gap:"3px",minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:"6px",minWidth:0}}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`/api/favicon?domain=${domain}`} width={16} height={16} alt=""
+                style={{borderRadius:"3px",flexShrink:0,filter:blur?"blur(5px)":"none",transition:"filter 0.25s"}} onError={e=>((e.target as HTMLImageElement).style.display="none")} />
+              <span style={{fontWeight:500,fontSize:"13px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",filter:blur?"blur(5px)":"none",transition:"filter 0.25s"}}>
+                {domain}
+              </span>
+              <a href={`https://${domain}`} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} style={{color:"var(--color-text-secondary)",flexShrink:0}}>
+                <ExternalLink size={10}/>
+              </a>
+              {/* Health dot */}
+              {healthStatus && (
+                <span
+                  title={healthStatus === "error" ? "Health issue detected" : healthStatus === "warn" ? "Health warning" : "All checks passed"}
+                  style={{
+                    width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
+                    background: healthStatus === "error" ? "#EF4444" : healthStatus === "warn" ? "#F59E0B" : "#10B981",
+                    boxShadow: `0 0 0 2px ${healthStatus === "error" ? "rgba(239,68,68,0.25)" : healthStatus === "warn" ? "rgba(245,158,11,0.25)" : "rgba(16,185,129,0.25)"}`,
+                  }}
+                />
+              )}
+            </div>
             {drMap[domain.toLowerCase().replace(/^www\./,"")] != null && (
-              <span title="Domain Rating by Ahrefs (ahrefs.com)" style={{fontSize:"10px",fontWeight:700,padding:"2px 6px",borderRadius:"6px",flexShrink:0,background:"rgba(58,87,252,0.12)",color:"#3A57FC",filter:blur?"blur(4px)":"none",transition:"filter 0.25s"}}>
+              <span title="Domain Rating by Ahrefs (ahrefs.com)" style={{fontSize:"10px",fontWeight:700,padding:"1px 6px",borderRadius:"6px",alignSelf:"flex-start",marginLeft:"22px",background:"rgba(58,87,252,0.12)",color:"#3A57FC",filter:blur?"blur(4px)":"none",transition:"filter 0.25s"}}>
                 DR {Math.round(drMap[domain.toLowerCase().replace(/^www\./,"")])}
               </span>
-            )}
-            {/* Health dot */}
-            {healthStatus && (
-              <span
-                title={healthStatus === "error" ? "Health issue detected" : healthStatus === "warn" ? "Health warning" : "All checks passed"}
-                style={{
-                  width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
-                  background: healthStatus === "error" ? "#EF4444" : healthStatus === "warn" ? "#F59E0B" : "#10B981",
-                  boxShadow: `0 0 0 2px ${healthStatus === "error" ? "rgba(239,68,68,0.25)" : healthStatus === "warn" ? "rgba(245,158,11,0.25)" : "rgba(16,185,129,0.25)"}`,
-                }}
-              />
             )}
           </div>
 
