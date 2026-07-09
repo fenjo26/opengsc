@@ -261,17 +261,22 @@ Tested on **Ubuntu 22.04 LTS**; other Debian-based distros also work. CentOS/RHE
 
 ### 1. Create a Google OAuth app (~5 minutes)
 
-1. Open [Google Cloud Console](https://console.cloud.google.com/) and create a project (or reuse one).
-2. **APIs & Services → Library** → find **Google Search Console API** → Enable.
-3. **APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID**, type **Web application**.
-4. Fill in:
+Every step below is a direct link that opens exactly the right page in Google Cloud Console. Sign in with the Google account that owns your Search Console sites.
+
+1. **Create a project** (or reuse one): [console.cloud.google.com/projectcreate](https://console.cloud.google.com/projectcreate). Any name works, e.g. `opengsc`. Make sure this project stays selected in the top bar for all following steps.
+2. **Enable the Search Console API**: open [console.cloud.google.com/apis/library/searchconsole.googleapis.com](https://console.cloud.google.com/apis/library/searchconsole.googleapis.com) and click **Enable**.
+3. **Configure the OAuth consent screen** (required once before creating credentials): open [console.cloud.google.com/auth/branding](https://console.cloud.google.com/auth/branding). Choose **External**, fill in the app name and your email — defaults are fine everywhere else. Then open [console.cloud.google.com/auth/audience](https://console.cloud.google.com/auth/audience) and add your own Google account (plus any accounts whose GSC sites you'll connect) under **Test users**.
+4. **Create the OAuth client**: open [console.cloud.google.com/auth/clients/create](https://console.cloud.google.com/auth/clients/create) (the same page is reachable via **Credentials → Create Credentials → OAuth client ID** at [console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials)). Application type: **Web application**. Fill in:
 
    | Field | Value |
    |---|---|
    | Authorized JavaScript origins | `https://your-domain.com` |
    | Authorized redirect URIs | `https://your-domain.com/api/auth/callback/google` |
 
-5. Copy the **Client ID** and **Client Secret** — the installer asks for both.
+   No domain yet? Use your server IP instead: origin `http://1.2.3.4:3000`, redirect URI `http://1.2.3.4:3000/api/auth/callback/google` — you can add the real domain later on the same page.
+5. Copy the **Client ID** and **Client Secret** from the confirmation dialog — the installer asks for both. You can always find them again at [console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials).
+
+> **Tip:** if sign-in later fails with `access_denied`, your account isn't in Test users (step 3) — either add it there, or publish the app on the same page (**Publish app**).
 
 ### 2. Run the one-line installer
 
