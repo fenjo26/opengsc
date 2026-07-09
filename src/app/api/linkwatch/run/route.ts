@@ -20,11 +20,14 @@ async function fetchBrandLinks(ahrefsKey: string, brand: string, sinceIso: strin
     aggregation: "1_per_domain",
     order_by: "first_seen_link:desc",
     select: "url_from,title,anchor,domain_rating_source,first_seen_link,url_to,is_dofollow",
+    // Official v3 filter syntax (docs.ahrefs.com/en/api/docs/filter-syntax): operators are
+    // strings — ["gte", 50], ["eq", true]. Mirrors the detailed.com filter set: in-content,
+    // DR ≥ minDr, first seen within the window; live-only comes from history=live.
     where: JSON.stringify({
       and: [
-        { field: "is_content", is: true },
-        { field: "domain_rating_source", is: [">=", minDr] },
-        { field: "first_seen_link", is: [">=", sinceIso] },
+        { field: "is_content", is: ["eq", true] },
+        { field: "domain_rating_source", is: ["gte", minDr] },
+        { field: "first_seen_link", is: ["gte", sinceIso] },
       ],
     }),
   });
