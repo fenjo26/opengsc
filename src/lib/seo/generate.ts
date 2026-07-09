@@ -485,6 +485,27 @@ export async function genOutline(b: any): Promise<GenResult> {
   // SANITIZE: decode HTML entities the passes occasionally emit (&eacute; → é) and drop
   // stray H1-level sections — the H1 lives in meta, an H1 section duplicates it in every view.
   deepMapStringsInPlace(outline, decodeHtmlEntities);
+
+  // STALE-YEAR fix (deterministic): headings/titles/FAQ questions saying "pour 2025" /
+  // "в 2024" mean "current year" — models leak their training-era year despite the prompt
+  // date line. Only heading-like fields are touched (summaries/notes may cite history),
+  // and phrases like "depuis 2024 / founded in 2023" are preserved.
+  const NOW_YEAR = new Date().getFullYear();
+  const fixYear = (s: string) => typeof s === "string"
+    ? s.replace(/(depuis|since|lancé en|founded in|est\.|основан[оа]?\s+в|запущен[оа]?\s+в|créé en|вышл[аио]\s+в)\s+(202[0-5])\b/gi, "$1 §KEEP$2§")
+        .replace(/\b202[0-5]\b/g, String(NOW_YEAR))
+        .replace(/§KEEP(202[0-5])§/g, "$1")
+    : s;
+  for (const sec of (Array.isArray((outline as any).sections) ? (outline as any).sections : [])) {
+    sec.heading = fixYear(sec.heading);
+    if (Array.isArray(sec.keywords)) sec.keywords = sec.keywords.map(fixYear);
+  }
+  if (meta.h1) meta.h1 = fixYear(meta.h1);
+  if (Array.isArray(meta.title_options)) meta.title_options = meta.title_options.map(fixYear);
+  if (Array.isArray(meta.description_options)) meta.description_options = meta.description_options.map(fixYear);
+  for (const q of (Array.isArray((outline as any).faq) ? (outline as any).faq : [])) {
+    if (q?.question) q.question = fixYear(q.question);
+  }
   if (Array.isArray((outline as any).sections)) {
     const secsAll: any[] = (outline as any).sections;
     for (let i = secsAll.length - 1; i >= 0; i--) {
@@ -629,7 +650,8 @@ async function writeTextInChunks(outline: any, ctx: {
       keyword: ctx.keyword, language: ctx.language, country: meta.country,
       tone: ctx.tone, narration: meta.narration === "first" ? "first" : meta.narration === "third" ? "third" : undefined,
       h1: meta.h1, allHeadings, sections: c,
-      faq: i === chunks.length - 1 ? faq : undefined,
+      // FAQ is NEVER written by a chunk — it's rendered by a dedicated call below. Chunks
+      // renamed/localized the FAQ heading and melted questions into prose too often.
       ragFacts: ctx.ragFacts, sources: ctx.sources, sourceMode: ctx.sourceMode,
       isVerdictChunk: c.some((s: any) => verdictRe.test(String(s.heading || ""))),
       chunkBudget: hi > 0 ? [lo, hi] : undefined,
@@ -667,29 +689,36 @@ async function writeTextInChunks(outline: any, ctx: {
   });
   if (parts.some(p => p == null)) return null; // a chunk failed even after retries → single-shot fallback
 
-  // FAQ guard: if the last chunk dropped the FAQ (or some questions), render it with a
-  // dedicated small call — a scoped prompt reliably produces all questions.
-  // Canonical FAQ shape (enforced deterministically below): «## FAQ» → immediately the first
-  // «### Question» → answer paragraph → next question… No intro prose inside the section.
+  // FAQ: single, deterministic path. (1) Strip ANY FAQ-ish section a chunk may have written
+  // anyway — matched by meaning, not by the literal "## FAQ" heading (models localize it:
+  // «Questions Fréquentes…», «Часто задаваемые вопросы»…). (2) Render the FAQ with one
+  // dedicated call that reliably yields the canonical shape: «## FAQ» → «### Question» →
+  // answer → next question. (3) canonFaq strips any stray intro prose after the heading.
+  const FAQ_HEADING_RE = /^##\s+.*(faq|questions?\s+fr[ée]quentes|frequently\s+asked|часто\s+задаваем|поширені\s+питання|вопросы\s+и\s+ответы)/im;
+  const stripFaqSection = (md: string) => {
+    const m = md.match(FAQ_HEADING_RE);
+    if (!m || m.index == null) return md;
+    const after = md.slice(m.index);
+    const next = after.slice(2).search(/^##\s/m); // next H2 after this heading
+    return (md.slice(0, m.index) + (next === -1 ? "" : after.slice(2 + next))).trim();
+  };
   const canonFaq = (md: string) => md
     .replace(/^(##\s*FAQ[^\n]*)\n+[\s\S]*?(?=^###\s)/m, "$1\n\n"); // strip prose between H2 and 1st question
   if (faq.length) {
-    const lastMd = parts[parts.length - 1] || "";
-    const faqQ = (lastMd.match(/^##\s*FAQ[\s\S]*$/m)?.[0].match(/^###\s/gm) || []).length;
-    if (faqQ < faq.length) {
-      // Strip a partial FAQ from the last chunk, then regenerate the full section.
-      parts[parts.length - 1] = lastMd.replace(/^##\s*FAQ[\s\S]*$/m, "").trim();
-      try {
-        const faqPrompt = `Ты пишешь FAQ-секцию статьи по теме "${ctx.keyword}" на языке ${ctx.language}. Верни ТОЛЬКО markdown секции строго такой формы: строка «## FAQ», затем СРАЗУ первый вопрос — НИКАКОГО вводного абзаца между ними. Каждый вопрос — «### Вопрос», под ним ответ 40-60 слов по answer_guideline (конкретика, без воды). Все ${faq.length} вопросов, СТРОГО В ЗАДАННОМ ПОРЯДКЕ. Без преамбулы и \`\`\`-обёрток.\nВОПРОСЫ: ${JSON.stringify(faq)}`;
-        const faqRaw = await fetchLLM(faqPrompt, ctx.provider, ctx.apiKey, 2500, ctx.model, ctx.baseUrl);
-        if (faqRaw) {
-          const faqMd = faqRaw.trim().replace(/^```(?:markdown|md)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
-          if (/^##\s*FAQ/m.test(faqMd)) parts.push(canonFaq(faqMd));
+    for (let i = 0; i < parts.length; i++) parts[i] = stripFaqSection(parts[i] || "");
+    try {
+      const faqPrompt = `Сегодня ${new Date().toISOString().slice(0, 10)} — если уместен год, только текущий (${new Date().getFullYear()}). Ты пишешь FAQ-секцию статьи по теме "${ctx.keyword}" на языке ${ctx.language}. Верни ТОЛЬКО markdown секции строго такой формы: первая строка — ровно «## FAQ», затем СРАЗУ первый вопрос — НИКАКОГО вводного абзаца между ними. Каждый вопрос — «### Вопрос», под ним ответ 40-60 слов по answer_guideline (конкретика, без воды). Все ${faq.length} вопросов, СТРОГО В ЗАДАННОМ ПОРЯДКЕ. Заголовок секции НЕ переименовывай — ровно «## FAQ». Без преамбулы и \`\`\`-обёрток.\nВОПРОСЫ: ${JSON.stringify(faq)}`;
+      const faqRaw = await fetchLLM(faqPrompt, ctx.provider, ctx.apiKey, 2500, ctx.model, ctx.baseUrl);
+      if (faqRaw) {
+        let faqMd = faqRaw.trim().replace(/^```(?:markdown|md)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+        // Normalize a localized heading to the canonical one, then enforce the shape.
+        faqMd = faqMd.replace(FAQ_HEADING_RE, "## FAQ");
+        if (!/^##\s*FAQ/m.test(faqMd) && /^###\s/m.test(faqMd)) faqMd = "## FAQ\n\n" + faqMd;
+        if (/^##\s*FAQ/m.test(faqMd) && (faqMd.match(/^###\s/gm) || []).length >= Math.min(faq.length, 2)) {
+          parts.push(canonFaq(faqMd));
         }
-      } catch { /* best-effort — article ships without FAQ in the worst case */ }
-    } else {
-      parts[parts.length - 1] = canonFaq(lastMd); // chunk-written FAQ gets the same canonical shape
-    }
+      }
+    } catch { /* best-effort — article ships without FAQ in the worst case */ }
   }
 
   // Deterministic assembly: H1 → (optional TOC) → sections → FAQ came with the last chunk.
