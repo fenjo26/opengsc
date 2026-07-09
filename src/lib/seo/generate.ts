@@ -667,6 +667,25 @@ async function writeTextInChunks(outline: any, ctx: {
   });
   if (parts.some(p => p == null)) return null; // a chunk failed even after retries → single-shot fallback
 
+  // FAQ guard: if the last chunk dropped the FAQ (or some questions), render it with a
+  // dedicated small call — a scoped prompt reliably produces all questions.
+  if (faq.length) {
+    const lastMd = parts[parts.length - 1] || "";
+    const faqQ = (lastMd.match(/^##\s*FAQ[\s\S]*$/m)?.[0].match(/^###\s/gm) || []).length;
+    if (faqQ < faq.length) {
+      // Strip a partial FAQ from the last chunk, then regenerate the full section.
+      parts[parts.length - 1] = lastMd.replace(/^##\s*FAQ[\s\S]*$/m, "").trim();
+      try {
+        const faqPrompt = `Ты пишешь FAQ-секцию статьи по теме "${ctx.keyword}" на языке ${ctx.language}. Верни ТОЛЬКО markdown секции: заголовок «## FAQ», затем КАЖДЫЙ из ${faq.length} вопросов как «### Вопрос», под ним ответ 40-60 слов по answer_guideline (конкретika, без воды). Без преамбулы и \`\`\`-обёрток.\nВОПРОСЫ: ${JSON.stringify(faq)}`;
+        const faqRaw = await fetchLLM(faqPrompt, ctx.provider, ctx.apiKey, 2500, ctx.model, ctx.baseUrl);
+        if (faqRaw) {
+          const faqMd = faqRaw.trim().replace(/^```(?:markdown|md)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+          if (/^##\s*FAQ/m.test(faqMd)) parts.push(faqMd);
+        }
+      } catch { /* best-effort — article ships without FAQ in the worst case */ }
+    }
+  }
+
   // Deterministic assembly: H1 → (optional TOC) → sections → FAQ came with the last chunk.
   const pick = (v: any) => Array.isArray(v) ? (v.find((x: any) => x && String(x).trim()) || "") : (v || "");
   const h1 = pick(meta.h1) || pick(meta.title_options) || ctx.keyword;
@@ -721,9 +740,11 @@ async function enforceVolumeTarget(text: string, targetWc: number, ctx: {
         if (!trimmed) break;
         trimmed = trimmed.trim().replace(/^```(?:markdown|md)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
         const newWords = trimmed.split(/\s+/).filter(Boolean).length;
-        // Accept any real reduction that kept the structure (same H2 count ±1) and didn't
+        // Accept any real reduction that kept the FULL structure — H2 AND H3 counts equal
+        // (H2-only check let the model "trim" by deleting FAQ ### questions) — and didn't
         // over-cut (still ≥70% of target).
-        if (newWords < cur * 0.95 && newWords >= targetWc * 0.7 && Math.abs(h2(trimmed) - h2(text)) <= 1) {
+        const allHeads = (s: string) => (s.match(/^#{2,3}\s/gm) || []).length;
+        if (newWords < cur * 0.95 && newWords >= targetWc * 0.7 && allHeads(trimmed) === allHeads(text)) {
           text = stripForeignScripts(trimmed, ctx.language);
         } else break; // model refused to cut further / structure changed — stop iterating
       } catch { break; }
