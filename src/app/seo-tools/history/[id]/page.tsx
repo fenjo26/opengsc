@@ -248,6 +248,9 @@ function GenTextModal({ item, t, onClose, onDone }: { item: HistoryItem; t: any;
   const [tone, setTone] = useState("");
   const [language, setLanguage] = useState("en");
   const [sourceMode, setSourceMode] = useState<"off" | "facts" | "cited">("off");
+  const [promptType, setPromptType] = useState<"service" | "custom">("service");
+  const [custom, setCustom] = useState("");
+  const [includeToc, setIncludeToc] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
@@ -262,7 +265,7 @@ function GenTextModal({ item, t, onClose, onDone }: { item: HistoryItem; t: any;
       const serp = getSerpCreds();
       const res = await fetch("/api/seo/text", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ outline: item.data, keyword: item.keyword, policy, language, tone: resolvedTone || undefined, sourceMode, serpProvider: serp.provider, serpKey: serp.apiKey || undefined, firecrawlKey: getFirecrawlKey() || undefined, scrapeCount: getFactSourceCount(), hardRedact: getHardRedact(), aiProvider: provider, aiApiKey: apiKey, model: model || undefined }),
+        body: JSON.stringify({ outline: item.data, keyword: item.keyword, policy, language, tone: resolvedTone || undefined, sourceMode, includeToc, promptType, custom: promptType === "custom" ? (custom.trim() || undefined) : undefined, serpProvider: serp.provider, serpKey: serp.apiKey || undefined, firecrawlKey: getFirecrawlKey() || undefined, scrapeCount: getFactSourceCount(), hardRedact: getHardRedact(), aiProvider: provider, aiApiKey: apiKey, model: model || undefined }),
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || t("seoErrText")); setLoading(false); return; }
@@ -309,6 +312,28 @@ function GenTextModal({ item, t, onClose, onDone }: { item: HistoryItem; t: any;
           <option value="cited">{t("seoSourcesCited")}</option>
         </select>
         <div style={{ fontSize: "11px", color: "var(--color-text-tertiary)", marginTop: "6px" }}>{t("seoSourcesModeHint")}</div>
+
+        <label style={label}>{t("seoPromptType")}</label>
+        <div style={{ display: "flex", gap: "14px" }}>
+          {([["service", t("seoPromptService")], ["custom", t("seoPromptCustom")]] as const).map(([v, l]) => (
+            <label key={v} style={{ display: "flex", alignItems: "center", gap: "7px", fontSize: "13px", color: "var(--color-text-primary)", cursor: "pointer" }}>
+              <input type="radio" checked={promptType === v} onChange={() => {
+                setPromptType(v as any);
+                if (v === "custom" && !custom.trim()) setCustom(t("seoCustomPromptSkeleton"));
+              }} /> {l}
+            </label>
+          ))}
+        </div>
+        {promptType === "custom" && (
+          <div style={{ marginTop: "8px" }}>
+            <textarea className="tool-input" style={{ minHeight: "150px", resize: "vertical", fontSize: "12px" }} value={custom} onChange={e => setCustom(e.target.value)} />
+            <div style={{ fontSize: "11px", color: "var(--color-text-tertiary)", marginTop: "4px" }}>{t("seoCustomPromptHint")}</div>
+          </div>
+        )}
+
+        <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "var(--color-text-primary)", cursor: "pointer", marginTop: "14px" }}>
+          <input type="checkbox" checked={includeToc} onChange={e => setIncludeToc(e.target.checked)} /> {t("seoIncludeToc")}
+        </label>
 
         {err && <div style={{ fontSize: "12px", color: "var(--color-accent-red)", marginTop: "10px" }}>{err}</div>}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "16px" }}>

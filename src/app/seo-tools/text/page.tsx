@@ -26,7 +26,8 @@ export default function TextGenPage() {
   const [structureId, setStructureId] = useState("");
   const [search, setSearch] = useState("");
   const [useCustom, setUseCustom] = useState(false);
-  const [custom, setCustom] = useState("");
+  const [custom, setCustom] = useState("");        // MAIN custom prompt (promptType "custom")
+  const [extraInstr, setExtraInstr] = useState(""); // optional addition to the SERVICE prompt
   const [includeToc, setIncludeToc] = useState(false);
   const [loading, setLoading] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -84,7 +85,10 @@ export default function TextGenPage() {
     setLoading(true); setErr("");
     const { jobId: jid, error } = await startJob("text", {
       outline: outline.data, keyword: outline.keyword, policy, language, tone: resolvedTone || undefined,
-      custom: useCustom && custom.trim() ? custom : undefined, promptType, includeToc,
+      custom: promptType === "custom"
+        ? (custom.trim() || undefined)
+        : (useCustom && extraInstr.trim() ? extraInstr : undefined),
+      promptType, includeToc,
       sourceMode, serpProvider: getSerpCreds().provider, serpKey: getSerpCreds().apiKey || undefined,
       firecrawlKey: getFirecrawlKey() || undefined, scrapeCount: getFactSourceCount(), hardRedact: getHardRedact(),
       aiProvider: provider, aiApiKey: apiKey, model: model || undefined, aiBaseUrl: baseUrl || undefined,
@@ -155,10 +159,21 @@ export default function TextGenPage() {
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "4px", marginBottom: "14px" }}>
               {([["service", t("seoPromptService")], ["custom", t("seoPromptCustom")]] as const).map(([v, l]) => (
                 <label key={v} style={{ display: "flex", alignItems: "center", gap: "9px", fontSize: "13px", color: "var(--color-text-primary)", cursor: "pointer" }}>
-                  <input type="radio" checked={promptType === v} onChange={() => setPromptType(v as any)} />
+                  <input type="radio" checked={promptType === v} onChange={() => {
+                    setPromptType(v as any);
+                    // First switch to "custom" pre-fills an editable skeleton so the user
+                    // immediately sees WHAT to write instead of a silent radio.
+                    if (v === "custom" && !custom.trim()) setCustom(t("seoCustomPromptSkeleton"));
+                  }} />
                   {l}
                 </label>
               ))}
+              {promptType === "custom" && (
+                <div>
+                  <textarea className="tool-input" style={{ minHeight: "170px", resize: "vertical", fontSize: "12px" }} value={custom} onChange={e => setCustom(e.target.value)} />
+                  <div style={{ fontSize: "11px", color: "var(--color-text-tertiary)", marginTop: "4px" }}>{t("seoCustomPromptHint")}</div>
+                </div>
+              )}
             </div>
             <label className="tool-field-label">{t("seoSourcesMode")}</label>
             <select style={selectStyle} value={sourceMode} onChange={e => setSourceMode(e.target.value as any)}>
@@ -199,10 +214,15 @@ export default function TextGenPage() {
           </div>
 
           <div className={card}>
-            <label style={{ display: "flex", alignItems: "center", gap: "9px", fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)", cursor: "pointer" }}>
-              <input type="checkbox" checked={useCustom} onChange={e => setUseCustom(e.target.checked)} /> {t("seoAddCustomInstruction")}
-            </label>
-            {useCustom && <textarea className="tool-input" style={{ marginTop: "10px", minHeight: "70px", resize: "vertical" }} value={custom} onChange={e => setCustom(e.target.value)} placeholder={t("seoCustomInstructionPh")} />}
+            {promptType === "service" && (
+              <>
+                <label style={{ display: "flex", alignItems: "center", gap: "9px", fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)", cursor: "pointer" }}>
+                  <input type="checkbox" checked={useCustom} onChange={e => setUseCustom(e.target.checked)} /> {t("seoAddCustomInstruction")}
+                </label>
+                <div style={{ fontSize: "11px", color: "var(--color-text-tertiary)", marginTop: "4px", paddingLeft: "27px" }}>{t("seoExtraInstrHint")}</div>
+                {useCustom && <textarea className="tool-input" style={{ marginTop: "10px", minHeight: "70px", resize: "vertical" }} value={extraInstr} onChange={e => setExtraInstr(e.target.value)} placeholder={t("seoCustomInstructionPh")} />}
+              </>
+            )}
             <label style={{ display: "flex", alignItems: "center", gap: "9px", fontSize: "13px", color: "var(--color-text-primary)", cursor: "pointer", marginTop: "14px", paddingTop: "14px", borderTop: "1px solid var(--color-border)" }}>
               <input type="checkbox" checked={includeToc} onChange={e => setIncludeToc(e.target.checked)} /> {t("seoIncludeToc")}
             </label>
