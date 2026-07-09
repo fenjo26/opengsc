@@ -273,7 +273,7 @@ Every step below is a direct link that opens exactly the right page in Google Cl
    | Authorized JavaScript origins | `https://your-domain.com` |
    | Authorized redirect URIs | `https://your-domain.com/api/auth/callback/google` |
 
-   No domain yet? Use your server IP instead: origin `http://1.2.3.4:3000`, redirect URI `http://1.2.3.4:3000/api/auth/callback/google` — you can add the real domain later on the same page.
+   > **Note:** Google does not accept bare IP addresses here — a domain is required (the only exception is `http://localhost` for local development). Any subdomain you control works fine, e.g. `gsc.your-domain.com`.
 5. Copy the **Client ID** and **Client Secret** from the confirmation dialog — the installer asks for both. You can always find them again at [console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials).
 
 > **Tip:** if sign-in later fails with `access_denied`, your account isn't in Test users (step 3) — either add it there, or publish the app on the same page (**Publish app**).
