@@ -16,12 +16,34 @@ const entName = (e: any) => {
   return `${e.name}${tag ? ` [${tag}]` : ""}`;
 };
 
+// Decode HTML entities that models occasionally emit in headings (&eacute; → é etc.).
+const HTML_ENTITIES: Record<string, string> = {
+  amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",
+  eacute: "é", egrave: "è", ecirc: "ê", euml: "ë", agrave: "à", acirc: "â", auml: "ä",
+  ccedil: "ç", ocirc: "ô", ouml: "ö", ucirc: "û", ugrave: "ù", uuml: "ü", icirc: "î", iuml: "ï",
+  oelig: "œ", aelig: "æ", ntilde: "ñ", szlig: "ß", laquo: "«", raquo: "»",
+  rsquo: "’", lsquo: "‘", ldquo: "“", rdquo: "”", ndash: "–", mdash: "—", hellip: "…",
+  deg: "°", euro: "€", pound: "£", middot: "·", times: "×",
+};
+export function decodeHtmlEntities(s: string): string {
+  if (!s || s.indexOf("&") === -1) return s;
+  return s
+    .replace(/&#(\d+);/g, (_, n) => { try { return String.fromCodePoint(+n); } catch { return _; } })
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => { try { return String.fromCodePoint(parseInt(n, 16)); } catch { return _; } })
+    .replace(/&([a-z]+);/gi, (m, name) => HTML_ENTITIES[name.toLowerCase()] ?? m);
+}
+
 export function outlineHeadings(o: any): Heading[] {
   if (!o) return [];
   const list: Heading[] = [];
   const title = o.meta?.h1 || o.meta?.title_options?.[0] || o.meta?.keyword;
-  if (title) list.push({ level: "H1", text: title });
-  (o.sections || []).forEach((s: any) => { if (s.heading) list.push({ level: s.h_level || "H2", text: s.heading }); });
+  if (title) list.push({ level: "H1", text: decodeHtmlEntities(String(title)) });
+  (o.sections || []).forEach((s: any) => {
+    if (!s.heading) return;
+    // The H1 comes from meta — an H1-level section (occasional model artifact) would duplicate it.
+    if (String(s.h_level || "").toUpperCase() === "H1") return;
+    list.push({ level: s.h_level || "H2", text: decodeHtmlEntities(String(s.heading)) });
+  });
   return list;
 }
 

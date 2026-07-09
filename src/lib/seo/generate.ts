@@ -11,6 +11,22 @@ import {
   enforceLinkPolicy, redactBannedWords, extractJson, CompetitorInput,
 } from "@/lib/seo/prompts";
 import { findRagFacts } from "@/lib/seo/rag";
+import { decodeHtmlEntities } from "@/lib/seo/outlineFormat";
+
+// Apply fn to every string value IN PLACE (existing references like `meta` stay valid).
+function deepMapStringsInPlace(obj: any, fn: (s: string) => string): void {
+  if (Array.isArray(obj)) {
+    obj.forEach((v, i) => { if (typeof v === "string") obj[i] = fn(v); else deepMapStringsInPlace(v, fn); });
+    return;
+  }
+  if (obj && typeof obj === "object") {
+    for (const k of Object.keys(obj)) {
+      const v = obj[k];
+      if (typeof v === "string") obj[k] = fn(v);
+      else deepMapStringsInPlace(v, fn);
+    }
+  }
+}
 
 export type GenResult = { ok: true; data: any } | { ok: false; error: string };
 
@@ -466,6 +482,19 @@ export async function genOutline(b: any): Promise<GenResult> {
       official: c.site_type === "official_store",
       facts: String(c.extracted).trim().slice(0, 1600),
     }));
+  // SANITIZE: decode HTML entities the passes occasionally emit (&eacute; → é) and drop
+  // stray H1-level sections — the H1 lives in meta, an H1 section duplicates it in every view.
+  deepMapStringsInPlace(outline, decodeHtmlEntities);
+  if (Array.isArray((outline as any).sections)) {
+    const secsAll: any[] = (outline as any).sections;
+    for (let i = secsAll.length - 1; i >= 0; i--) {
+      if (String(secsAll[i]?.h_level || "").toUpperCase() === "H1") {
+        if (!meta.h1 && secsAll[i].heading) meta.h1 = secsAll[i].heading;
+        secsAll.splice(i, 1);
+      }
+    }
+  }
+
   // RAG facts join the facts bank FIRST (highest trust) so both the text step and the
   // auto fact-clean verify against the knowledge base, not only scraped competitors.
   if (rag?.bankEntry) factsBank.unshift(rag.bankEntry as any);
