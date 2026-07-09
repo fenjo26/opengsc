@@ -669,6 +669,10 @@ async function writeTextInChunks(outline: any, ctx: {
 
   // FAQ guard: if the last chunk dropped the FAQ (or some questions), render it with a
   // dedicated small call — a scoped prompt reliably produces all questions.
+  // Canonical FAQ shape (enforced deterministically below): «## FAQ» → immediately the first
+  // «### Question» → answer paragraph → next question… No intro prose inside the section.
+  const canonFaq = (md: string) => md
+    .replace(/^(##\s*FAQ[^\n]*)\n+[\s\S]*?(?=^###\s)/m, "$1\n\n"); // strip prose between H2 and 1st question
   if (faq.length) {
     const lastMd = parts[parts.length - 1] || "";
     const faqQ = (lastMd.match(/^##\s*FAQ[\s\S]*$/m)?.[0].match(/^###\s/gm) || []).length;
@@ -676,13 +680,15 @@ async function writeTextInChunks(outline: any, ctx: {
       // Strip a partial FAQ from the last chunk, then regenerate the full section.
       parts[parts.length - 1] = lastMd.replace(/^##\s*FAQ[\s\S]*$/m, "").trim();
       try {
-        const faqPrompt = `Ты пишешь FAQ-секцию статьи по теме "${ctx.keyword}" на языке ${ctx.language}. Верни ТОЛЬКО markdown секции: заголовок «## FAQ», затем КАЖДЫЙ из ${faq.length} вопросов как «### Вопрос», под ним ответ 40-60 слов по answer_guideline (конкретika, без воды). Без преамбулы и \`\`\`-обёрток.\nВОПРОСЫ: ${JSON.stringify(faq)}`;
+        const faqPrompt = `Ты пишешь FAQ-секцию статьи по теме "${ctx.keyword}" на языке ${ctx.language}. Верни ТОЛЬКО markdown секции строго такой формы: строка «## FAQ», затем СРАЗУ первый вопрос — НИКАКОГО вводного абзаца между ними. Каждый вопрос — «### Вопрос», под ним ответ 40-60 слов по answer_guideline (конкретика, без воды). Все ${faq.length} вопросов, СТРОГО В ЗАДАННОМ ПОРЯДКЕ. Без преамбулы и \`\`\`-обёрток.\nВОПРОСЫ: ${JSON.stringify(faq)}`;
         const faqRaw = await fetchLLM(faqPrompt, ctx.provider, ctx.apiKey, 2500, ctx.model, ctx.baseUrl);
         if (faqRaw) {
           const faqMd = faqRaw.trim().replace(/^```(?:markdown|md)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
-          if (/^##\s*FAQ/m.test(faqMd)) parts.push(faqMd);
+          if (/^##\s*FAQ/m.test(faqMd)) parts.push(canonFaq(faqMd));
         }
       } catch { /* best-effort — article ships without FAQ in the worst case */ }
+    } else {
+      parts[parts.length - 1] = canonFaq(lastMd); // chunk-written FAQ gets the same canonical shape
     }
   }
 
