@@ -13,6 +13,10 @@ import {
 import { findRagFacts } from "@/lib/seo/rag";
 import { decodeHtmlEntities } from "@/lib/seo/outlineFormat";
 
+// Language-agnostic "this heading is a FAQ section" test — templates carry "H2: FAQ" and the
+// localization pass renames it («FAQ : Tout savoir…», «Часто задаваемые вопросы»…).
+const FAQ_LIKE_RE = /(^|[\s:—-])faq\b|questions?\s+fr[ée]quentes|frequently\s+asked|часто\s+задаваем|поширені\s+питання|вопросы\s+и\s+ответы/i;
+
 // Apply fn to every string value IN PLACE (existing references like `meta` stay valid).
 function deepMapStringsInPlace(obj: any, fn: (s: string) => string): void {
   if (Array.isArray(obj)) {
@@ -508,11 +512,16 @@ export async function genOutline(b: any): Promise<GenResult> {
   }
   if (Array.isArray((outline as any).sections)) {
     const secsAll: any[] = (outline as any).sections;
+    const hasFaqArr = Array.isArray((outline as any).faq) && (outline as any).faq.length > 0;
     for (let i = secsAll.length - 1; i >= 0; i--) {
       if (String(secsAll[i]?.h_level || "").toUpperCase() === "H1") {
         if (!meta.h1 && secsAll[i].heading) meta.h1 = secsAll[i].heading;
         secsAll.splice(i, 1);
+        continue;
       }
+      // The FAQ lives ONLY in the faq[] array — a sections[] entry titled "FAQ…" (template
+      // artifact) duplicates it and gets written as a prose section with its own questions.
+      if (hasFaqArr && FAQ_LIKE_RE.test(String(secsAll[i]?.heading || ""))) secsAll.splice(i, 1);
     }
   }
 
@@ -558,7 +567,12 @@ async function writeTextInChunks(outline: any, ctx: {
   sources?: { title: string; snippet: string; url: string; domain: string }[];
   sourceMode?: "off" | "facts" | "cited"; includeToc?: boolean;
 }): Promise<string | null> {
-  const secs: any[] = Array.isArray(outline?.sections) ? outline.sections : [];
+  // FAQ-like sections[] entries are dropped up front (defensive — outlines saved before the
+  // sanitizer existed still carry the template's "H2: FAQ" duplicate): the FAQ is rendered
+  // exclusively from the faq[] array by the dedicated call below.
+  const hasFaqArr = Array.isArray(outline?.faq) && outline.faq.length > 0;
+  const secs: any[] = (Array.isArray(outline?.sections) ? outline.sections : [])
+    .filter((s: any) => !(hasFaqArr && FAQ_LIKE_RE.test(String(s?.heading || ""))));
   if (!secs.length) return null;
   const meta = outline.meta || {};
 
