@@ -757,7 +757,9 @@ async function enforceVolumeTarget(text: string, targetWc: number, ctx: {
   language: string; provider: string; apiKey: string; model?: string; baseUrl?: string;
 }): Promise<string> {
   if (!targetWc || targetWc < 500 || !text) return text;
-  const h2 = (s: string) => (s.match(/^##\s/gm) || []).length;
+  // Full-structure invariant: H2 AND H3 counts must survive any volume pass untouched.
+  // (H2-only checks let passes "improve" the FAQ — dropping ### questions, adding intros.)
+  const allHeadsOf = (s: string) => (s.match(/^#{2,3}\s/gm) || []).length;
   const words = text.split(/\s+/).filter(Boolean).length;
   if (words < targetWc * 0.85) {
     try {
@@ -768,8 +770,8 @@ async function enforceVolumeTarget(text: string, targetWc: number, ctx: {
       if (expanded) {
         expanded = expanded.trim().replace(/^```(?:markdown|md)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
         const newWords = expanded.split(/\s+/).filter(Boolean).length;
-        // Accept only a real improvement that didn't mangle the structure (same H2 count ±1).
-        if (newWords > words * 1.1 && Math.abs(h2(expanded) - h2(text)) <= 1) {
+        // Accept only a real improvement that kept EVERY heading (H2+H3, incl. FAQ questions).
+        if (newWords > words * 1.1 && allHeadsOf(expanded) === allHeadsOf(text)) {
           text = stripForeignScripts(expanded, ctx.language);
         }
       }
@@ -983,8 +985,12 @@ export async function genText(b: any): Promise<GenResult> {
       let cleaned = await fetchLLM(buildAutoFactCleanPrompt({ article: text, factsBank: bankText, language: String(b.language ?? "en") }), provider, apiKey, 12000, model, baseUrl);
       if (cleaned && cleaned.trim().length > text.length * 0.85) {
         cleaned = cleaned.trim().replace(/^```(?:markdown|md)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
-        text = stripForeignScripts(cleaned, String(b.language ?? "en"));
-        autoCleaned = true;
+        // Structure invariant: every heading (H2+H3, incl. FAQ questions) must survive.
+        const heads = (s: string) => (s.match(/^#{2,3}\s/gm) || []).length;
+        if (heads(cleaned) === heads(text)) {
+          text = stripForeignScripts(cleaned, String(b.language ?? "en"));
+          autoCleaned = true;
+        }
       }
     } catch { /* keep original text */ }
   }
