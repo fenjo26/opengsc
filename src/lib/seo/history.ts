@@ -22,9 +22,53 @@ const MAX = 40;
 // cap is reachable. On QuotaExceededError evict the OLDEST records and retry — the newest
 // record (first in the list) always survives, so redirects to it never break. Never throws:
 // a failed history write must not crash the generation onDone flow.
+// ─── Server sync: localStorage is the working cache, the server copy survives browser
+// resets. Every persist() schedules a debounced push; syncHistoryFromServer() (called once
+// on app mount, see SeoKeysSync) restores records missing locally. Pushes are blocked
+// until the initial pull finished, so a freshly-wiped browser can never clobber the backup.
+let historyPulled = false;
+let pushTimer: any = null;
+function schedulePush(): void {
+  if (typeof window === "undefined" || !historyPulled) return;
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => {
+    const list = loadHistory();
+    if (!list.length) return;
+    fetch("/api/seo/history", {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ records: list }),
+    }).catch(() => {});
+  }, 2_500);
+}
+
+export async function syncHistoryFromServer(): Promise<number> {
+  if (typeof window === "undefined") return 0;
+  try {
+    const res = await fetch("/api/seo/history", { cache: "no-store" });
+    if (!res.ok) { historyPulled = true; return 0; }
+    const d = await res.json();
+    const server: HistoryItem[] = Array.isArray(d?.records) ? d.records : [];
+    const local = loadHistory();
+    const have = new Set(local.map(h => h.id));
+    const missing = server.filter(r => r?.id && !have.has(r.id));
+    if (missing.length) {
+      const merged = [...local, ...missing].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      persist(merged);
+      window.dispatchEvent(new Event("seo-history-restored"));
+    }
+    historyPulled = true;
+    schedulePush(); // seed/refresh the backup with whatever is local-only
+    return missing.length;
+  } catch {
+    historyPulled = true;
+    return 0;
+  }
+}
+
 function persist(list: HistoryItem[]): void {
   if (typeof window === "undefined") return;
   let next = list.slice(0, MAX);
+  schedulePush();
   for (;;) {
     try { localStorage.setItem(KEY, JSON.stringify(next)); return; }
     catch {
@@ -93,11 +137,13 @@ export function updateHistory(id: string, data: any) {
 export function removeHistory(id: string) {
   if (typeof window === "undefined") return;
   persist(loadHistory().filter(h => h.id !== id));
+  fetch(`/api/seo/history?id=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {});
 }
 
 export function clearHistory() {
   if (typeof window === "undefined") return;
   localStorage.removeItem(KEY);
+  fetch("/api/seo/history?all=1", { method: "DELETE" }).catch(() => {});
 }
 
 // Hand a history item to its tool page for viewing (read on that page's mount).

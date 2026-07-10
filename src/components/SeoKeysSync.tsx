@@ -10,6 +10,7 @@
 
 import { useEffect } from "react";
 import { useSession } from "next-auth/react";
+import { syncHistoryFromServer } from "@/lib/seo/history";
 
 const EXACT_KEYS = [
   "aiProvider", "aiApiKey", "seoProvider", "seoModel", "seoSerpProvider", "seoSerpProvider_rank",
@@ -99,6 +100,7 @@ export default function SeoKeysSync() {
     (async () => {
       try { await pullAndRestore(); } catch { /* offline / not migrated — silent */ }
       try { await pushIfChanged(); } catch { /* silent */ }
+      try { await syncHistoryFromServer(); } catch { /* silent */ }
       timer = setInterval(() => { pushIfChanged().catch(() => {}); }, 20_000);
     })();
     const onHide = () => { if (document.visibilityState === "hidden") pushIfChanged().catch(() => {}); };

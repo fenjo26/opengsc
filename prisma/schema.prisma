@@ -453,6 +453,22 @@ model RagSlot {
 
 // Cached Ahrefs Domain Rating (free public API, 7-day TTL). Attribution required in UI:
 // "Domain Rating by Ahrefs" → https://ahrefs.com/ (see ahrefs.com/legal/domain-rating-license).
+// Server-side copy of the SEO Tools generation history (outlines/texts/analyses).
+// The browser's localStorage stays the working cache; this table survives browser resets.
+model SeoHistory {
+  id        String   @id            // client-generated history id
+  userId    String
+  type      String
+  keyword   String   @default("")
+  status    String   @default("completed")
+  data      String                  // JSON payload (outline object / article markdown)
+  meta      String?                 // JSON meta
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, createdAt])
+}
+
 model DrCache {
   domain    String   @id
   dr        Float
