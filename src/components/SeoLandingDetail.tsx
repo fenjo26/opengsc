@@ -15,8 +15,8 @@ export default function SeoLandingDetail({ item }: { item: HistoryItem }) {
   const { t } = useLanguage();
   const router = useRouter();
   const [copied, setCopied] = useState(false);
-  const data = (item.data || {}) as { outline?: any; wireframe?: any; text?: string };
-  const { outline, wireframe, text } = data;
+  const data = (item.data || {}) as { outline?: any; wireframe?: any; text?: string; wireframeError?: string };
+  const { outline, wireframe, text, wireframeError } = data;
 
   function copyText() {
     if (!text) return;
@@ -36,6 +36,11 @@ export default function SeoLandingDetail({ item }: { item: HistoryItem }) {
       {outline && <OutlineView outline={outline} />}
       {item.meta?.serpIntent && <SerpIntentPanel analysis={item.meta.serpIntent} />}
       {wireframe && <WireframeView wireframe={wireframe} />}
+      {!wireframe && wireframeError && (
+        <div className="panel" style={{ borderColor: "rgba(255,159,10,0.35)", background: "rgba(255,159,10,0.06)", fontSize: "13px", color: "var(--color-text-secondary)" }}>
+          ⚠️ Wireframe: {wireframeError === "parse_failed" ? t("seoErrParseJson") : wireframeError}
+        </div>
+      )}
 
       {text && (
         <div className="panel">

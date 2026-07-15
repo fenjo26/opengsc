@@ -303,32 +303,73 @@ const BLOCK_COLOR: Record<string, string> = {
   REVIEWS: "#34c759", TRUST_BADGES: "#34c759", MAP: "#2997ff", FAQ: "#8e8e93", TEXT_BLOCK: "#8e8e93", CTA_BANNER: "#ff453a",
 };
 
+// Visual landing wireframe: renders each block as a design-free page mockup — placeholder
+// bars, hatched image areas, CTA button stubs and requirement cards (orange, checkable) —
+// so the ТЗ reads like a page, not like a JSON list.
+const bar = (w: string, dark = false, h = 10): React.CSSProperties => ({
+  width: w, height: h, borderRadius: h / 2,
+  background: dark ? "var(--color-text-tertiary)" : "var(--color-border)",
+  opacity: dark ? 0.9 : 0.9,
+});
+function ReqCard({ text }: { text: string }) {
+  return (
+    <div style={{ padding: "10px 12px", borderRadius: "8px", background: "var(--color-bg)", border: "1px solid var(--color-border)", display: "flex", flexDirection: "column", gap: "7px" }}>
+      <div style={{ fontSize: "10.5px", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--color-accent-orange)", lineHeight: 1.5 }}>{text}</div>
+      <div style={bar("72%")} />
+      <div style={bar("46%")} />
+    </div>
+  );
+}
 export function WireframeView({ wireframe }: { wireframe: any }) {
   const { t } = useLanguage();
   const blocks = Array.isArray(wireframe?.blocks) ? wireframe.blocks : [];
   if (!blocks.length) return null;
+  const BUTTON_BLOCKS = new Set(["HERO_FORM", "CTA_BANNER"]);
+  const IMAGE_BLOCKS = new Set(["USP_BAR", "GALLERY", "MAP"]);
+  const hatch: React.CSSProperties = {
+    height: "110px", borderRadius: "8px", border: "1px solid var(--color-border)",
+    background: "repeating-linear-gradient(45deg, var(--color-bg), var(--color-bg) 8px, var(--color-border) 8px, var(--color-border) 9px)",
+    opacity: 0.7,
+  };
   return (
     <div className="panel">
       <h3 style={{ fontSize: "16px", fontWeight: 700, margin: "0 0 4px", color: "var(--color-text-primary)", display: "flex", alignItems: "center", gap: "8px" }}>
         <LayoutTemplate size={18} color="var(--color-accent-purple)" /> {t("seoWireframeTitle")}
       </h3>
-      <p style={{ fontSize: "12px", color: "var(--color-text-tertiary)", margin: "0 0 8px" }}>{t("seoWireframeSub")}</p>
-      <div>
+      <p style={{ fontSize: "12px", color: "var(--color-text-tertiary)", margin: "0 0 12px" }}>{t("seoWireframeSub")}</p>
+
+      {/* The page: one bordered canvas, blocks separated by dashed cut lines */}
+      <div style={{ border: "1px solid var(--color-border)", borderRadius: "12px", overflow: "hidden", background: "var(--color-card)" }}>
         {blocks.map((b: any, i: number) => {
-          const color = BLOCK_COLOR[b.type] || "#8e8e93";
+          const reqs: string[] = Array.isArray(b.requirements) ? b.requirements : [];
           return (
-            <div key={i} style={{ padding: "14px 4px", borderTop: i ? "1px dashed var(--color-border)" : "none" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "5px" }}>
-                <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.03em", padding: "2px 8px", borderRadius: "5px", color, background: `${color}1a` }}>{b.type}</span>
-                {b.source_section && <span style={{ fontSize: "11px", color: "var(--color-text-tertiary)" }}>← {b.source_section}</span>}
+            <div key={i} style={{ padding: "18px 22px 22px", borderTop: i ? "1px dashed var(--color-border)" : "none" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
+                <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", color: "var(--color-text-tertiary)", textTransform: "uppercase" }}>{b.type}</span>
+                {b.source_section && <span style={{ fontSize: "10px", color: "var(--color-text-tertiary)", opacity: 0.7 }}>← {b.source_section}</span>}
               </div>
-              <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: b.requirements?.length ? "8px" : 0 }}>{b.heading}</div>
-              {Array.isArray(b.requirements) && b.requirements.length > 0 && (
-                <ul style={{ margin: 0, paddingLeft: "18px", display: "flex", flexDirection: "column", gap: "4px" }}>
-                  {b.requirements.map((r: string, j: number) => (
-                    <li key={j} style={{ fontSize: "12px", color: "var(--color-accent-orange)", lineHeight: 1.5, textTransform: "uppercase", letterSpacing: "0.01em" }}>{r}</li>
-                  ))}
-                </ul>
+              {b.heading && <div style={{ fontSize: "17px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "12px", lineHeight: 1.3 }}>{b.heading}</div>}
+
+              {/* content placeholder bars */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <div style={bar("55%", true, 14)} />
+                <div style={bar("82%")} />
+                <div style={bar("64%")} />
+              </div>
+
+              {/* CTA button stub */}
+              {BUTTON_BLOCKS.has(b.type) && (
+                <div style={{ marginTop: "14px", width: "120px", height: "34px", borderRadius: "8px", background: "var(--color-accent-orange)", opacity: 0.85 }} />
+              )}
+
+              {/* image / media area */}
+              {IMAGE_BLOCKS.has(b.type) && <div style={{ ...hatch, marginTop: "14px" }} />}
+
+              {/* requirements as checkable cards */}
+              {reqs.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "14px" }}>
+                  {reqs.map((r: string, j: number) => <ReqCard key={j} text={r} />)}
+                </div>
               )}
             </div>
           );
