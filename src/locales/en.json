@@ -1767,5 +1767,7 @@
   "aeoNoQuestionsDesc": "Add questions above, phrased like a real user asking an AI assistant about your niche.",
   "aeoDeleteConfirm": "Stop tracking this question?",
   "aeoNoHistory": "Not enough history yet",
-  "seoBadgeCluster": "Clusters"
+  "seoBadgeCluster": "Clusters",
+  "seoClusterThMax": "maximum",
+  "seoClusterThHint": "Threshold = how many identical URLs two keywords must share in the TOP-10 to land on one page. 2 — broad clusters, fewer pages (risk of merging different intents; for very niche topics with sparse SERPs). 3 — the standard: right for most niches, start here. 4 — strict: for competitive commercial niches with uniform SERPs (brand/gambling/finance), when accidentally merging pages is costly. 5 — near-duplicates only: keyword variations of the same query. Rule of thumb: too FEW clusters → raise the threshold; too MANY single-keyword clusters → lower it."
 }

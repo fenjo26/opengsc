@@ -97,9 +97,12 @@ export default function ClusterPage() {
                 <option value={2}>2 — {t("seoClusterThLoose")}</option>
                 <option value={3}>3 — {t("seoClusterThNormal")}</option>
                 <option value={4}>4 — {t("seoClusterThStrict")}</option>
-                <option value={5}>5</option>
+                <option value={5}>5 — {t("seoClusterThMax")}</option>
               </select>
             </div>
+          </div>
+          <div style={{ marginTop: "10px", padding: "10px 13px", borderRadius: "9px", background: "var(--color-bg)", border: "1px solid var(--color-border)", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+            💡 {t("seoClusterThHint")}
           </div>
           <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "var(--color-text-primary)", cursor: "pointer", marginTop: "12px" }}>
             <input type="checkbox" checked={useVolumes} onChange={e => setUseVolumes(e.target.checked)} disabled={!dfsKey} />
