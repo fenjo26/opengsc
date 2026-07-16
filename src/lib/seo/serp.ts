@@ -107,7 +107,7 @@ async function serperSearch(
 // ─── DataForSEO ──────────────────────────────────────────────────────────────
 // Country (gl) → DataForSEO location_code (country-level). Free-text location_name is
 // error-prone, so we use codes. Fallback = United States (2840).
-const DFS_LOC: Record<string, number> = {
+export const DFS_LOC: Record<string, number> = {
   us: 2840, gb: 2826, ca: 2124, au: 2036, nz: 2554, ie: 2372,
   de: 2276, fr: 2250, nl: 2528, be: 2056, ch: 2756, at: 2040,
   se: 2752, no: 2578, dk: 2208, fi: 2246, it: 2380, es: 2724, pt: 2620,

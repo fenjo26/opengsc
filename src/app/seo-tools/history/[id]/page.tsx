@@ -11,6 +11,7 @@ import { OutlineStructure, OutlineEntities } from "@/components/SeoRenderers";
 import SeoContentAnalysis from "@/components/SeoContentAnalysis";
 import SeoTextDetail from "@/components/SeoTextDetail";
 import SeoLandingDetail from "@/components/SeoLandingDetail";
+import SeoClusterDetail from "@/components/SeoClusterDetail";
 import { getHistoryItem, updateHistory, addHistory, HistoryItem } from "@/lib/seo/history";
 import { outlineToMarkdown, outlineToHtml, htmlDocument, outlineHeadings, outlineSummary } from "@/lib/seo/outlineFormat";
 import { getSeoGenCreds, getSerpCreds, getFirecrawlKey, getFactSourceCount, getHardRedact, loadPolicies, getActivePolicyName } from "@/lib/seo/keys";
@@ -95,6 +96,7 @@ export default function TaskDetailPage() {
 
   if (item.type === "text") return <SeoTextDetail item={item} />;
   if (item.type === "landing") return <SeoLandingDetail item={item} />;
+  if (item.type === "cluster") return <SeoClusterDetail item={item} />;
 
   return (
     <div ref={topRef} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>

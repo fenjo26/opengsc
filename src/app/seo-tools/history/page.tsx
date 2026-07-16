@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Eye, Trash2, FileText, ScrollText, BarChart3, LayoutTemplate, Loader2, AlertTriangle, X } from "lucide-react";
+import { Search, Eye, Trash2, FileText, ScrollText, BarChart3, LayoutTemplate, Loader2, AlertTriangle, X, Boxes } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { loadHistory, removeHistory, clearHistory, HistoryItem, HistoryType } from "@/lib/seo/history";
 import { listJobs, importJob, deleteJob, clearFailedJobs, SeoJobRec } from "@/lib/seo/jobs";
@@ -12,9 +12,10 @@ const TYPE_META: Record<HistoryType, { labelKey: string; color: string; icon: an
   text: { labelKey: "seoBadgeText", color: "#bf5af2", icon: ScrollText },
   analysis: { labelKey: "seoBadgeAnalysis", color: "#ff9f0a", icon: BarChart3 },
   landing: { labelKey: "seoBadgeLanding", color: "#bf5af2", icon: LayoutTemplate },
+  cluster: { labelKey: "seoBadgeCluster", color: "#34c759", icon: Boxes },
 };
 
-type Filter = "all" | "done" | "progress" | "outline" | "text" | "analysis" | "landing";
+type Filter = "all" | "done" | "progress" | "outline" | "text" | "analysis" | "landing" | "cluster";
 
 export default function HistoryPage() {
   const { t } = useLanguage();

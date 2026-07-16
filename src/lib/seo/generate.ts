@@ -2,7 +2,7 @@
 // the synchronous routes and the background-job runner. No HTTP / auth here — pure work.
 
 import { fetchLLM, fetchLLMDetailed } from "@/lib/llm";
-import { runSerp } from "@/lib/seo/serp";
+import { runSerp, heuristicIntent, DFS_LOC } from "@/lib/seo/serp";
 import { scrapeMany } from "@/lib/seo/scrape";
 import {
   buildOutlinePrompt, buildTextPrompt, buildAnalysisPrompt, buildFactScrubPrompt, buildSourceExtractPrompt,
@@ -1128,10 +1128,101 @@ export async function genAnalysis(b: any): Promise<GenResult> {
   return { ok: true, data: report };
 }
 
+// ─── SERP-based keyword clustering ────────────────────────────────────────────────
+// Groups keywords by TOP-10 URL overlap — Google's own view of "same topic", more reliable
+// than embeddings for SEO page planning. Hard clustering against the cluster seed (the
+// highest-volume unassigned keyword): kw joins if it shares ≥ threshold URLs with the seed.
+const normUrl = (u: string) => {
+  try { const x = new URL(u); return (x.hostname.replace(/^www\./, "") + x.pathname).replace(/\/+$/, "").toLowerCase(); }
+  catch { return u.toLowerCase(); }
+};
+
+async function fetchDfsVolumes(dfsKey: string, keywords: string[], gl: string, hl: string): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  const cred = dfsKey.trim();
+  const auth = cred.includes(":") ? Buffer.from(cred).toString("base64") : cred;
+  for (let i = 0; i < keywords.length; i += 700) {
+    try {
+      const res = await fetch("https://api.dataforseo.com/v3/keywords_data/google_ads/search_volume/live", {
+        method: "POST",
+        headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/json" },
+        body: JSON.stringify([{ keywords: keywords.slice(i, i + 700), location_code: DFS_LOC[gl.toLowerCase()] ?? 2840, language_code: hl || "en" }]),
+        signal: AbortSignal.timeout(60_000),
+      });
+      if (!res.ok) continue;
+      const d = await res.json();
+      for (const r of (d?.tasks?.[0]?.result ?? [])) {
+        if (r?.keyword != null) out[String(r.keyword).toLowerCase()] = Number(r.search_volume) || 0;
+      }
+    } catch { /* volumes are optional */ }
+  }
+  return out;
+}
+
+export async function genCluster(b: any): Promise<GenResult> {
+  const keywords: string[] = [...new Set((Array.isArray(b.keywords) ? b.keywords : [])
+    .map((k: any) => String(k).trim().toLowerCase()).filter(Boolean))].slice(0, 1000) as string[];
+  if (keywords.length < 2) return { ok: false, error: "no_keywords" };
+  const serpKey = String(b.serpKey ?? "");
+  if (!serpKey) return { ok: false, error: "no_serp_key" };
+  const provider = String(b.serpProvider ?? "serper");
+  const gl = String(b.gl ?? "us"), hl = String(b.hl ?? "en");
+  const threshold = Math.max(2, Math.min(6, Number(b.threshold ?? 3)));
+
+  // 1) volumes (optional, DataForSEO)
+  const volumes = b.dfsKey ? await fetchDfsVolumes(String(b.dfsKey), keywords, gl, hl) : {};
+
+  // 2) TOP-10 per keyword (bounded concurrency)
+  const serps: Record<string, { urls: string[]; titles: string[] }> = {};
+  const failed: string[] = [];
+  await runPool(keywords, 4, async (kw) => {
+    const r = await runSerp(provider, serpKey, kw, { gl, hl, num: 10, engine: "google" });
+    if (r.error || !r.results?.length) { failed.push(kw); return; }
+    serps[kw] = { urls: r.results.slice(0, 10).map(x => normUrl(x.url)), titles: r.results.slice(0, 5).map(x => x.title) };
+  });
+  const usable = keywords.filter(k => serps[k]);
+  if (usable.length < 2) return { ok: false, error: "serp_failed" };
+
+  // 3) hard clustering against seeds, richest keyword first
+  const vol = (k: string) => volumes[k] ?? 0;
+  const sorted = [...usable].sort((a, z) => vol(z) - vol(a));
+  const assigned = new Set<string>();
+  const clusters: any[] = [];
+  for (const seed of sorted) {
+    if (assigned.has(seed)) continue;
+    assigned.add(seed);
+    const seedUrls = new Set(serps[seed].urls);
+    const members = [{ keyword: seed, volume: vol(seed), overlap: 10 }];
+    for (const kw of sorted) {
+      if (assigned.has(kw)) continue;
+      const overlap = serps[kw].urls.filter(u => seedUrls.has(u)).length;
+      if (overlap >= threshold) { assigned.add(kw); members.push({ keyword: kw, volume: vol(kw), overlap }); }
+    }
+    clusters.push({
+      name: seed,
+      intent: heuristicIntent(serps[seed].urls[0], serps[seed].titles[0]),
+      volume: members.reduce((a, m) => a + m.volume, 0),
+      keywords: members,
+      top_domains: [...new Set(serps[seed].urls.map(u => u.split("/")[0]))].slice(0, 6),
+    });
+  }
+  clusters.sort((a, z) => z.volume - a.volume || z.keywords.length - a.keywords.length);
+
+  return {
+    ok: true,
+    data: {
+      params: { gl, hl, threshold, total_keywords: keywords.length, clustered: usable.length, failed },
+      clusters,
+      generated_at: new Date().toISOString(),
+    },
+  };
+}
+
 export function genByType(type: string, payload: any): Promise<GenResult> {
   if (type === "outline") return genOutline(payload);
   if (type === "text") return genText(payload);
   if (type === "analysis") return genAnalysis(payload);
   if (type === "landing") return genLanding(payload);
+  if (type === "cluster") return genCluster(payload);
   return Promise.resolve({ ok: false, error: "unknown_job_type" });
 }

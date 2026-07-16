@@ -1,10 +1,12 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { FileText, Search, ScrollText, Sparkles, History, PenLine, Quote, Globe, LayoutTemplate, SlidersHorizontal, Link2 } from "lucide-react";
+import { FileText, Search, ScrollText, Sparkles, History, PenLine, Quote, Globe, LayoutTemplate, SlidersHorizontal, Link2, LayoutGrid, Boxes } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 const TABS = [
+  { href: "/seo-tools", key: "seoTabHome" as const, icon: LayoutGrid },
+  { href: "/seo-tools/cluster", key: "seoTabCluster" as const, icon: Boxes },
   { href: "/seo-tools/geo", key: "geoTabGeo" as const, icon: Globe },
   { href: "/seo-tools/outline", key: "seoTabOutline" as const, icon: FileText },
   { href: "/seo-tools/landing", key: "seoTabLanding" as const, icon: LayoutTemplate },
@@ -57,11 +59,11 @@ export default function SeoToolsLayout({ children }: { children: React.ReactNode
 
       {/* Sub-tabs */}
       <div style={{
-        display: "flex", gap: "4px", marginTop: "20px", marginBottom: "24px",
+        display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "20px", marginBottom: "24px",
         borderBottom: "1px solid var(--color-border)", paddingBottom: "0",
       }}>
         {TABS.map(({ href, key, icon: Icon }) => {
-          const active = pathname === href || (pathname === "/seo-tools" && href.endsWith("/outline"));
+          const active = pathname === href;
           return (
             <button
               key={href}
