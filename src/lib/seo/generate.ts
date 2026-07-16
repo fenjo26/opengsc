@@ -2,7 +2,7 @@
 // the synchronous routes and the background-job runner. No HTTP / auth here — pure work.
 
 import { fetchLLM, fetchLLMDetailed } from "@/lib/llm";
-import { runSerp, heuristicIntent, DFS_LOC } from "@/lib/seo/serp";
+import { runSerp, heuristicIntent, heuristicSiteType, DFS_LOC } from "@/lib/seo/serp";
 import { scrapeMany } from "@/lib/seo/scrape";
 import {
   buildOutlinePrompt, buildTextPrompt, buildAnalysisPrompt, buildFactScrubPrompt, buildSourceExtractPrompt,
@@ -1128,6 +1128,39 @@ export async function genAnalysis(b: any): Promise<GenResult> {
   return { ok: true, data: report };
 }
 
+// ─── Fully-automated outline: SERP → scrape → outline in ONE server-side job ───────
+// The interactive Outline page does SERP+scrape client-side (user picks competitors);
+// batch generation from clusters can't stop for that — this wrapper does the whole
+// pipeline unattended: top-10, scrape the best pages, then the regular genOutline.
+export async function genOutlineAuto(b: any): Promise<GenResult> {
+  const keyword = String(b.keyword ?? "").trim();
+  if (!keyword) return { ok: false, error: "no_keyword" };
+  if (!b.serpKey) return { ok: false, error: "no_serp_key" };
+  const serp = await runSerp(String(b.serpProvider || "serper"), String(b.serpKey), keyword, {
+    gl: b.gl ?? b.country, hl: b.hl ?? b.language, num: 10, engine: "google",
+  });
+  if (serp.error || !serp.results?.length) return { ok: false, error: serp.error || "serp_failed" };
+  const results = serp.results.slice(0, 10);
+  let pages: any[] = [];
+  try { pages = await scrapeMany(results.map(r => r.url), b.firecrawlKey ? String(b.firecrawlKey) : undefined, 4); } catch { /* outline can run on titles alone */ }
+  const competitors: CompetitorInput[] = results.map(r => {
+    const p = pages.find((x: any) => x.url === r.url);
+    return {
+      position: r.position, url: r.url,
+      site_type: heuristicSiteType(r.domain, r.url, r.title) || undefined,
+      intent: heuristicIntent(r.url, r.title),
+      title: p?.title || r.title, headings: p?.headings || [],
+      word_count: p?.wordCount || 0, has_price_table: !!p?.hasPriceTable, has_faq: !!p?.hasFaq,
+      text_sample: p?.textSample || undefined,
+    };
+  });
+  return genOutline({
+    ...b, competitors,
+    paa: serp.peopleAlsoAsk, related: serp.relatedSearches,
+    country: b.country ?? b.gl, language: b.language ?? b.hl,
+  });
+}
+
 // ─── SERP-based keyword clustering ────────────────────────────────────────────────
 // Groups keywords by TOP-10 URL overlap — Google's own view of "same topic", more reliable
 // than embeddings for SEO page planning. Hard clustering against the cluster seed (the
@@ -1224,5 +1257,6 @@ export function genByType(type: string, payload: any): Promise<GenResult> {
   if (type === "analysis") return genAnalysis(payload);
   if (type === "landing") return genLanding(payload);
   if (type === "cluster") return genCluster(payload);
+  if (type === "outline_auto") return genOutlineAuto(payload);
   return Promise.resolve({ ok: false, error: "unknown_job_type" });
 }

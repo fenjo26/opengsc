@@ -19,7 +19,7 @@ export interface SeoJobRec {
   updatedAt: string;
 }
 
-export async function startJob(type: HistoryType, payload: any, meta?: any): Promise<{ jobId?: string; error?: string }> {
+export async function startJob(type: HistoryType | "outline_auto", payload: any, meta?: any): Promise<{ jobId?: string; error?: string }> {
   try {
     const keyword = payload?.keyword || payload?.outline?.meta?.keyword || "";
     const res = await fetch("/api/seo/jobs", {
@@ -81,8 +81,10 @@ export async function importJob(job: SeoJobRec): Promise<HistoryItem | null> {
     if (result != null) {
       const data = job.type === "text" ? (result.text ?? result) : result;
       const createdAt = Date.parse(job.createdAt || "") || undefined;
+      // outline_auto (batch SERP→scrape→outline) lands in history as a regular outline.
+      const htype = (String(job.type) === "outline_auto" ? "outline" : job.type) as HistoryItem["type"];
       rec = addHistory({
-        type: job.type, keyword: job.keyword || "—", data, createdAt,
+        type: htype, keyword: job.keyword || "—", data, createdAt,
         meta: { ...(safeParse(job.meta) || {}), jobId: job.id },
       });
     }
