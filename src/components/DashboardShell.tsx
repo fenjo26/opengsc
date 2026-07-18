@@ -3,7 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useState, Suspense } from "react";
-import { Settings, LogOut, Sparkles, Globe, Newspaper } from "lucide-react";
+import { Settings, LogOut, Sparkles, Globe, Newspaper, LayoutDashboard, TrendingUp, Anchor, BarChart2 } from "lucide-react";
 import { usePrivacy } from "@/lib/PrivacyContext";
 import { useTheme } from "@/lib/ThemeContext";
 import { useLayout } from "@/lib/LayoutContext";
@@ -448,10 +448,10 @@ function NavLinks() {
   const activeTab = searchParams.get("tab") || "sites";
 
   const items = [
-    { href: "/?tab=sites", label: t("menuDashboard"), key: "sites", isRootTab: true },
-    { href: "/?tab=striking", label: t("menuStriking"), key: "striking", isRootTab: true },
-    { href: "/?tab=cannibalization", label: t("menuCannibalization"), key: "cannibalization", isRootTab: true },
-    { href: "/?tab=decay", label: t("menuDecay"), key: "decay", isRootTab: true },
+    { href: "/?tab=sites", label: t("menuDashboard"), key: "sites", isRootTab: true, icon: <LayoutDashboard size={14} /> },
+    { href: "/?tab=striking", label: t("menuStriking"), key: "striking", isRootTab: true, icon: <TrendingUp size={14} /> },
+    { href: "/?tab=cannibalization", label: t("menuCannibalization"), key: "cannibalization", isRootTab: true, icon: <Anchor size={14} /> },
+    { href: "/?tab=decay", label: t("menuDecay"), key: "decay", isRootTab: true, icon: <BarChart2 size={14} /> },
     { href: "/seo-tools", label: t("seoNavTitle"), key: "seo-tools", icon: <Sparkles size={14} /> },
     { href: "/indexer", label: t("indexerNavTitle"), key: "indexer", icon: <Globe size={14} /> },
     { href: "/digest", label: t("digestNavTitle"), key: "digest", icon: <Newspaper size={14} /> },
