@@ -286,8 +286,8 @@ function GoogleIcon({ size = 16 }: { size?: number }) {
 
 function BingIcon({ size = 16 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
-      <path d="M10.1 2.3v27.4l9.2-5.4 6.2 9.2 4.4-2-13.6-19.8 4.3-2.6-10.5-6.8z" fill="#0078d4" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d="M5 2v20l7.5-4.5 5 7.5 3.5-1.5-11-16L12 12V4.5L5 2z" fill="#00809D" />
     </svg>
   );
 }
@@ -295,8 +295,7 @@ function BingIcon({ size = 16 }: { size?: number }) {
 function YandexIcon({ size = 16 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="12" fill="#FC3F1D" />
-      <path d="M14.3 16.5V7.5h-2.1c-1.9 0-3.3.9-3.3 2.7 0 1.5 1 2.4 2.5 2.6L9.3 16.5h2.2l1.9-3.7h.9v3.7h2zM12.2 11.2c-.9 0-1.5-.4-1.5-1.2s.6-1.1 1.5-1.1h.6v2.3h-.6z" fill="#fff" />
+      <path d="M19 2H11C7.13 2 4 5.13 4 9c0 2.82 1.67 5.25 4.09 6.34L4.75 22h4.55l3.2-6h1.5v6H19V2zm-5 8h-3c-1.1 0-2-.9-2-2s.9-2 2-2h3v4z" fill="#FC3F1D" />
     </svg>
   );
 }
