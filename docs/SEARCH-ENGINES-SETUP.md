@@ -48,20 +48,50 @@ dashboard uses.
 
 1. Make sure your site is added and verified in
    [Yandex.Webmaster](https://webmaster.yandex.com) under the same Yandex account.
-2. Create an OAuth app at [oauth.yandex.ru](https://oauth.yandex.ru) → **Create app**:
-   - Platform: **Web services**; Redirect URI: `https://oauth.yandex.ru/verification_code`.
-   - Permissions: check everything under **Яндекс.Вебмастер** (host info, verification).
-3. After creating, copy the app's **ClientID** and open this URL in the browser (replace
-   `<ClientID>`):
+
+2. Go to [oauth.yandex.ru](https://oauth.yandex.ru) and click **Создать приложение**
+   (Create app).
+
+3. **Шаг 1 — Общие сведения (General info):**
+   - **Название сервиса** — enter any name, e.g. `OpenGSC`.
+   - **Иконка** — optional, skip it.
+
+4. **Шаг 2 — Платформы приложений (Platforms):**
+   - Check **Веб-сервисы** (Web services).
+   - **Redirect URI** — paste exactly:
+     ```
+     https://oauth.yandex.ru/verification_code
+     ```
+     Click the **+** button to add it.
+   - **Suggest Hostname** — leave empty (this field is optional, it's for login widgets on
+     your site — not needed for API access).
+   - Leave **iOS-приложение** and **Android-приложение** unchecked.
+   - Click **Продолжить** (Continue).
+
+5. **Шаг 3 — Доступы (Permissions):**
+   - Find the **Яндекс.Вебмастер** section in the list.
+   - Check **all** boxes under it (host info, verification, etc.).
+   - Click **Продолжить** (Continue).
+
+6. **Шаг 4 — Подтверждение (Confirm):**
+   - Review and click **Создать приложение** (Create app).
+   - You'll see the app page — copy the **ClientID** (looks like a long hex string).
+
+7. **Get the token** — open this URL in your browser, replacing `<ClientID>` with the value
+   from step 6:
 
    ```
    https://oauth.yandex.ru/authorize?response_type=token&client_id=<ClientID>
    ```
 
-4. Approve access — the page shows your token (`y0_AgAA…`). Paste it into
-   **OpenGSC → Settings → Indexing API → Яндекс.Вебмастер API**.
+8. Yandex will ask you to approve access. Click **Разрешить** (Allow).
+   The page will show your OAuth token (starts with `y0_AgAA…`).
 
-> The token is long-lived (typically ~1 year). When it expires, repeat step 3.
+9. Copy the token and paste it into **OpenGSC → Settings → Яндекс.Вебмастер → Global
+   Default OAuth Token** (or into a specific connected account).
+
+> The token is long-lived (typically ~1 year). When it expires, repeat steps 7–9 with the
+> same ClientID — no need to create a new app.
 
 **What OpenGSC pulls:** host summary (SQI/ИКС, pages in search, excluded pages), clicks &
 impressions history (8 weeks), top-25 popular queries with average show position, site
