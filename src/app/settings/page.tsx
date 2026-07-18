@@ -69,22 +69,186 @@ function LocalKeyField({ storageKey, placeholder }: { storageKey: string; placeh
   );
 }
 
-// Bing API key (stored browser-side, synced via SeoKeysSync)
-function BingKeyField() {
-  const [val, setVal] = useState("");
-  const [saved, setSaved] = useState(false);
-  useEffect(() => { setVal(localStorage.getItem("seoKey_bing") || ""); }, []);
+interface SearchEngineAccount {
+  id: string;
+  name: string;
+  key: string;
+}
+
+function BingAccountsManager() {
+  const [accounts, setAccounts] = useState<SearchEngineAccount[]>([]);
+  const [newName, setNewName] = useState("");
+  const [newKey, setNewKey] = useState("");
+  const [globalKey, setGlobalKey] = useState("");
+  const [globalSaved, setGlobalSaved] = useState(false);
+
+  useEffect(() => {
+    try {
+      setAccounts(JSON.parse(localStorage.getItem("seoKey_bing_accounts_list") || "[]"));
+    } catch (e) {
+      setAccounts([]);
+    }
+    setGlobalKey(localStorage.getItem("seoKey_bing") || "");
+  }, []);
+
+  const addAccount = () => {
+    if (!newName.trim() || !newKey.trim()) return;
+    const newList = [...accounts, { id: Math.random().toString(36).slice(2, 9), name: newName.trim(), key: newKey.trim() }];
+    setAccounts(newList);
+    localStorage.setItem("seoKey_bing_accounts_list", JSON.stringify(newList));
+    setNewName("");
+    setNewKey("");
+  };
+
+  const removeAccount = (id: string) => {
+    const newList = accounts.filter(a => a.id !== id);
+    setAccounts(newList);
+    localStorage.setItem("seoKey_bing_accounts_list", JSON.stringify(newList));
+  };
+
+  const saveGlobal = () => {
+    if (globalKey.trim()) localStorage.setItem("seoKey_bing", globalKey.trim());
+    else localStorage.removeItem("seoKey_bing");
+    setGlobalSaved(true);
+    setTimeout(() => setGlobalSaved(false), 2000);
+  };
+
   return (
-    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-      <input
-        type="password" value={val} onChange={e => { setVal(e.target.value); setSaved(false); }}
-        placeholder="Bing API key"
-        style={{ width: "260px", padding: "8px 11px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "13px", outline: "none" }}
-      />
-      <button onClick={() => { val.trim() ? localStorage.setItem("seoKey_bing", val.trim()) : localStorage.removeItem("seoKey_bing"); setSaved(true); }}
-        style={{ padding: "8px 14px", borderRadius: "8px", border: "1px solid var(--color-border)", background: saved ? "rgba(52,199,89,0.12)" : "var(--color-bg)", color: saved ? "var(--color-accent-green)" : "var(--color-text-primary)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
-        {saved ? "✓" : "Save"}
-      </button>
+    <div style={{ display: "flex", flexDirection: "column", gap: "14px", width: "100%", marginTop: "14px" }}>
+      <div style={{ borderBottom: "1px solid var(--color-border)", paddingBottom: "14px" }}>
+        <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "6px", color: "var(--color-text-primary)" }}>Global Default API Key</div>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <input
+            type="password" value={globalKey} onChange={e => { setGlobalKey(e.target.value); setGlobalSaved(false); }}
+            placeholder="Global Bing API key fallback..."
+            style={{ width: "260px", padding: "8px 11px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "13px", outline: "none" }}
+          />
+          <button onClick={saveGlobal}
+            style={{ padding: "8px 14px", borderRadius: "8px", border: "1px solid var(--color-border)", background: globalSaved ? "rgba(52,199,89,0.12)" : "var(--color-bg)", color: globalSaved ? "var(--color-accent-green)" : "var(--color-text-primary)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
+            {globalSaved ? "✓" : "Save"}
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "8px", color: "var(--color-text-primary)" }}>Connected Bing Accounts ({accounts.length})</div>
+        {accounts.length === 0 ? (
+          <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "10px" }}>No accounts connected yet. Add one below to segregate sites.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "10px" }}>
+            {accounts.map(acc => (
+              <div key={acc.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: "8px", gap: "10px" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{acc.name}</div>
+                  <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", fontFamily: "monospace" }}>Key: {acc.key.slice(0, 8)}...</div>
+                </div>
+                <button onClick={() => removeAccount(acc.id)} style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid rgba(239,68,68,0.3)", background: "transparent", color: "#EF4444", fontSize: "11px", cursor: "pointer" }}>Delete</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", background: "rgba(255,255,255,0.02)", padding: "10px", borderRadius: "8px", border: "1px dashed var(--color-border)" }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: "11px", color: "var(--color-text-secondary)", display: "block", marginBottom: "4px" }}>Account Name</label>
+            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Gambling Sites" style={{ width: "100%", padding: "7px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "12px", outline: "none" }} />
+          </div>
+          <div style={{ flex: 2 }}>
+            <label style={{ fontSize: "11px", color: "var(--color-text-secondary)", display: "block", marginBottom: "4px" }}>API Key</label>
+            <input type="password" value={newKey} onChange={e => setNewKey(e.target.value)} placeholder="Bing API key..." style={{ width: "100%", padding: "7px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "12px", outline: "none" }} />
+          </div>
+          <button onClick={addAccount} disabled={!newName.trim() || !newKey.trim()} style={{ padding: "8px 14px", borderRadius: "6px", border: "none", background: "var(--color-accent-blue)", color: "#fff", fontSize: "12px", fontWeight: 600, cursor: "pointer", opacity: (newName.trim() && newKey.trim()) ? 1 : 0.5 }}>Add</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function YandexAccountsManager() {
+  const [accounts, setAccounts] = useState<SearchEngineAccount[]>([]);
+  const [newName, setNewName] = useState("");
+  const [newKey, setNewKey] = useState("");
+  const [globalKey, setGlobalKey] = useState("");
+  const [globalSaved, setGlobalSaved] = useState(false);
+
+  useEffect(() => {
+    try {
+      setAccounts(JSON.parse(localStorage.getItem("seoKey_yandex_accounts_list") || "[]"));
+    } catch (e) {
+      setAccounts([]);
+    }
+    setGlobalKey(localStorage.getItem("seoKey_yandex") || "");
+  }, []);
+
+  const addAccount = () => {
+    if (!newName.trim() || !newKey.trim()) return;
+    const newList = [...accounts, { id: Math.random().toString(36).slice(2, 9), name: newName.trim(), key: newKey.trim() }];
+    setAccounts(newList);
+    localStorage.setItem("seoKey_yandex_accounts_list", JSON.stringify(newList));
+    setNewName("");
+    setNewKey("");
+  };
+
+  const removeAccount = (id: string) => {
+    const newList = accounts.filter(a => a.id !== id);
+    setAccounts(newList);
+    localStorage.setItem("seoKey_yandex_accounts_list", JSON.stringify(newList));
+  };
+
+  const saveGlobal = () => {
+    if (globalKey.trim()) localStorage.setItem("seoKey_yandex", globalKey.trim());
+    else localStorage.removeItem("seoKey_yandex");
+    setGlobalSaved(true);
+    setTimeout(() => setGlobalSaved(false), 2000);
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "14px", width: "100%", marginTop: "14px" }}>
+      <div style={{ borderBottom: "1px solid var(--color-border)", paddingBottom: "14px" }}>
+        <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "6px", color: "var(--color-text-primary)" }}>Global Default OAuth Token</div>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <input
+            type="password" value={globalKey} onChange={e => { setGlobalKey(e.target.value); setGlobalSaved(false); }}
+            placeholder="Global Yandex token fallback..."
+            style={{ width: "260px", padding: "8px 11px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "13px", outline: "none" }}
+          />
+          <button onClick={saveGlobal}
+            style={{ padding: "8px 14px", borderRadius: "8px", border: "1px solid var(--color-border)", background: globalSaved ? "rgba(52,199,89,0.12)" : "var(--color-bg)", color: globalSaved ? "var(--color-accent-green)" : "var(--color-text-primary)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
+            {globalSaved ? "✓" : "Save"}
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "8px", color: "var(--color-text-primary)" }}>Connected Yandex Accounts ({accounts.length})</div>
+        {accounts.length === 0 ? (
+          <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "10px" }}>No accounts connected yet. Add one below to segregate sites.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "10px" }}>
+            {accounts.map(acc => (
+              <div key={acc.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: "8px", gap: "10px" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{acc.name}</div>
+                  <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", fontFamily: "monospace" }}>Token: {acc.key.slice(0, 8)}...</div>
+                </div>
+                <button onClick={() => removeAccount(acc.id)} style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid rgba(239,68,68,0.3)", background: "transparent", color: "#EF4444", fontSize: "11px", cursor: "pointer" }}>Delete</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", background: "rgba(255,255,255,0.02)", padding: "10px", borderRadius: "8px", border: "1px dashed var(--color-border)" }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: "11px", color: "var(--color-text-secondary)", display: "block", marginBottom: "4px" }}>Account Name</label>
+            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Gambling Sites" style={{ width: "100%", padding: "7px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "12px", outline: "none" }} />
+          </div>
+          <div style={{ flex: 2 }}>
+            <label style={{ fontSize: "11px", color: "var(--color-text-secondary)", display: "block", marginBottom: "4px" }}>OAuth Token</label>
+            <input type="password" value={newKey} onChange={e => setNewKey(e.target.value)} placeholder="Yandex token..." style={{ width: "100%", padding: "7px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "12px", outline: "none" }} />
+          </div>
+          <button onClick={addAccount} disabled={!newName.trim() || !newKey.trim()} style={{ padding: "8px 14px", borderRadius: "6px", border: "none", background: "var(--color-accent-blue)", color: "#fff", fontSize: "12px", fontWeight: 600, cursor: "pointer", opacity: (newName.trim() && newKey.trim()) ? 1 : 0.5 }}>Add</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1466,43 +1630,36 @@ function IndexApiSection() {
 
       {/* ── Bing Webmaster Tools API ── */}
       <SectionCard>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <div style={{ width: 28, height: 28, borderRadius: "6px", background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 800, color: "#3B82F6" }}>BG</div>
-            <div>
-              <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>Bing Webmaster API</span>
-              <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>{t("bingDesc") || "Used to fetch traffic stats and submit sitemaps directly to Bing Webmaster Tools."}</p>
-              <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
-                {t("bingHowTo")}{" "}
-                <a href="https://www.bing.com/webmasters" target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)" }}>bing.com/webmasters</a>
-                {" · "}
-                <a href="https://github.com/fenjo26/opengsc/blob/main/docs/SEARCH-ENGINES-SETUP.md" target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)" }}>{t("seSetupGuide")}</a>
-              </p>
-            </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+          <div style={{ width: 28, height: 28, borderRadius: "6px", background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 800, color: "#3B82F6" }}>BG</div>
+          <div>
+            <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>Bing Webmaster API</span>
+            <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px", margin: 0 }}>
+              {t("bingDesc") || "Used to fetch traffic stats and submit sitemaps directly to Bing Webmaster Tools."}{" "}
+              <a href="https://www.bing.com/webmasters" target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)" }}>bing.com/webmasters</a>
+              {" · "}
+              <a href="https://github.com/fenjo26/opengsc/blob/main/docs/SEARCH-ENGINES-SETUP.md" target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)" }}>{t("seSetupGuide")}</a>
+            </p>
           </div>
-          <BingKeyField />
         </div>
+        <BingAccountsManager />
       </SectionCard>
 
       {/* ── Yandex.Webmaster API ── */}
       <SectionCard>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <div style={{ width: 28, height: 28, borderRadius: "6px", background: "rgba(252,63,29,0.12)", border: "1px solid rgba(252,63,29,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 800, color: "#FC3F1D" }}>Я</div>
-            <div>
-              <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>Яндекс.Вебмастер API</span>
-              <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
-                {t("yandexDesc")}{" "}
-                <a href="https://oauth.yandex.ru" target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)" }}>oauth.yandex.ru</a>
-              </p>
-              <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
-                {t("yandexHowTo")}{" "}
-                <a href="https://github.com/fenjo26/opengsc/blob/main/docs/SEARCH-ENGINES-SETUP.md" target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)" }}>{t("seSetupGuide")}</a>
-              </p>
-            </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+          <div style={{ width: 28, height: 28, borderRadius: "6px", background: "rgba(252,63,29,0.12)", border: "1px solid rgba(252,63,29,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 800, color: "#FC3F1D" }}>Я</div>
+          <div>
+            <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>Яндекс.Вебмастер API</span>
+            <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px", margin: 0 }}>
+              {t("yandexDesc")}{" "}
+              <a href="https://oauth.yandex.ru" target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)" }}>oauth.yandex.ru</a>
+              {" · "}
+              <a href="https://github.com/fenjo26/opengsc/blob/main/docs/SEARCH-ENGINES-SETUP.md" target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)" }}>{t("seSetupGuide")}</a>
+            </p>
           </div>
-          <LocalKeyField storageKey="seoKey_yandex" placeholder="y0_AgAAAA..." />
         </div>
+        <YandexAccountsManager />
       </SectionCard>
 
       {/* ── IndexNow key ── */}

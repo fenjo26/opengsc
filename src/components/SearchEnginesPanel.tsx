@@ -7,7 +7,7 @@
 // passed per-request, matching the app's key convention.
 
 import { useEffect, useState } from "react";
-import { Loader2, Send, RefreshCw, ExternalLink } from "lucide-react";
+import { Loader2, Send, RefreshCw, ExternalLink, Settings } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 const card: React.CSSProperties = { background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "12px", padding: "16px", display: "flex", flexDirection: "column", gap: "10px" };
@@ -36,12 +36,103 @@ export default function SearchEnginesPanel({ siteDbId, domain }: { siteDbId: str
   useEffect(() => { setMounted(true); }, []);
 
   const cleanDomain = domain.replace(/^https?:\/\//, "").replace(/^sc-domain:/, "").replace(/\/.*$/, "");
-  const bingKey = mounted ? localStorage.getItem("seoKey_bing") || "" : "";
-  const yandexToken = mounted ? localStorage.getItem("seoKey_yandex") || "" : "";
-  const indexNowKey = mounted ? localStorage.getItem("seoKey_indexnow") || "" : "";
+  
+  // Custom site override keys
+  const [siteBing, setSiteBing] = useState("");
+  const [siteYandex, setSiteYandex] = useState("");
+  const [siteIndexNow, setSiteIndexNow] = useState("");
+  const [showOverrides, setShowOverrides] = useState(false);
+  const [overridesSaved, setOverridesSaved] = useState(false);
+
+  // Connected Accounts Lists
+  const [bingAccounts, setBingAccounts] = useState<any[]>([]);
+  const [yandexAccounts, setYandexAccounts] = useState<any[]>([]);
+  const [selectedBingAccId, setSelectedBingAccId] = useState("");
+  const [selectedYandexAccId, setSelectedYandexAccId] = useState("");
+
+  useEffect(() => {
+    if (mounted) {
+      setSiteBing(localStorage.getItem(`seoKey_bing_${siteDbId}`) || "");
+      setSiteYandex(localStorage.getItem(`seoKey_yandex_${siteDbId}`) || "");
+      setSiteIndexNow(localStorage.getItem(`seoKey_indexnow_${siteDbId}`) || "");
+
+      try {
+        setBingAccounts(JSON.parse(localStorage.getItem("seoKey_bing_accounts_list") || "[]"));
+      } catch (e) {
+        setBingAccounts([]);
+      }
+      try {
+        setYandexAccounts(JSON.parse(localStorage.getItem("seoKey_yandex_accounts_list") || "[]"));
+      } catch (e) {
+        setYandexAccounts([]);
+      }
+
+      setSelectedBingAccId(localStorage.getItem(`seoKey_bing_account_select_${siteDbId}`) || "");
+      setSelectedYandexAccId(localStorage.getItem(`seoKey_yandex_account_select_${siteDbId}`) || "");
+    }
+  }, [mounted, siteDbId]);
+
+  const hasLocalIndexNow = mounted && localStorage.getItem(`seoKey_indexnow_${siteDbId}`) !== null;
+
+  const matchedBingAcc = bingAccounts.find(a => a.id === selectedBingAccId);
+  const matchedYandexAcc = yandexAccounts.find(a => a.id === selectedYandexAccId);
+
+  const bingKey = selectedBingAccId === "custom"
+    ? siteBing
+    : (matchedBingAcc
+        ? matchedBingAcc.key
+        : (mounted ? localStorage.getItem("seoKey_bing") || "" : "")
+      );
+
+  const yandexToken = selectedYandexAccId === "custom"
+    ? siteYandex
+    : (matchedYandexAcc
+        ? matchedYandexAcc.key
+        : (mounted ? localStorage.getItem("seoKey_yandex") || "" : "")
+      );
+
+  const indexNowKey = hasLocalIndexNow ? siteIndexNow : (mounted ? localStorage.getItem("seoKey_indexnow") || "" : "");
 
   const [sitemapUrl, setSitemapUrl] = useState("");
   useEffect(() => { setSitemapUrl(`https://${cleanDomain}/sitemap.xml`); }, [cleanDomain]);
+
+  const handleSaveOverrides = () => {
+    if (selectedBingAccId) {
+      localStorage.setItem(`seoKey_bing_account_select_${siteDbId}`, selectedBingAccId);
+    } else {
+      localStorage.removeItem(`seoKey_bing_account_select_${siteDbId}`);
+    }
+
+    if (selectedYandexAccId) {
+      localStorage.setItem(`seoKey_yandex_account_select_${siteDbId}`, selectedYandexAccId);
+    } else {
+      localStorage.removeItem(`seoKey_yandex_account_select_${siteDbId}`);
+    }
+
+    if (selectedBingAccId === "custom" && siteBing.trim()) {
+      localStorage.setItem(`seoKey_bing_${siteDbId}`, siteBing.trim());
+    } else {
+      localStorage.removeItem(`seoKey_bing_${siteDbId}`);
+    }
+
+    if (selectedYandexAccId === "custom" && siteYandex.trim()) {
+      localStorage.setItem(`seoKey_yandex_${siteDbId}`, siteYandex.trim());
+    } else {
+      localStorage.removeItem(`seoKey_yandex_${siteDbId}`);
+    }
+
+    if (siteIndexNow.trim()) {
+      localStorage.setItem(`seoKey_indexnow_${siteDbId}`, siteIndexNow.trim());
+    } else {
+      localStorage.removeItem(`seoKey_indexnow_${siteDbId}`);
+    }
+
+    setOverridesSaved(true);
+    setTimeout(() => {
+      setOverridesSaved(false);
+      window.location.reload();
+    }, 1200);
+  };
 
   // ── Bing state ──
   const [bingBusy, setBingBusy] = useState("");
@@ -133,9 +224,91 @@ export default function SearchEnginesPanel({ siteDbId, domain }: { siteDbId: str
       <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
         <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)" }}>{t("sePanelTitle")}</div>
         <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{t("sePanelSub")}</span>
+        <button
+          onClick={() => setShowOverrides(o => !o)}
+          style={{
+            background: "transparent",
+            border: "none",
+            color: showOverrides ? "var(--color-accent-blue)" : "var(--color-text-secondary)",
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            padding: "2px 6px",
+            borderRadius: "4px",
+            fontSize: "11px",
+            gap: "4px",
+          }}
+          onMouseOver={e => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.05)"}
+          onMouseOut={e => e.currentTarget.style.backgroundColor = "transparent"}
+        >
+          <Settings size={12} />
+          {t("seOverridesBtn") || "Site Keys"}
+        </button>
         <span style={{ flex: 1 }} />
         <input value={sitemapUrl} onChange={e => setSitemapUrl(e.target.value)} style={{ ...inputS, width: "280px", fontFamily: "monospace", fontSize: "11px" }} title="Sitemap URL" />
       </div>
+
+      {showOverrides && (
+        <div style={{
+          background: "var(--color-bg)",
+          border: "1px solid var(--color-border)",
+          borderRadius: "8px",
+          padding: "12px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "10px",
+          marginBottom: "10px",
+        }}>
+          <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-primary)" }}>
+            {t("seOverridesTitle") || "Override Keys for this Site Only"}
+          </div>
+          <p style={{ fontSize: "11px", color: "var(--color-text-secondary)", margin: 0 }}>
+            {t("seOverridesDesc") || "If blank, the global keys from settings will be used. Set overrides here to use different Bing/Yandex/IndexNow credentials for this site."}
+          </p>
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: "200px" }}>
+              <label style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-text-secondary)", display: "block", marginBottom: "4px" }}>Bing Webmaster Account</label>
+              <select value={selectedBingAccId} onChange={e => setSelectedBingAccId(e.target.value)} style={{ ...inputS, background: "var(--color-bg)", padding: "7px 10px" }}>
+                <option value="">Use Global Default</option>
+                {bingAccounts.map((acc: any) => (
+                  <option key={acc.id} value={acc.id}>Account: {acc.name}</option>
+                ))}
+                <option value="custom">-- Custom API Key Override --</option>
+              </select>
+              {selectedBingAccId === "custom" && (
+                <input type="password" value={siteBing} onChange={e => setSiteBing(e.target.value)} placeholder="Enter Bing API key..." style={{ ...inputS, marginTop: "6px" }} />
+              )}
+            </div>
+            <div style={{ flex: 1, minWidth: "200px" }}>
+              <label style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-text-secondary)", display: "block", marginBottom: "4px" }}>Yandex Webmaster Account</label>
+              <select value={selectedYandexAccId} onChange={e => setSelectedYandexAccId(e.target.value)} style={{ ...inputS, background: "var(--color-bg)", padding: "7px 10px" }}>
+                <option value="">Use Global Default</option>
+                {yandexAccounts.map((acc: any) => (
+                  <option key={acc.id} value={acc.id}>Account: {acc.name}</option>
+                ))}
+                <option value="custom">-- Custom Token Override --</option>
+              </select>
+              {selectedYandexAccId === "custom" && (
+                <input type="password" value={siteYandex} onChange={e => setSiteYandex(e.target.value)} placeholder="Enter Yandex OAuth token..." style={{ ...inputS, marginTop: "6px" }} />
+              )}
+            </div>
+            <div style={{ flex: 1, minWidth: "200px" }}>
+              <label style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-text-secondary)", display: "block", marginBottom: "4px" }}>IndexNow Key</label>
+              <input type="password" value={siteIndexNow} onChange={e => setSiteIndexNow(e.target.value)} placeholder="Global key fallback..." style={{ ...inputS, height: "35px" }} />
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <button onClick={handleSaveOverrides} style={{ ...btn, background: overridesSaved ? "rgba(52,199,89,0.12)" : "var(--color-bg)", color: overridesSaved ? "var(--color-accent-green)" : "var(--color-text-primary)" }}>
+              {overridesSaved ? "✓ Saved" : "Save Site Keys"}
+            </button>
+            {(selectedBingAccId || selectedYandexAccId || hasLocalIndexNow) && (
+              <span style={{ fontSize: "11px", color: "var(--color-accent-green)" }}>
+                ● Custom keys/accounts active for this site
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "10px" }}>
         {/* ── Bing ── */}
