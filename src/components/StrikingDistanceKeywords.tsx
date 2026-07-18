@@ -3,11 +3,13 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { ExternalLink } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
+import { withShare, isGuestView } from "@/lib/shareParam";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 interface StrikingKeyword {
   query: string; page: string; fullUrl: string;
   impressions: number; clicks: number; ctr: number; position: number;
+  siteId?: string; siteName?: string;
 }
 
 type SortKey = "impressions" | "clicks" | "position" | "ctr";
@@ -116,23 +118,26 @@ function KeywordsTable({ data, loading, siteDbId }: { data: StrikingKeyword[]; l
   const [tracked, setTracked] = useState<Set<string>>(new Set());
   useEffect(() => {
     if (!siteDbId) return;
+    if (isGuestView()) return; // guests don't see the Track buttons
     fetch(`/api/rank/keywords?siteId=${encodeURIComponent(siteDbId)}`)
       .then(r => r.json())
       .then(d => { if (Array.isArray(d.keywords)) setTracked(new Set(d.keywords.map((k: any) => String(k.keyword).toLowerCase()))); })
       .catch(() => {});
   }, [siteDbId]);
 
-  const track = (query: string) => {
+  const track = (query: string, siteIdOverride?: string) => {
+    if (isGuestView()) return;
+    const targetSiteId = siteIdOverride || siteDbId;
     const kw = query.trim().toLowerCase();
-    if (!kw || tracked.has(kw) || !siteDbId) return;
+    if (!kw || tracked.has(kw) || !targetSiteId) return;
     setTracked(prev => new Set(prev).add(kw));
     fetch("/api/rank/keywords", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ siteId: siteDbId, keywords: [kw] }),
+      body: JSON.stringify({ siteId: targetSiteId, keywords: [kw] }),
     })
       .then(() => fetch("/api/rank/check", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ siteId: siteDbId }),
+        body: JSON.stringify({ siteId: targetSiteId }),
       }))
       .catch(() => {});
   };
@@ -233,7 +238,7 @@ function KeywordsTable({ data, loading, siteDbId }: { data: StrikingKeyword[]; l
                   {tracked.has(item.query.toLowerCase()) ? (
                     <span title={t("rankTracked")} style={{ color: "#10B981", flexShrink: 0, fontSize: "12px" }}>✓</span>
                   ) : (
-                    <button onClick={() => track(item.query)} title={t("rankTrack")}
+                    <button onClick={() => track(item.query, item.siteId)} title={t("rankTrack")}
                       style={{ width: "17px", height: "17px", borderRadius: "4px", border: "1px solid var(--color-border)", background: "none", color: "var(--color-text-secondary)", cursor: "pointer", fontSize: "12px", lineHeight: 1, padding: 0, flexShrink: 0 }}
                       onMouseEnter={e => { e.currentTarget.style.color = "#3B82F6"; e.currentTarget.style.borderColor = "#3B82F6"; }}
                       onMouseLeave={e => { e.currentTarget.style.color = "var(--color-text-secondary)"; e.currentTarget.style.borderColor = "var(--color-border)"; }}>+</button>
@@ -241,6 +246,11 @@ function KeywordsTable({ data, loading, siteDbId }: { data: StrikingKeyword[]; l
                   <span style={{ fontWeight: 600, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.query}>
                     {item.query}
                   </span>
+                  {item.siteName && (
+                    <span style={{ fontSize: "10px", color: "var(--color-text-secondary)", background: "rgba(255,255,255,0.06)", padding: "2px 6px", borderRadius: "4px", marginLeft: "4px", flexShrink: 0 }} title={item.siteName}>
+                      {item.siteName}
+                    </span>
+                  )}
                 </div>
                 {/* Page */}
                 <div style={{ display: "flex", alignItems: "center", gap: "4px", overflow: "hidden" }}>
@@ -290,9 +300,9 @@ export default function StrikingDistanceKeywords({ siteDbId }: { siteDbId: strin
     if (!siteDbId) return;
     setLoading(true); setError("");
     try {
-      const res = await fetch(
+      const res = await fetch(withShare(
         `/api/gsc/striking?siteId=${encodeURIComponent(siteDbId)}&posFrom=${from}&posTo=${to}&days=${d}&minImpressions=10&limit=200`
-      );
+      ));
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed");
       setKeywords(data.keywords ?? []);

@@ -1,0 +1,260 @@
+// Built-in site audit crawler — zero external APIs, zero cost. BFS-walks same-host
+// pages from the site root with plain fetch + regex HTML extraction (no headless
+// browser: the signals we audit — status codes, titles, meta, canonicals, link graph —
+// all live in the raw HTML). Runs as a fire-and-forget job (same pattern as SeoJob):
+// POST /api/audit creates the SiteAudit row and calls runAudit() without awaiting it.
+
+import { prisma } from "@/lib/prisma";
+
+const UA = "Mozilla/5.0 (compatible; OpenGSC-Audit/1.0; +https://opengsc.org)";
+const PAGE_TIMEOUT_MS = 20_000;
+const CONCURRENCY = 4;
+const POLITENESS_DELAY_MS = 150; // per worker, between requests — be a good citizen on the user's own site
+
+// ─── HTML extraction (regex — fine for the signals we need) ─────────────────────
+
+const strip = (s: string) => s.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+const decode = (s: string) => s
+  .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+  .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&nbsp;/g, " ");
+
+function extract(html: string) {
+  const head = html.slice(0, 200_000);
+  const title = decode(strip(head.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? ""));
+  const metaDesc = decode(
+    head.match(/<meta[^>]+name=["']description["'][^>]*content=["']([\s\S]*?)["'][^>]*>/i)?.[1] ??
+    head.match(/<meta[^>]+content=["']([\s\S]*?)["'][^>]*name=["']description["'][^>]*>/i)?.[1] ?? "");
+  const robots = (
+    head.match(/<meta[^>]+name=["']robots["'][^>]*content=["']([^"']*)["']/i)?.[1] ??
+    head.match(/<meta[^>]+content=["']([^"']*)["'][^>]*name=["']robots["']/i)?.[1] ?? "").toLowerCase();
+  const canonical = head.match(/<link[^>]+rel=["']canonical["'][^>]*href=["']([^"']+)["']/i)?.[1]
+    ?? head.match(/<link[^>]+href=["']([^"']+)["'][^>]*rel=["']canonical["']/i)?.[1] ?? null;
+  const h1Count = (html.match(/<h1[\s>]/gi) ?? []).length;
+
+  const hrefs: string[] = [];
+  for (const m of html.matchAll(/<a\s[^>]*href=["']([^"'#]+)["']/gi)) hrefs.push(m[1]);
+
+  const imgTags = html.match(/<img\s[^>]*>/gi) ?? [];
+  const imagesNoAlt = imgTags.filter(t => !/\salt=["'][^"']+["']/i.test(t)).length;
+
+  // Word count over body text with scripts/styles removed — a thin-content signal, not prose analytics.
+  const body = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<nav[\s\S]*?<\/nav>/gi, " ")
+    .replace(/<footer[\s\S]*?<\/footer>/gi, " ");
+  const wordCount = strip(body).split(/\s+/).filter(w => w.length > 1).length;
+
+  return { title, metaDesc, robots, canonical, h1Count, hrefs, imagesNoAlt, wordCount };
+}
+
+// ─── URL normalization ──────────────────────────────────────────────────────────
+
+function normalizeUrl(href: string, base: URL): URL | null {
+  try {
+    const u = new URL(href, base);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    u.hash = "";
+    // Skip obvious non-HTML assets
+    if (/\.(jpg|jpeg|png|gif|webp|svg|ico|css|js|mjs|json|xml|pdf|zip|gz|mp4|webm|mp3|woff2?|ttf|eot|avif)(\?|$)/i.test(u.pathname)) return null;
+    return u;
+  } catch { return null; }
+}
+
+const sameHost = (a: URL, b: URL) => a.hostname.replace(/^www\./, "") === b.hostname.replace(/^www\./, "");
+
+// ─── page fetch ─────────────────────────────────────────────────────────────────
+
+interface PageResult {
+  url: string;
+  httpStatus: number;
+  redirectTo: string | null;
+  contentType: string;
+  loadMs: number;
+  html: string | null;
+  fetchError?: string;
+}
+
+async function fetchPage(url: string): Promise<PageResult> {
+  const started = Date.now();
+  try {
+    // manual redirect handling so 301→ chains are visible as issues
+    const res = await fetch(url, {
+      headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml" },
+      redirect: "manual",
+      signal: AbortSignal.timeout(PAGE_TIMEOUT_MS),
+    });
+    const loadMs = Date.now() - started;
+    const contentType = res.headers.get("content-type") ?? "";
+    if (res.status >= 300 && res.status < 400) {
+      return { url, httpStatus: res.status, redirectTo: res.headers.get("location"), contentType, loadMs, html: null };
+    }
+    const isHtml = contentType.includes("html") || contentType === "";
+    const html = res.ok && isHtml ? await res.text() : null;
+    return { url, httpStatus: res.status, redirectTo: null, contentType, loadMs, html };
+  } catch (e: any) {
+    return { url, httpStatus: 0, redirectTo: null, contentType: "", loadMs: Date.now() - started, html: null, fetchError: String(e?.message ?? e).slice(0, 120) };
+  }
+}
+
+// ─── issue detection ────────────────────────────────────────────────────────────
+
+export const ISSUE_CODES = [
+  "http_error", "fetch_failed", "redirect", "title_missing", "title_too_long", "title_duplicate",
+  "description_missing", "description_too_long", "h1_missing", "h1_multiple", "noindex",
+  "canonical_mismatch", "thin_content", "images_no_alt", "broken_links", "slow_response",
+] as const;
+
+// ─── main runner ────────────────────────────────────────────────────────────────
+
+export async function runAudit(auditId: string): Promise<void> {
+  const audit = await prisma.siteAudit.findUnique({ where: { id: auditId }, include: { site: true } });
+  if (!audit) return;
+  try {
+    const rootUrl = audit.site.url.startsWith("http") ? audit.site.url : `https://${audit.site.url.replace(/^sc-domain:/, "")}`;
+    const root = new URL(rootUrl);
+    const maxPages = Math.min(500, Math.max(10, audit.maxPages));
+
+    type QItem = { url: string; depth: number };
+    const queue: QItem[] = [{ url: root.href, depth: 0 }];
+    const seen = new Set<string>([root.href]);
+    const results = new Map<string, PageResult & { depth: number; ex?: ReturnType<typeof extract>; internalTargets?: string[] }>();
+
+    let crawled = 0;
+    const workers = Array.from({ length: CONCURRENCY }, async () => {
+      while (queue.length && crawled < maxPages) {
+        const item = queue.shift();
+        if (!item) break;
+        crawled++;
+        const page = await fetchPage(item.url);
+        const entry: any = { ...page, depth: item.depth };
+        if (page.html) {
+          const ex = extract(page.html);
+          entry.ex = ex;
+          entry.internalTargets = [];
+          for (const href of ex.hrefs) {
+            const u = normalizeUrl(href, new URL(item.url));
+            if (!u) continue;
+            if (sameHost(u, root)) {
+              entry.internalTargets.push(u.href);
+              if (!seen.has(u.href) && seen.size < maxPages * 3) {
+                seen.add(u.href);
+                queue.push({ url: u.href, depth: item.depth + 1 });
+              }
+            }
+          }
+        } else if (page.redirectTo) {
+          // Follow the redirect target as part of the crawl so chains are mapped.
+          const u = normalizeUrl(page.redirectTo, new URL(item.url));
+          if (u && sameHost(u, root) && !seen.has(u.href)) {
+            seen.add(u.href);
+            queue.push({ url: u.href, depth: item.depth });
+          }
+        }
+        results.set(item.url, entry);
+        if (crawled % 10 === 0) {
+          await prisma.siteAudit.update({ where: { id: auditId }, data: { pagesCrawled: crawled } }).catch(() => {});
+        }
+        await new Promise(r => setTimeout(r, POLITENESS_DELAY_MS));
+      }
+    });
+    await Promise.all(workers);
+
+    // ── second pass: issues (needs the full crawl map for broken links & duplicate titles)
+    const statusOf = new Map<string, number>();
+    for (const [url, r] of results) statusOf.set(url, r.httpStatus);
+    const titleCount = new Map<string, number>();
+    for (const r of results.values()) {
+      const t = r.ex?.title?.toLowerCase().trim();
+      if (t) titleCount.set(t, (titleCount.get(t) ?? 0) + 1);
+    }
+
+    const issueTotals: Record<string, number> = {};
+    const bump = (code: string) => { issueTotals[code] = (issueTotals[code] ?? 0) + 1; };
+
+    const rows: any[] = [];
+    for (const [url, r] of results) {
+      const issues: string[] = [];
+      const broken: string[] = [];
+      if (r.httpStatus === 0) issues.push("fetch_failed");
+      else if (r.httpStatus >= 400) issues.push("http_error");
+      else if (r.httpStatus >= 300) issues.push("redirect");
+      if (r.loadMs > 3000) issues.push("slow_response");
+      if (r.ex) {
+        const { title, metaDesc, robots, canonical, h1Count, imagesNoAlt, wordCount } = r.ex;
+        if (!title) issues.push("title_missing");
+        else {
+          if (title.length > 65) issues.push("title_too_long");
+          if ((titleCount.get(title.toLowerCase().trim()) ?? 0) > 1) issues.push("title_duplicate");
+        }
+        if (!metaDesc) issues.push("description_missing");
+        else if (metaDesc.length > 165) issues.push("description_too_long");
+        if (h1Count === 0) issues.push("h1_missing");
+        if (h1Count > 1) issues.push("h1_multiple");
+        if (/noindex/.test(robots)) issues.push("noindex");
+        if (canonical) {
+          try {
+            const c = new URL(canonical, url);
+            const here = new URL(url);
+            if (c.href.replace(/\/$/, "") !== here.href.replace(/\/$/, "")) issues.push("canonical_mismatch");
+          } catch { /* malformed canonical — ignore */ }
+        }
+        if (wordCount < 150) issues.push("thin_content");
+        if (imagesNoAlt > 0) issues.push("images_no_alt");
+        for (const target of new Set(r.internalTargets ?? [])) {
+          const st = statusOf.get(target);
+          if (st !== undefined && (st >= 400 || st === 0)) broken.push(target);
+        }
+        if (broken.length) issues.push("broken_links");
+      }
+      for (const code of issues) bump(code);
+      rows.push({
+        auditId,
+        url,
+        httpStatus: r.httpStatus,
+        redirectTo: r.redirectTo,
+        contentType: r.contentType.split(";")[0],
+        title: r.ex?.title?.slice(0, 300) ?? "",
+        metaDescription: r.ex?.metaDesc?.slice(0, 400) ?? "",
+        h1Count: r.ex?.h1Count ?? 0,
+        canonical: r.ex?.canonical ?? null,
+        noindex: /noindex/.test(r.ex?.robots ?? ""),
+        internalLinks: new Set(r.internalTargets ?? []).size,
+        externalLinks: r.ex ? r.ex.hrefs.length - (r.internalTargets?.length ?? 0) : 0,
+        imagesNoAlt: r.ex?.imagesNoAlt ?? 0,
+        wordCount: r.ex?.wordCount ?? 0,
+        loadMs: r.loadMs,
+        depth: r.depth,
+        issues: issues.length ? JSON.stringify(issues) : null,
+        brokenLinks: broken.length ? JSON.stringify(broken.slice(0, 50)) : null,
+      });
+    }
+
+    // createMany is not supported for SQLite pre-Prisma5-style in all setups — chunked create is fine here.
+    for (let i = 0; i < rows.length; i += 50) {
+      await prisma.siteAuditPage.createMany({ data: rows.slice(i, i + 50) });
+    }
+
+    const pagesWithIssues = rows.filter(r => r.issues).length;
+    await prisma.siteAudit.update({
+      where: { id: auditId },
+      data: {
+        status: "completed",
+        finishedAt: new Date(),
+        pagesCrawled: rows.length,
+        summary: JSON.stringify({
+          pages: rows.length,
+          pagesWithIssues,
+          healthScore: rows.length ? Math.round(100 * (1 - pagesWithIssues / rows.length)) : 0,
+          issues: issueTotals,
+          avgLoadMs: rows.length ? Math.round(rows.reduce((s, r) => s + r.loadMs, 0) / rows.length) : 0,
+        }),
+      },
+    });
+  } catch (e: any) {
+    await prisma.siteAudit.update({
+      where: { id: auditId },
+      data: { status: "error", finishedAt: new Date(), error: String(e?.message ?? e).slice(0, 500) },
+    }).catch(() => {});
+  }
+}

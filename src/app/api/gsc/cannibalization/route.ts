@@ -17,8 +17,18 @@ function brandTerms(siteUrl: string): string[] {
 // GET /api/gsc/cannibalization?siteId=&days=90&minImpressions=30&limit=60
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
-  const userId = (session?.user as any)?.id as string | undefined;
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  let userId = (session?.user as any)?.id as string | undefined;
+  if (!userId) {
+    // Guest access via a share link: the token must match the requested site (never 'all').
+    const sp = new URL(req.url).searchParams;
+    const shareToken = sp.get('shareToken') ?? '';
+    const sharedSiteId = sp.get('siteId') ?? '';
+    if (shareToken && sharedSiteId && sharedSiteId !== 'all') {
+      const shared = await prisma.site.findFirst({ where: { id: sharedSiteId, shareToken, shareEnabled: true } });
+      if (shared) userId = shared.userId;
+    }
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   const { searchParams } = new URL(req.url);
   const siteId  = searchParams.get('siteId') ?? '';
@@ -26,18 +36,28 @@ export async function GET(req: Request) {
   const minImpr = parseInt(searchParams.get('minImpressions') ?? '30');
   const limit   = Math.min(parseInt(searchParams.get('limit') ?? '60'), 200);
 
-  const site = await prisma.site.findFirst({ where: { id: siteId, userId } });
-  if (!site) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  let siteIds: string[];
+  let siteMap: Map<string, any>;
 
-  const brand = brandTerms(site.siteId);
+  if (siteId === 'all' || !siteId) {
+    const sites = await prisma.site.findMany({ where: { userId } });
+    siteIds = sites.map(s => s.id);
+    siteMap = new Map(sites.map(s => [s.id, s]));
+  } else {
+    const site = await prisma.site.findFirst({ where: { id: siteId, userId } });
+    if (!site) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    siteIds = [site.id];
+    siteMap = new Map([[site.id, site]]);
+  }
+
   const since = new Date();
   since.setDate(since.getDate() - days);
 
   // ── Aggregate (query, url) pairs ───────────────────────────────────────────────
-  type AggRow = { url: string; query: string; _sum: { clicks: number | null; impressions: number | null }; _avg: { ctr: number | null; position: number | null } };
+  type AggRow = { siteId: string; url: string; query: string; _sum: { clicks: number | null; impressions: number | null }; _avg: { ctr: number | null; position: number | null } };
   const aggsRaw = await prisma.dailyMetric.groupBy({
-    by: ['query', 'url'],
-    where: { siteId, date: { gte: since } },
+    by: ['siteId', 'query', 'url'],
+    where: { siteId: { in: siteIds }, date: { gte: since } },
     _sum: { clicks: true, impressions: true },
     _avg: { ctr: true, position: true },
     orderBy: { _sum: { impressions: 'desc' } },
@@ -46,24 +66,28 @@ export async function GET(req: Request) {
   // Exclude site-level aggregate rows (url='' or query='') that have no per-URL meaning
   const aggs: AggRow[] = (aggsRaw as unknown as AggRow[]).filter(a => a.url !== '' && a.query !== '');
 
-  // ── Build URL → top query map (query bringing most impressions to that URL) ──
+  // ── Build siteId + URL → top query map ──
   const urlBest = new Map<string, { query: string; impr: number }>();
   for (const a of aggs) {
+    const key = `${a.siteId}::${a.url}`;
     const impr = a._sum.impressions ?? 0;
-    const cur  = urlBest.get(a.url);
-    if (!cur || impr > cur.impr) urlBest.set(a.url, { query: a.query, impr });
+    const cur  = urlBest.get(key);
+    if (!cur || impr > cur.impr) urlBest.set(key, { query: a.query, impr });
   }
 
-  // ── Group by query ─────────────────────────────────────────────────────────────
+  // ── Group by siteId + query ─────────────────────────────────────────────────────────────
   const queryMap = new Map<string, typeof aggs>();
   for (const a of aggs) {
-    if (!queryMap.has(a.query)) queryMap.set(a.query, []);
-    queryMap.get(a.query)!.push(a);
+    const key = `${a.siteId}::${a.query}`;
+    if (!queryMap.has(key)) queryMap.set(key, []);
+    queryMap.get(key)!.push(a);
   }
 
   // ── Build cannibalization groups ───────────────────────────────────────────────
   const groups: {
     query: string;
+    siteId: string;
+    siteName: string;
     pages: {
       url: string; fullUrl: string; topQuery: string;
       impressions: number; clicks: number; ctr: number; position: number;
@@ -71,7 +95,13 @@ export async function GET(req: Request) {
     isTrue: boolean;
   }[] = [];
 
-  for (const [query, entries] of queryMap) {
+  for (const [key, entries] of queryMap) {
+    const [grpSiteId, query] = key.split('::');
+    const grpSite = siteMap.get(grpSiteId);
+    if (!grpSite) continue;
+
+    const brand = brandTerms(grpSite.siteId);
+
     // Skip branded queries
     if (brand.some(b => query.toLowerCase().includes(b))) continue;
 
@@ -107,7 +137,7 @@ export async function GET(req: Request) {
     const pages = significant.map(p => ({
       url:         p.url.replace(/^https?:\/\/[^/]+/, '') || '/',
       fullUrl:     p.url,
-      topQuery:    urlBest.get(p.url)?.query ?? query,
+      topQuery:    urlBest.get(`${grpSiteId}::${p.url}`)?.query ?? query,
       impressions: p.impressions,
       clicks:      p.clicks,
       ctr:         p.ctr,
@@ -123,7 +153,9 @@ export async function GET(req: Request) {
     ).length >= 2;
     const isTrue = sameTopQuery || overlapping;
 
-    groups.push({ query, pages, isTrue });
+    const domain = grpSite.url.replace("sc-domain:", "").replace(/^https?:\/\//, "").replace(/\/$/, "");
+
+    groups.push({ query, siteId: grpSiteId, siteName: domain, pages, isTrue });
   }
 
   // Sort by total impressions desc, limit
@@ -134,7 +166,7 @@ export async function GET(req: Request) {
     )
     .slice(0, limit);
 
-  return NextResponse.json({ groups: result, brand });
+  return NextResponse.json({ groups: result, brand: siteIds.length === 1 ? brandTerms(siteMap.values().next().value.siteId) : [] });
 }
 
 function minImpressions(n: number) { return n; }

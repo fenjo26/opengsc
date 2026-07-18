@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { verifyAuthOrShare } from "@/lib/authShare";
 import { getUserSerpCreds } from "@/lib/rank";
 import { getUserGoogleAccounts, queryGsc, isoDaysAgo } from "@/lib/gscQuery";
 
@@ -13,18 +14,38 @@ async function ownedSite(userId: string, siteId: string) {
 // List tracked keywords with recent check history (sparkline) and, when gsc=1,
 // the matching GSC average position/clicks for the last 7 days.
 export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  const userId = (session?.user as any)?.id as string | undefined;
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const { searchParams } = new URL(req.url);
   const siteId = searchParams.get("siteId") || "";
   const withGsc = searchParams.get("gsc") === "1";
-  const site = await ownedSite(userId, siteId);
-  if (!site) return NextResponse.json({ error: "Site not found" }, { status: 404 });
+  
+  const shareToken = searchParams.get("shareToken");
+  let userId: string;
+  let site: any = null;
+  let whereClause: any = {};
+
+  if (shareToken) {
+    site = await prisma.site.findFirst({ where: { shareToken, shareEnabled: true } });
+    if (!site) return NextResponse.json({ error: "Invalid share token" }, { status: 403 });
+    userId = site.userId;
+    whereClause = { siteId: site.id };
+  } else {
+    const session = await getServerSession(authOptions);
+    const loggedInId = (session?.user as any)?.id as string | undefined;
+    if (!loggedInId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    userId = loggedInId;
+
+    if (siteId === "all" || !siteId) {
+      const sites = await prisma.site.findMany({ where: { userId }, select: { id: true } });
+      whereClause = { siteId: { in: sites.map(s => s.id) } };
+    } else {
+      site = await ownedSite(userId, siteId);
+      if (!site) return NextResponse.json({ error: "Site not found" }, { status: 404 });
+      whereClause = { siteId };
+    }
+  }
 
   const keywords = await prisma.trackedKeyword.findMany({
-    where: { siteId },
+    where: whereClause,
     orderBy: { createdAt: "desc" },
     include: {
       checks: {
@@ -37,7 +58,7 @@ export async function GET(req: Request) {
 
   // GSC comparison: one query for all keywords (top 500 by clicks, last 7 finalized days)
   let gscMap: Record<string, { pos: number; clicks: number; impressions: number }> = {};
-  if (withGsc && keywords.length) {
+  if (withGsc && keywords.length && site) {
     const accounts = await getUserGoogleAccounts(userId);
     const rows = await queryGsc(accounts, site.siteId, {
       startDate: isoDaysAgo(9),

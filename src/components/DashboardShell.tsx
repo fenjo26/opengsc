@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useState } from "react";
-import { Settings, LogOut, Sparkles, Globe } from "lucide-react";
+import { Settings, LogOut, Sparkles, Globe, Newspaper } from "lucide-react";
 import { usePrivacy } from "@/lib/PrivacyContext";
 import { useTheme } from "@/lib/ThemeContext";
 import { useLayout } from "@/lib/LayoutContext";
@@ -528,6 +528,28 @@ function TopBar() {
             </button>
           );
         })()}
+        {(() => {
+          const active = pathname?.startsWith("/digest");
+          return (
+            <button
+              onClick={() => router.push("/digest")}
+              style={{
+                display: "flex", alignItems: "center", gap: "7px",
+                padding: "6px 14px", borderRadius: "8px",
+                fontSize: "13px", fontWeight: active ? 700 : 500,
+                cursor: "pointer", border: "none",
+                color: active ? "var(--color-accent-green, #34c759)" : "var(--color-text-secondary)",
+                background: active ? "rgba(52,199,89,0.12)" : "transparent",
+                transition: "all 0.15s",
+              }}
+              onMouseOver={e => { if (!active) e.currentTarget.style.background = "var(--color-card-hover)"; }}
+              onMouseOut={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
+            >
+              <Newspaper size={15} />
+              {t("digestNavTitle")}
+            </button>
+          );
+        })()}
       </nav>
 
       {/* Avatar */}
@@ -692,7 +714,8 @@ function TopBar() {
 }
 
 // ─── Shell ────────────────────────────────────────────────────────────────────
-const AUTH_PATHS = ["/login"];
+// Paths rendered without the app shell (no TopBar): auth pages and public share links.
+const AUTH_PATHS = ["/login", "/share"];
 
 function Shell({ children }: { children: React.ReactNode }) {
   const { layout } = useLayout();

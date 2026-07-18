@@ -143,11 +143,18 @@ async function checkVirusTotal(domain: string, apiKey: string): Promise<{
 // ─── Route ────────────────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const { searchParams } = new URL(req.url);
   const siteId = searchParams.get("siteId");
   if (!siteId) return NextResponse.json({ error: "siteId required" }, { status: 400 });
+
+  // Session OR a valid share token for this exact site (read-only guest dashboards).
+  if (!session?.user?.email) {
+    const shareToken = searchParams.get("shareToken") ?? "";
+    const shared = shareToken
+      ? await prisma.site.findFirst({ where: { id: siteId, shareToken, shareEnabled: true } })
+      : null;
+    if (!shared) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const site = await (prisma as any).site.findUnique({ where: { id: siteId }, include: { siteHealth: true } });
   if (!site) return NextResponse.json({ error: "Not found" }, { status: 404 });

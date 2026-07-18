@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { verifyAuthOrShare } from '@/lib/authShare';
 import { google } from 'googleapis';
 import { makeOAuth2, dateWindows, type GoogleAccount } from '@/lib/ga4';
 
@@ -27,16 +28,13 @@ const val = <T,>(r: PromiseSettledResult<T>): T | null =>
 
 // GET /api/ga4/breakdowns?domain=...&period=7d
 export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  const userId = (session?.user as any)?.id as string | undefined;
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
   const { searchParams } = new URL(req.url);
   const domain = (searchParams.get('domain') ?? '').trim();
   const period = searchParams.get('period') ?? '7d';
 
-  const site = await prisma.site.findFirst({ where: { userId, url: domain } });
-  if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
+  const auth = await verifyAuthOrShare(req, domain, true);
+  if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { userId, site } = auth;
 
   const propertyId = (site as any).ga4PropertyId as string | null;
   if (!propertyId) return NextResponse.json({ linked: false });

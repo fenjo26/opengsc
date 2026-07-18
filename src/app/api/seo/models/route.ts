@@ -78,17 +78,72 @@ async function listModels(provider: string, apiKey: string): Promise<M[]> {
       .filter((m) => m.id);
   }
 
+  if (provider === "kimi") {
+    // Moonshot AI — OpenAI-compatible /v1/models. Falls back to the known current lineup.
+    try {
+      const res = await fetch("https://api.moonshot.ai/v1/models", {
+        headers: { Authorization: `Bearer ${apiKey}` }, signal: timeout,
+      });
+      if (!res.ok) throw new Error(`kimi ${res.status}`);
+      const data = await res.json();
+      const arr: any[] = data.data ?? [];
+      const models = arr.map((m) => ({ id: m.id as string, label: m.id as string })).filter((m) => m.id);
+      return models.length ? models : KIMI_FALLBACK;
+    } catch {
+      return KIMI_FALLBACK;
+    }
+  }
+
   if (provider === "kie") {
     // Kie.ai's Codex Responses endpoint currently exposes a single fixed model — no public
     // /models listing to query, so just surface the one known id (matches fetchLLM's default).
     return [{ id: "gpt-5-5", label: "GPT-5.5 (Codex)" }];
   }
 
+  if (provider === "deepseek") {
+    try {
+      const res = await fetch("https://api.deepseek.com/models", {
+        headers: { Authorization: `Bearer ${apiKey}` }, signal: timeout,
+      });
+      if (!res.ok) throw new Error(`deepseek ${res.status}`);
+      const data = await res.json();
+      const arr: any[] = data.data ?? [];
+      const models = arr.map((m) => ({ id: m.id as string, label: m.id as string })).filter((m) => m.id);
+      return models.length ? models : DEEPSEEK_FALLBACK;
+    } catch {
+      return DEEPSEEK_FALLBACK;
+    }
+  }
+
+  if (provider === "qwen") {
+    return QWEN_FALLBACK;
+  }
+
   return [];
 }
+
+const KIMI_FALLBACK: M[] = [
+  { id: "kimi-k3", label: "Kimi K3 (flagship, 1M context, vision)" },
+  { id: "kimi-k2.7-code", label: "Kimi K2.7 Code" },
+  { id: "kimi-k2.7-code-highspeed", label: "Kimi K2.7 Code High-Speed" },
+  { id: "kimi-k2.6", label: "Kimi K2.6" },
+];
 
 const ZAI_FALLBACK: M[] = [
   { id: "glm-4.6", label: "GLM-4.6" },
   { id: "glm-4.5", label: "GLM-4.5" },
   { id: "glm-4.5-air", label: "GLM-4.5-Air" },
+];
+
+const DEEPSEEK_FALLBACK: M[] = [
+  { id: "deepseek-v4-flash", label: "DeepSeek-V4-Flash" },
+  { id: "deepseek-v4-pro", label: "DeepSeek-V4-Pro" },
+];
+
+const QWEN_FALLBACK: M[] = [
+  { id: "qwen-max", label: "Qwen-Max (flagship)" },
+  { id: "qwen-plus", label: "Qwen-Plus" },
+  { id: "qwen-turbo", label: "Qwen-Turbo" },
+  { id: "qwen2.5-coder-72b-instruct", label: "Qwen 2.5 Coder 72B" },
+  { id: "qwen2.5-72b-instruct", label: "Qwen 2.5 72B" },
 ];

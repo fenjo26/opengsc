@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { ExternalLink } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
+import { withShare } from "@/lib/shareParam";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 interface CtrQuery {
@@ -109,7 +110,7 @@ function CtrTable({ siteDbId }: { siteDbId: string }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/gsc/ctr?siteId=${siteDbId}&days=${days}&minImpressions=10&limit=200`);
+      const res = await fetch(withShare(`/api/gsc/ctr?siteId=${siteDbId}&days=${days}&minImpressions=10&limit=200`));
       if (!res.ok) throw new Error(await res.text());
       const json = await res.json();
       setData(json.keywords ?? []);

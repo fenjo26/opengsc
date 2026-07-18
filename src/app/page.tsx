@@ -507,6 +507,7 @@ const tbBtn = (active = false): React.CSSProperties => ({
 export default function PortfolioPage() {
   const { t } = useLanguage();
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<"sites" | "striking" | "cannibalization" | "decay">("sites");
   const [sites, setSites]       = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState("");
@@ -1157,6 +1158,13 @@ export default function PortfolioPage() {
                 DR {Math.round(drMap[domain.toLowerCase().replace(/^www\./,"")])}
               </span>
             )}
+            {/* Quick manual indexing check: opens Google `site:` search in a new tab */}
+            <a href={`https://www.google.com/search?q=site:${encodeURIComponent(domain.replace(/^www\./,""))}`}
+              target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+              title={`site:${domain} — Google`}
+              style={{fontSize:"10px",fontWeight:700,padding:"1px 6px",borderRadius:"6px",alignSelf:"flex-start",background:"rgba(66,133,244,0.12)",color:"#4285F4",textDecoration:"none",filter:blur?"blur(4px)":"none",transition:"filter 0.25s"}}>
+              G
+            </a>
           </div>
 
           {/* Metrics 2×2 */}
@@ -1311,8 +1319,44 @@ export default function PortfolioPage() {
         </div>
       )}
 
-      {/* ─── Period quick buttons + Metric text toggles ─── */}
-      <div style={{display:"flex",alignItems:"center",gap:"6px",flexWrap:"wrap",marginBottom:"8px"}}>
+      {/* ─── Portfolio Tab Switcher ─── */}
+      <div style={{ display: "flex", gap: "8px", marginBottom: "18px", borderBottom: "1px solid var(--color-border)", paddingBottom: "12px" }}>
+        {(["sites", "striking", "cannibalization", "decay"] as const).map(tab => {
+          const isActive = activeTab === tab;
+          const labels = {
+            sites: t("tabDashboard") || "Sites",
+            striking: t("optStriking") || "Striking Distance",
+            cannibalization: t("optCannibalization") || "Cannibalization",
+            decay: t("optContentDecay") || "Content Decay",
+          };
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              style={{
+                padding: "8px 16px",
+                borderRadius: "8px",
+                fontSize: "13px",
+                fontWeight: 600,
+                cursor: "pointer",
+                border: "none",
+                background: isActive ? "rgba(59,130,246,0.15)" : "transparent",
+                color: isActive ? "#3B82F6" : "var(--color-text-secondary)",
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
+              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
+            >
+              {labels[tab]}
+            </button>
+          );
+        })}
+      </div>
+
+      {activeTab === "sites" ? (
+        <>
+          {/* ─── Period quick buttons + Metric text toggles ─── */}
+          <div style={{display:"flex",alignItems:"center",gap:"6px",flexWrap:"wrap",marginBottom:"8px"}}>
         {/* Quick period buttons */}
         {(["7d","28d","3m","6m","12m","16m"] as string[]).map(p => {
           const active = period === p;
@@ -1501,6 +1545,14 @@ export default function PortfolioPage() {
             </section>
           )}
         </>
+      )}
+      </>
+      ) : activeTab === "striking" ? (
+        <StrikingDistanceKeywords siteDbId="all" />
+      ) : activeTab === "cannibalization" ? (
+        <KeywordCannibalization siteDbId="all" />
+      ) : (
+        <ContentDecayMap domain="" siteDbId="all" />
       )}
 
       {/* Export modal */}

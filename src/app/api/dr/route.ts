@@ -25,9 +25,15 @@ async function fetchDr(domain: string): Promise<number | null> {
 
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
-  if (!(session?.user as any)?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const { searchParams } = new URL(req.url);
+  const shareToken = searchParams.get('shareToken');
+  let isAuthorized = !!(session?.user as any)?.id;
+  if (!isAuthorized && shareToken) {
+    const site = await prisma.site.findFirst({ where: { shareToken, shareEnabled: true } });
+    if (site) isAuthorized = true;
+  }
+  if (!isAuthorized) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const domains = [...new Set(String(searchParams.get("domains") ?? "").split(",")
     .map(s => s.trim().toLowerCase().replace(/^www\./, "")).filter(d => d && d.includes(".")))].slice(0, 250);
   if (!domains.length) return NextResponse.json({ ratings: {} });

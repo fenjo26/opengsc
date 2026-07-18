@@ -1,0 +1,58 @@
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { getAlertSettings, DEFAULT_ALERT_SETTINGS, runAlertsOnce } from "@/lib/alertScheduler";
+
+// Alert rules (Settings → Notifications).
+// GET  → { settings, recent (last 20 fired alerts) }
+// POST → { settings } save;  { action: "run" } evaluate rules right now (for testing)
+
+async function uid(): Promise<string | null> {
+  const session = await getServerSession(authOptions);
+  return ((session?.user as any)?.id as string) || null;
+}
+
+export async function GET() {
+  const userId = await uid();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const settings = await getAlertSettings(userId);
+  let recent: any[] = [];
+  try {
+    recent = await prisma.alertEvent.findMany({
+      where: { userId }, orderBy: { createdAt: "desc" }, take: 20,
+      select: { id: true, type: true, title: true, message: true, sent: true, createdAt: true },
+    });
+  } catch { /* not migrated */ }
+  return NextResponse.json({ settings, recent });
+}
+
+export async function POST(req: Request) {
+  const userId = await uid();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const b = await req.json().catch(() => ({}));
+
+  if (b.action === "run") {
+    const fired = await runAlertsOnce(userId);
+    return NextResponse.json({ ok: true, fired });
+  }
+
+  const cur = await getAlertSettings(userId);
+  const s = {
+    rankDrop: { ...cur.rankDrop, ...(b.settings?.rankDrop ?? {}) },
+    trafficDrop: { ...cur.trafficDrop, ...(b.settings?.trafficDrop ?? {}) },
+    ssl: { ...cur.ssl, ...(b.settings?.ssl ?? {}) },
+    audit: { ...cur.audit, ...(b.settings?.audit ?? {}) },
+    lang: (b.settings?.lang === "ru" || b.settings?.lang === "uk" ? b.settings.lang : cur.lang ?? "en"),
+  };
+  s.rankDrop.threshold = Math.min(50, Math.max(1, Number(s.rankDrop.threshold) || DEFAULT_ALERT_SETTINGS.rankDrop.threshold));
+  s.trafficDrop.percent = Math.min(95, Math.max(5, Number(s.trafficDrop.percent) || DEFAULT_ALERT_SETTINGS.trafficDrop.percent));
+  s.ssl.days = Math.min(60, Math.max(1, Number(s.ssl.days) || DEFAULT_ALERT_SETTINGS.ssl.days));
+  s.audit.minScore = Math.min(100, Math.max(0, Number(s.audit.minScore) || DEFAULT_ALERT_SETTINGS.audit.minScore));
+  try {
+    await prisma.$executeRawUnsafe(`UPDATE "User" SET alertSettings = ? WHERE id = ?`, JSON.stringify(s), userId);
+    return NextResponse.json({ ok: true, settings: s });
+  } catch {
+    return NextResponse.json({ error: "not_migrated" }, { status: 500 });
+  }
+}

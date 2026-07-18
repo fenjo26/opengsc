@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import SeoToolsSettings, { SeoProviderKeysSection, AeoProviderKeysSection } from "@/components/SeoToolsSettings";
 
-type NavItem = "accounts" | "teams" | "api" | "api-keys" | "indexing-api" | "seo-tools" | "members" | "preferences" | "supersites";
+type NavItem = "accounts" | "teams" | "api" | "api-keys" | "indexing-api" | "seo-tools" | "notifications" | "members" | "preferences" | "supersites";
 
 interface ConnectedAccount {
   id: string; email: string; picture: string | null; connected: boolean; gscAccess: boolean; ga4Access?: boolean;
@@ -42,6 +42,46 @@ function AhrefsKeyField() {
         style={{ width: "260px", padding: "8px 11px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "13px", outline: "none" }}
       />
       <button onClick={() => { val.trim() ? localStorage.setItem("seoKey_ahrefs", val.trim()) : localStorage.removeItem("seoKey_ahrefs"); setSaved(true); }}
+        style={{ padding: "8px 14px", borderRadius: "8px", border: "1px solid var(--color-border)", background: saved ? "rgba(52,199,89,0.12)" : "var(--color-bg)", color: saved ? "var(--color-accent-green)" : "var(--color-text-primary)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
+        {saved ? "✓" : "Save"}
+      </button>
+    </div>
+  );
+}
+
+// Generic browser-side key field (seoKey_* convention, synced via SeoKeysSync)
+function LocalKeyField({ storageKey, placeholder }: { storageKey: string; placeholder: string }) {
+  const [val, setVal] = useState("");
+  const [saved, setSaved] = useState(false);
+  useEffect(() => { setVal(localStorage.getItem(storageKey) || ""); }, [storageKey]);
+  return (
+    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+      <input
+        type="password" value={val} onChange={e => { setVal(e.target.value); setSaved(false); }}
+        placeholder={placeholder}
+        style={{ width: "260px", padding: "8px 11px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "13px", outline: "none" }}
+      />
+      <button onClick={() => { val.trim() ? localStorage.setItem(storageKey, val.trim()) : localStorage.removeItem(storageKey); setSaved(true); }}
+        style={{ padding: "8px 14px", borderRadius: "8px", border: "1px solid var(--color-border)", background: saved ? "rgba(52,199,89,0.12)" : "var(--color-bg)", color: saved ? "var(--color-accent-green)" : "var(--color-text-primary)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
+        {saved ? "✓" : "Save"}
+      </button>
+    </div>
+  );
+}
+
+// Bing API key (stored browser-side, synced via SeoKeysSync)
+function BingKeyField() {
+  const [val, setVal] = useState("");
+  const [saved, setSaved] = useState(false);
+  useEffect(() => { setVal(localStorage.getItem("seoKey_bing") || ""); }, []);
+  return (
+    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+      <input
+        type="password" value={val} onChange={e => { setVal(e.target.value); setSaved(false); }}
+        placeholder="Bing API key"
+        style={{ width: "260px", padding: "8px 11px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "13px", outline: "none" }}
+      />
+      <button onClick={() => { val.trim() ? localStorage.setItem("seoKey_bing", val.trim()) : localStorage.removeItem("seoKey_bing"); setSaved(true); }}
         style={{ padding: "8px 14px", borderRadius: "8px", border: "1px solid var(--color-border)", background: saved ? "rgba(52,199,89,0.12)" : "var(--color-bg)", color: saved ? "var(--color-accent-green)" : "var(--color-text-primary)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
         {saved ? "✓" : "Save"}
       </button>
@@ -297,126 +337,159 @@ function TeamsSection({ user }: { user: any }) {
 // ─── Section: API & MCP Keys ──────────────────────────────────────────────────
 function ApiSection() {
   const { t } = useLanguage();
-  const [keyName, setKeyName] = useState("");
-  const [keys, setKeys] = useState<{ id: string; name: string; key: string; created: string }[]>([]);
-  const [os, setOs] = useState<"mac" | "win">("mac");
-  const [copied, setCopied] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const [copied, setCopied] = useState<string>("");
+  const [client, setClient] = useState<"claude-code" | "claude-desktop" | "cursor" | "codex">("claude-code");
 
-  const activeKey = keys[0]?.key ?? "REPLACE_WITH_YOUR_KEY";
-  const appUrl = typeof window !== "undefined" ? window.location.origin : "";
-  const command = os === "mac"
-    ? `curl -sSL ${appUrl}/install-mcp.sh | bash -s -- ${activeKey}`
-    : `powershell -c "irm ${appUrl}/install-mcp.ps1 | iex" -- ${activeKey}`;
+  const appUrl = typeof window !== "undefined" ? window.location.origin : "https://your-domain.com";
+  const endpoint = `${appUrl}/api/mcp`;
+  const shownToken = token ?? "<TOKEN>";
 
-  const createKey = () => {
-    if (!keyName.trim()) return;
-    const newKey = { id: Date.now().toString(), name: keyName.trim(), key: `sk-${Math.random().toString(36).slice(2,18)}`, created: new Date().toLocaleDateString() };
-    setKeys(k => [...k, newKey]);
-    setKeyName("");
+  useEffect(() => {
+    fetch("/api/settings/mcp-token").then(r => r.json()).then(d => { setToken(d.token ?? null); setLoading(false); }).catch(() => setLoading(false));
+  }, []);
+
+  const generate = async () => {
+    setBusy(true);
+    try {
+      const d = await fetch("/api/settings/mcp-token", { method: "POST" }).then(r => r.json());
+      if (d.token) { setToken(d.token); setVisible(true); }
+    } catch {}
+    setBusy(false);
+  };
+  const revoke = async () => {
+    setBusy(true);
+    try { await fetch("/api/settings/mcp-token", { method: "DELETE" }); setToken(null); } catch {}
+    setBusy(false);
+  };
+  const copy = (what: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(what);
+    setTimeout(() => setCopied(""), 2000);
   };
 
-  const copyCmd = () => {
-    navigator.clipboard.writeText(command);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const commands: Record<typeof client, { label: string; cmd: string }> = {
+    "claude-code": {
+      label: "Claude Code",
+      cmd: `claude mcp add --transport http opengsc ${endpoint} --header "Authorization: Bearer ${shownToken}"`,
+    },
+    "claude-desktop": {
+      label: "Claude Desktop",
+      cmd: `${t("mcpDesktopHint")}
+
+URL: ${endpoint}
+Authorization: Bearer ${shownToken}`,
+    },
+    "cursor": {
+      label: "Cursor",
+      cmd: `{
+  "mcpServers": {
+    "opengsc": {
+      "url": "${endpoint}",
+      "headers": { "Authorization": "Bearer ${shownToken}" }
+    }
+  }
+}`,
+    },
+    "codex": {
+      label: "Codex CLI",
+      cmd: `[mcp_servers.opengsc]
+url = "${endpoint}"
+http_headers = { "Authorization" = "Bearer ${shownToken}" }`,
+    },
   };
+
+  const TOOL_LIST = [
+    "get_capabilities", "list_sites", "get_search_performance", "compare_periods",
+    "get_striking_distance", "get_cannibalization", "get_rank_tracker", "get_aeo_visibility",
+    "get_backlinks", "get_link_mentions", "get_site_health", "get_indexing_status",
+    "get_site_audit", "query_gsc_live", "inspect_url",
+  ];
+
+  const codeBox: React.CSSProperties = { display: "flex", alignItems: "stretch", background: "rgba(255,255,255,0.04)", border: "1px solid var(--color-border)", borderRadius: "8px", overflow: "hidden" };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-      {/* Beta banner */}
-      <div style={{ padding: "12px 16px", borderRadius: "8px", border: "1px solid rgba(245,158,11,0.4)", background: "rgba(245,158,11,0.06)", fontSize: "13px", color: "#FCD34D" }}>
-        <strong>{t("mcpBeta")}</strong> {t("mcpBetaText")}
-      </div>
-
       <SectionCard>
-        <SectionTitle
-          icon={<Zap size={17} />}
-          title={t("mcpKeys")}
-          sub={t("mcpKeysDesc")}
-        />
+        <SectionTitle icon={<Zap size={17} />} title={t("mcpTitle")} sub={t("mcpSub")} />
 
-        {/* Create key input */}
-        <div style={{ display: "flex", gap: "0", marginBottom: "24px", border: "1px solid var(--color-border)", borderRadius: "8px", overflow: "hidden" }}>
-          <input
-            value={keyName} onChange={e => setKeyName(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && createKey()}
-            placeholder={t("mcpKeyName")}
-            style={{ flex: 1, padding: "10px 14px", background: "transparent", border: "none", color: "var(--color-text-primary)", fontSize: "13px", outline: "none" }}
-          />
-          <button onClick={createKey} style={{ padding: "10px 18px", background: "transparent", borderLeft: "1px solid var(--color-border)", color: "var(--color-accent-blue)", fontSize: "13px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
-            onMouseOver={e => e.currentTarget.style.background = "rgba(59,130,246,0.08)"} onMouseOut={e => e.currentTarget.style.background = "transparent"}>
-            {t("createKey")}
-          </button>
+        {/* Token management */}
+        <div style={{ marginBottom: "20px" }}>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "8px" }}>{t("mcpTokenTitle")}</div>
+          {loading ? (
+            <div style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>…</div>
+          ) : token ? (
+            <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+              <code style={{ flex: 1, minWidth: "220px", padding: "10px 14px", fontSize: "12px", fontFamily: "monospace", color: "var(--color-text-primary)", background: "rgba(255,255,255,0.04)", border: "1px solid var(--color-border)", borderRadius: "8px", wordBreak: "break-all" }}>
+                {visible ? token : token.slice(0, 10) + "•".repeat(24)}
+              </code>
+              <button onClick={() => setVisible(v => !v)} style={{ padding: "9px 10px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", cursor: "pointer" }}><Eye size={14} /></button>
+              <button onClick={() => copy("token", token)} style={{ padding: "9px 12px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "transparent", color: copied === "token" ? "#10B981" : "var(--color-text-secondary)", fontSize: "12px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "5px" }}>
+                {copied === "token" ? <CheckCircle size={13} /> : <Copy size={13} />} {copied === "token" ? t("mcpCopied") : t("mcpCopy")}
+              </button>
+              <button onClick={generate} disabled={busy} style={{ padding: "9px 12px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>{t("mcpRotate")}</button>
+              <button onClick={revoke} disabled={busy} style={{ padding: "9px 12px", borderRadius: "8px", border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.08)", color: "#f87171", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>{t("mcpRevoke")}</button>
+            </div>
+          ) : (
+            <button onClick={generate} disabled={busy} style={{ padding: "10px 18px", borderRadius: "8px", border: "none", background: "var(--color-accent-blue)", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+              {busy ? "…" : t("mcpGenerate")}
+            </button>
+          )}
+          <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "8px", lineHeight: 1.6 }}>{t("mcpTokenNote")}</div>
         </div>
 
-        {/* Existing keys */}
-        {keys.length > 0 && (
-          <div style={{ marginBottom: "24px", display: "flex", flexDirection: "column", gap: "8px" }}>
-            {keys.map(k => (
-              <div key={k.id} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: "8px", border: "1px solid var(--color-border)" }}>
-                <Key size={14} color="var(--color-text-secondary)" />
-                <span style={{ flex: 1, fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{k.name}</span>
-                <code style={{ fontSize: "12px", color: "var(--color-text-secondary)", fontFamily: "monospace" }}>{k.key}</code>
-                <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{k.created}</span>
-                <button onClick={() => setKeys(prev => prev.filter(x => x.id !== k.id))} style={{ color: "var(--color-text-secondary)", background: "none", border: "none", cursor: "pointer" }}
-                  onMouseOver={e => e.currentTarget.style.color = "#f87171"} onMouseOut={e => e.currentTarget.style.color = "var(--color-text-secondary)"}>
-                  <X size={14} />
-                </button>
-              </div>
+        {/* Endpoint */}
+        <div style={{ marginBottom: "20px" }}>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "8px" }}>{t("mcpEndpointTitle")}</div>
+          <div style={codeBox}>
+            <code style={{ flex: 1, padding: "12px 16px", fontSize: "12px", fontFamily: "monospace", color: "var(--color-text-secondary)", wordBreak: "break-all" }}>{endpoint}</code>
+            <button onClick={() => copy("endpoint", endpoint)} style={{ padding: "0 14px", background: "transparent", border: "none", borderLeft: "1px solid var(--color-border)", color: copied === "endpoint" ? "#10B981" : "var(--color-text-secondary)", cursor: "pointer" }}>
+              {copied === "endpoint" ? <CheckCircle size={15} /> : <Copy size={15} />}
+            </button>
+          </div>
+        </div>
+
+        {/* Connect guide */}
+        <div style={{ border: "1px solid var(--color-border)", borderRadius: "10px", padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
+          <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>{t("mcpConnectTitle")}</h3>
+          <div style={{ display: "flex", gap: "2px", background: "rgba(255,255,255,0.06)", borderRadius: "8px", padding: "3px", width: "fit-content", flexWrap: "wrap" }}>
+            {(Object.keys(commands) as (typeof client)[]).map(id => (
+              <button key={id} onClick={() => setClient(id)} style={{ padding: "6px 14px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, cursor: "pointer", background: client === id ? "var(--color-card)" : "transparent", color: client === id ? "var(--color-text-primary)" : "var(--color-text-secondary)", border: "none", transition: "all 0.15s" }}>
+                {commands[id].label}
+              </button>
             ))}
           </div>
-        )}
-
-        {/* MCP setup guide */}
-        <div style={{ border: "1px solid var(--color-border)", borderRadius: "10px", padding: "20px", display: "flex", flexDirection: "column", gap: "20px" }}>
-          <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>{t("mcpSetupTitle")}</h3>
-
-          {/* Step 1 */}
-          <div>
-            <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "6px" }}>{t("mcpStep1Title")}</div>
-            <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
-              {t("mcpStep1Desc")}{" "}
-              <a href="https://nodejs.org" target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)" }}>nodejs.org</a>.
-            </p>
+          {!token && <div style={{ fontSize: "12px", color: "#FCD34D" }}>{t("mcpNoTokenYet")}</div>}
+          <div style={codeBox}>
+            <pre style={{ flex: 1, padding: "12px 16px", fontSize: "12px", fontFamily: "monospace", color: "var(--color-text-secondary)", whiteSpace: "pre-wrap", wordBreak: "break-all", margin: 0 }}>{commands[client].cmd}</pre>
+            <button onClick={() => copy("cmd", commands[client].cmd)} style={{ padding: "0 14px", background: "transparent", border: "none", borderLeft: "1px solid var(--color-border)", color: copied === "cmd" ? "#10B981" : "var(--color-text-secondary)", cursor: "pointer", flexShrink: 0 }}>
+              {copied === "cmd" ? <CheckCircle size={15} /> : <Copy size={15} />}
+            </button>
           </div>
+          <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: 1.6, margin: 0 }}>
+            {t("mcpTryPrompt")} <em style={{ color: "var(--color-text-primary)" }}>{t("mcpTryPromptExample")}</em>
+          </p>
+        </div>
 
-          {/* Step 2 */}
-          <div>
-            <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "12px" }}>{t("mcpStep2Title")}</div>
-            {/* OS tabs */}
-            <div style={{ display: "flex", gap: "2px", background: "rgba(255,255,255,0.06)", borderRadius: "8px", padding: "3px", width: "fit-content", marginBottom: "14px" }}>
-              {([["mac", "🍎  macOS / Linux"], ["win", "⊞  Windows"]] as [string, string][]).map(([id, label]) => (
-                <button key={id} onClick={() => setOs(id as "mac" | "win")} style={{ padding: "6px 16px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, cursor: "pointer", background: os === id ? "var(--color-card)" : "transparent", color: os === id ? "#fff" : "var(--color-text-secondary)", border: "none", boxShadow: os === id ? "0 1px 4px rgba(0,0,0,0.3)" : "none", transition: "all 0.15s" }}>
-                  {label}
-                </button>
-              ))}
-            </div>
-            <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", marginBottom: "8px", lineHeight: 1.6 }}>
-              {keys.length === 0
-                ? t("mcpNoKeyYet")
-                : <>{t("mcpOpenTerminal")} <strong style={{ color: "var(--color-text-primary)" }}>{t("mcpTerminal")}</strong> {t("mcpTerminalApp")} {os === "mac" && <>(press <kbd style={{ background: "rgba(255,255,255,0.1)", padding: "1px 5px", borderRadius: "4px", fontSize: "11px" }}>⌘ Space</kbd> {t("mcpTerminalPress")} <em>{t("mcpTerminal")}</em>)</>}, {t("mcpTerminalPaste")}</>
-              }
-            </p>
-            {/* Command box */}
-            <div style={{ display: "flex", alignItems: "center", gap: "0", background: "rgba(255,255,255,0.04)", border: "1px solid var(--color-border)", borderRadius: "8px", overflow: "hidden" }}>
-              <code style={{ flex: 1, padding: "12px 16px", fontSize: "12px", fontFamily: "monospace", color: "var(--color-text-secondary)", wordBreak: "break-all" }}>
-                {command}
-              </code>
-              <button onClick={copyCmd} title="Copy" style={{ padding: "12px 14px", background: "transparent", borderLeft: "1px solid var(--color-border)", color: copied ? "#10B981" : "var(--color-text-secondary)", cursor: "pointer", flexShrink: 0 }}>
-                {copied ? <CheckCircle size={15} /> : <Copy size={15} />}
-              </button>
-            </div>
+        {/* Available tools */}
+        <div style={{ marginTop: "20px" }}>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "8px" }}>{t("mcpToolsTitle")}</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+            {TOOL_LIST.map(name => (
+              <code key={name} style={{ fontSize: "11px", fontFamily: "monospace", padding: "4px 9px", borderRadius: "6px", background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.2)", color: "var(--color-accent-blue)" }}>{name}</code>
+            ))}
           </div>
-
-          {/* Step 3 */}
-          <div>
-            <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "6px" }}>{t("mcpStep3Title")}</div>
-            <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: 1.6, marginBottom: "8px" }}>
-              {t("mcpStep3Desc")} <em style={{ color: "var(--color-text-primary)" }}>{t("mcpStep3Example")}</em>
-            </p>
-            <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
-              {t("mcpTip")}
-            </p>
+          <div style={{ fontSize: "12.5px", color: "var(--color-text-secondary)", marginTop: "14px", lineHeight: 1.6, padding: "12px 14px", borderRadius: "8px", background: "rgba(59,130,246,0.05)", border: "1px solid rgba(59,130,246,0.12)", display: "flex", flexDirection: "column", gap: "6px" }}>
+            <span>
+              💡 <b>{t("mcpSkillsTitle") || "AI Agent Skills:"}</b> {t("mcpSkillsNote")}
+            </span>
+            <a href="https://github.com/fenjo26/opengsc/tree/main/.agents/skills" target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "4px", width: "fit-content" }}>
+              <span>GitHub: opengsc/.agents/skills</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
+            </a>
           </div>
         </div>
       </SectionCard>
@@ -538,14 +611,209 @@ function PreferencesSection({ user }: { user: any }) {
   );
 }
 
+// ─── Notifications Section (Telegram bot + alert rules) ───────────────────────
+function NotificationsSection() {
+  const { t, language } = useLanguage() as any;
+  // Telegram state
+  const [tg, setTg] = useState<{ connected: boolean; botTokenMasked: string | null; chatId: string | null } | null>(null);
+  const [botToken, setBotToken] = useState("");
+  const [tgBusy, setTgBusy] = useState("");
+  const [tgMsg, setTgMsg] = useState("");
+  // Slack state
+  const [slack, setSlack] = useState<{ connected: boolean; webhookMasked: string | null } | null>(null);
+  const [slackWebhook, setSlackWebhook] = useState("");
+  const [slackBusy, setSlackBusy] = useState("");
+  const [slackMsg, setSlackMsg] = useState("");
+  // Alerts state
+  const [alerts, setAlerts] = useState<any>(null);
+  const [recent, setRecent] = useState<any[]>([]);
+  const [alertsSaved, setAlertsSaved] = useState(false);
+
+  const reloadTg = () => fetch("/api/settings/telegram").then(r => r.json()).then(setTg).catch(() => {});
+  const reloadSlack = () => fetch("/api/settings/slack").then(r => r.json()).then(setSlack).catch(() => {});
+  const reloadAlerts = () => fetch("/api/settings/alerts").then(r => r.json()).then(d => { setAlerts(d.settings); setRecent(d.recent || []); }).catch(() => {});
+  useEffect(() => { reloadTg(); reloadSlack(); reloadAlerts(); }, []);
+
+  const tgAction = async (action: string, body: any = {}) => {
+    setTgBusy(action); setTgMsg("");
+    try {
+      const res = await fetch("/api/settings/telegram", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ...body }),
+      });
+      const d = await res.json();
+      if (!res.ok) setTgMsg(t("tgErr") + ": " + (d.error ?? res.status));
+      else if (action === "detect") setTgMsg(`${t("tgDetected")} ${d.username || d.chatId}`);
+      else if (action === "test") setTgMsg(t("tgTestOk"));
+      reloadTg();
+    } catch (e: any) { setTgMsg(String(e?.message ?? e)); }
+    setTgBusy("");
+  };
+
+  const slackAction = async (action: string, body: any = {}) => {
+    setSlackBusy(action); setSlackMsg("");
+    try {
+      const res = await fetch("/api/settings/slack", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ...body }),
+      });
+      const d = await res.json();
+      if (!res.ok) setSlackMsg((t("tgErr") || "Error") + ": " + (d.error ?? res.status));
+      else if (action === "save") setSlackMsg(t("slackSaved") || "Slack Webhook saved successfully.");
+      else if (action === "test") setSlackMsg(t("slackTestOk") || "Test message sent to Slack channel.");
+      reloadSlack();
+    } catch (e: any) { setSlackMsg(String(e?.message ?? e)); }
+    setSlackBusy("");
+  };
+
+  const saveAlerts = async (next: any) => {
+    setAlerts(next);
+    try {
+      await fetch("/api/settings/alerts", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ settings: { ...next, lang: language } }),
+      });
+      setAlertsSaved(true); setTimeout(() => setAlertsSaved(false), 1500);
+    } catch {}
+  };
+
+  const numInput: React.CSSProperties = { width: "64px", padding: "6px 8px", borderRadius: "7px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-primary)", fontSize: "12px" };
+  const rowStyle: React.CSSProperties = { display: "flex", alignItems: "center", gap: "10px", padding: "10px 0", borderBottom: "1px solid var(--color-border)", flexWrap: "wrap" };
+  const smallBtn: React.CSSProperties = { padding: "8px 14px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-primary)", fontSize: "12px", fontWeight: 600, cursor: "pointer" };
+
+  const AlertRow = ({ id, label, value, unit, field }: { id: string; label: string; value: any; unit: string; field: string }) => (
+    <div style={rowStyle}>
+      <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "var(--color-text-primary)", cursor: "pointer", minWidth: "260px" }}>
+        <input type="checkbox" checked={!!value.on} onChange={e => saveAlerts({ ...alerts, [id]: { ...value, on: e.target.checked } })} />
+        {label}
+      </label>
+      <input type="number" value={value[field]} style={numInput}
+        onChange={e => saveAlerts({ ...alerts, [id]: { ...value, [field]: Number(e.target.value) } })} />
+      <span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>{unit}</span>
+    </div>
+  );
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      {/* Telegram */}
+      <SectionCard>
+        <SectionTitle icon={<Zap size={17} color="#2AABEE" />} title={t("tgTitle")} sub={t("tgSub")} />
+        {tg?.connected ? (
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "#10B981", fontWeight: 600 }}>
+              <CheckCircle size={14} /> {t("tgConnected")}
+            </span>
+            <code style={{ fontSize: "12px", color: "var(--color-text-secondary)", fontFamily: "monospace" }}>{tg.botTokenMasked} · chat {tg.chatId}</code>
+            <button onClick={() => tgAction("test")} disabled={!!tgBusy} style={smallBtn}>{tgBusy === "test" ? "…" : t("tgTest")}</button>
+            <button onClick={async () => { await fetch("/api/settings/telegram", { method: "DELETE" }); reloadTg(); }} style={{ ...smallBtn, border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.08)", color: "#f87171" }}>{t("tgDisconnect")}</button>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <ol style={{ fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: 1.8, paddingLeft: "18px", margin: 0 }}>
+              <li>{t("tgStep1")} <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)" }}>@BotFather</a> → <code>/newbot</code></li>
+              <li>{t("tgStep2")}</li>
+              <li>{t("tgStep3")}</li>
+            </ol>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              <input value={botToken} onChange={e => setBotToken(e.target.value)} placeholder="123456789:AA..." type="password"
+                style={{ flex: 1, minWidth: "220px", padding: "9px 12px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-primary)", fontSize: "12px", fontFamily: "monospace" }} />
+              <button onClick={() => tgAction("save", { botToken })} disabled={!botToken.trim() || !!tgBusy}
+                style={{ ...smallBtn, background: "var(--color-accent-blue)", color: "#fff", border: "none" }}>{tgBusy === "save" ? "…" : t("tgSaveToken")}</button>
+            </div>
+            {tg?.botTokenMasked && !tg.chatId && (
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                <span style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>{t("tgDetectHint")}</span>
+                <button onClick={() => tgAction("detect")} disabled={!!tgBusy} style={smallBtn}>{tgBusy === "detect" ? "…" : t("tgDetect")}</button>
+              </div>
+            )}
+          </div>
+        )}
+        {tgMsg && <div style={{ fontSize: "12px", color: tgMsg.startsWith(t("tgErr")) ? "#f87171" : "#10B981", marginTop: "10px" }}>{tgMsg}</div>}
+      </SectionCard>
+
+      {/* Slack Webhook */}
+      <SectionCard>
+        <SectionTitle icon={
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#E01E5A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+            <rect x="3" y="3" width="18" height="18" rx="4" /><path d="M12 8v8M8 12h8" />
+          </svg>
+        } title={t("slackTitle") || "Slack Webhook"} sub={t("slackSub") || "Send alerts and digests directly to a Slack channel."} />
+        {slack?.connected ? (
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "#10B981", fontWeight: 600 }}>
+              <CheckCircle size={14} /> {t("slackConnected") || "Connected"}
+            </span>
+            <code style={{ fontSize: "12px", color: "var(--color-text-secondary)", fontFamily: "monospace" }}>{slack.webhookMasked}</code>
+            <button onClick={() => slackAction("test")} disabled={!!slackBusy} style={smallBtn}>{slackBusy === "test" ? "…" : t("tgTest")}</button>
+            <button onClick={async () => { await fetch("/api/settings/slack", { method: "DELETE" }); reloadSlack(); }} style={{ ...smallBtn, border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.08)", color: "#f87171" }}>{t("tgDisconnect")}</button>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: 0 }}>
+              {t("slackStep1") || "Create an Incoming Webhook in your Slack Workspace settings and paste the Webhook URL below:"}
+            </p>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              <input value={slackWebhook} onChange={e => setSlackWebhook(e.target.value)} placeholder="https://hooks.slack.com/services/..." type="password"
+                style={{ flex: 1, minWidth: "220px", padding: "9px 12px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-primary)", fontSize: "12px", fontFamily: "monospace" }} />
+              <button onClick={() => slackAction("save", { webhookUrl: slackWebhook })} disabled={!slackWebhook.trim() || !!slackBusy}
+                style={{ ...smallBtn, background: "var(--color-accent-blue)", color: "#fff", border: "none" }}>{slackBusy === "save" ? "…" : t("tgSaveToken")}</button>
+            </div>
+          </div>
+        )}
+        {slackMsg && <div style={{ fontSize: "12px", color: slackMsg.includes("Error") || slackMsg.includes("invalid") ? "#f87171" : "#10B981", marginTop: "10px" }}>{slackMsg}</div>}
+      </SectionCard>
+
+      {/* Alert rules */}
+      {alerts && (
+        <SectionCard>
+          <SectionTitle icon={<AlertCircle size={17} color="#F59E0B" />} title={t("alertsTitle")} sub={t("alertsSub")} />
+          <AlertRow id="rankDrop" label={t("alertRankDrop")} value={alerts.rankDrop} unit={t("alertPositionsUnit")} field="threshold" />
+          <AlertRow id="trafficDrop" label={t("alertTrafficDrop")} value={alerts.trafficDrop} unit="%" field="percent" />
+          <AlertRow id="ssl" label={t("alertSsl")} value={alerts.ssl} unit={t("alertDaysUnit")} field="days" />
+          <AlertRow id="audit" label={t("alertAudit")} value={alerts.audit} unit={t("alertScoreUnit")} field="minScore" />
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "12px" }}>
+            <button onClick={async () => {
+              const d = await fetch("/api/settings/alerts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "run" }) }).then(r => r.json());
+              setTgMsg(`${t("alertsRanNow")}: ${d.fired ?? 0}`);
+              reloadAlerts();
+            }} style={smallBtn}>{t("alertsRunNow")}</button>
+            {alertsSaved && <span style={{ fontSize: "12px", color: "#10B981" }}>✓ {t("seoModelSaved")}</span>}
+            <span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>{t("alertsCadenceNote")}</span>
+          </div>
+        </SectionCard>
+      )}
+
+      {/* Recent alerts */}
+      {recent.length > 0 && (
+        <SectionCard>
+          <SectionTitle icon={<AlertCircle size={17} color="#EF4444" />} title={t("alertsRecent")} sub="" />
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {recent.map(a => (
+              <div key={a.id} style={{ padding: "10px 12px", borderRadius: "8px", background: "rgba(255,255,255,0.03)", border: "1px solid var(--color-border)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)" }}>{a.title}</span>
+                  {a.sent && <span style={{ fontSize: "11px", color: "#34c759" }}>✓ {t("alertSent") || "Sent"}</span>}
+                  <span style={{ flex: 1 }} />
+                  <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{new Date(a.createdAt).toLocaleString()}</span>
+                </div>
+                <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "3px" }}>{a.message.replace(/\*/g, "")}</div>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      )}
+    </div>
+  );
+}
+
 // ─── AI Configuration Section Component ───────────────────────────────────────
 const AI_PROVIDERS = [
   {
     id: "anthropic",
     name: "Anthropic",
-    model: "Claude Haiku",
+    model: "Claude Haiku 4.5",
     placeholder: "sk-ant-api03-...",
-    hint: "Fastest and most affordable Claude model",
+    hint: "Default: Claude Haiku 4.5 — fast and affordable; pick Sonnet/Opus below for higher quality",
     docsUrl: "https://console.anthropic.com/settings/keys",
     docsLabel: "console.anthropic.com",
     color: "#CF6B4A",
@@ -554,9 +822,9 @@ const AI_PROVIDERS = [
   {
     id: "openai",
     name: "OpenAI",
-    model: "GPT-4o Mini",
+    model: "GPT-5.6 Luna",
     placeholder: "sk-...",
-    hint: "Fast and cost-effective GPT model",
+    hint: "Default: GPT-5.6 Luna — cost-optimized; Terra/Sol available in the model list",
     docsUrl: "https://platform.openai.com/api-keys",
     docsLabel: "platform.openai.com",
     color: "#10A37F",
@@ -565,9 +833,9 @@ const AI_PROVIDERS = [
   {
     id: "gemini",
     name: "Google Gemini",
-    model: "Gemini 1.5 Flash",
+    model: "Gemini 3 Flash",
     placeholder: "AIzaSy...",
-    hint: "Google's fast multimodal model",
+    hint: "Default: Gemini 3 Flash — Google's fast multimodal model",
     docsUrl: "https://aistudio.google.com/app/apikey",
     docsLabel: "aistudio.google.com",
     color: "#4285F4",
@@ -576,9 +844,9 @@ const AI_PROVIDERS = [
   {
     id: "openrouter",
     name: "OpenRouter",
-    model: "Claude 3.5 Haiku",
+    model: "Claude Haiku 4.5",
     placeholder: "sk-or-...",
-    hint: "Access 200+ models through one API",
+    hint: "Access 200+ models through one API; default: Claude Haiku 4.5",
     docsUrl: "https://openrouter.ai/keys",
     docsLabel: "openrouter.ai",
     color: "#7C3AED",
@@ -596,6 +864,17 @@ const AI_PROVIDERS = [
     logo: "Z",
   },
   {
+    id: "kimi",
+    name: "Kimi (Moonshot AI)",
+    model: "Kimi K3",
+    placeholder: "sk-...",
+    hint: "Default: Kimi K3 — flagship, 1M context, vision; OpenAI-compatible API",
+    docsUrl: "https://platform.moonshot.ai/console/api-keys",
+    docsLabel: "platform.moonshot.ai",
+    color: "#16C2A3",
+    logo: "K",
+  },
+  {
     id: "kie",
     name: "Kie.ai",
     model: "GPT-5.5 (Codex)",
@@ -606,18 +885,70 @@ const AI_PROVIDERS = [
     color: "#F97316",
     logo: "K",
   },
+  {
+    id: "deepseek",
+    name: "DeepSeek",
+    model: "deepseek-v4-flash",
+    placeholder: "sk-...",
+    hint: "Default: deepseek-v4-flash — extremely affordable and fast; pick deepseek-v4-pro below for deep reasoning and complex coding",
+    docsUrl: "https://platform.deepseek.com",
+    docsLabel: "platform.deepseek.com",
+    color: "#4D6BFE",
+    logo: "D",
+  },
+  {
+    id: "qwen",
+    name: "Qwen (Alibaba Cloud)",
+    model: "qwen-max",
+    placeholder: "sk-...",
+    hint: "Default: qwen-max — flagship model by Alibaba Cloud; supports qwen-plus and qwen-turbo in the model list",
+    docsUrl: "https://modelstudio.console.alibabacloud.com",
+    docsLabel: "modelstudio.console.alibabacloud.com",
+    color: "#6E55D0",
+    logo: "Q",
+  },
 ] as const;
 
 function AIProviderCard({ provider }: { provider: typeof AI_PROVIDERS[number] }) {
+  const { t } = useLanguage();
   const storageKey = `aiKey_${provider.id}`;
+  const modelKey = `aiModel_${provider.id}`;
   const [key, setKey] = useState("");
   const [visible, setVisible] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [model, setModel] = useState("");
+  const [models, setModels] = useState<{ id: string; label: string }[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsErr, setModelsErr] = useState(false);
   const isConfigured = key.trim().length > 6;
 
   useEffect(() => {
     setKey(localStorage.getItem(storageKey) || "");
-  }, [storageKey]);
+    setModel(localStorage.getItem(modelKey) || "");
+  }, [storageKey, modelKey]);
+
+  // Live model list from the provider's own API (server-side proxy avoids CORS).
+  const loadModels = async (apiKey: string) => {
+    if (!apiKey.trim()) return;
+    setModelsLoading(true); setModelsErr(false);
+    try {
+      const res = await fetch("/api/seo/models", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: provider.id, apiKey: apiKey.trim() }),
+      });
+      const d = await res.json();
+      const list = Array.isArray(d?.models) ? d.models : [];
+      setModels(list);
+      if (!list.length) setModelsErr(true);
+    } catch { setModelsErr(true); }
+    setModelsLoading(false);
+  };
+
+  const pickModel = (id: string) => {
+    setModel(id);
+    if (id) localStorage.setItem(modelKey, id);
+    else localStorage.removeItem(modelKey);
+  };
 
   const handleSave = () => {
     localStorage.setItem(storageKey, key.trim());
@@ -659,14 +990,14 @@ function AIProviderCard({ provider }: { provider: typeof AI_PROVIDERS[number] })
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)" }}>{provider.name}</div>
-          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{provider.model}</div>
+          <div style={{ fontSize: "11px", color: model ? provider.color : "var(--color-text-secondary)", fontFamily: model ? "monospace" : undefined }}>{model || provider.model}</div>
         </div>
         {isConfigured ? (
           <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", color: "#10B981", fontWeight: 600, flexShrink: 0 }}>
-            <CheckCircle size={12} color="#10B981" /> Connected
+            <CheckCircle size={12} color="#10B981" /> {t("scConnected") || "Connected"}
           </span>
         ) : (
-          <span style={{ fontSize: "11px", color: "var(--color-text-secondary)", flexShrink: 0 }}>Not set</span>
+          <span style={{ fontSize: "11px", color: "var(--color-text-secondary)", flexShrink: 0 }}>{t("apiKeyNotConfigured") || "Not set"}</span>
         )}
       </div>
 
@@ -698,7 +1029,7 @@ function AIProviderCard({ provider }: { provider: typeof AI_PROVIDERS[number] })
           <button
             onClick={handleClear}
             style={{ padding: "8px 10px", borderRadius: "8px", border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.08)", color: "#f87171", fontSize: "12px", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center" }}
-            title="Remove key"
+            title={t("apiKeyDelete") || "Remove key"}
           >
             <X size={13} />
           </button>
@@ -714,9 +1045,35 @@ function AIProviderCard({ provider }: { provider: typeof AI_PROVIDERS[number] })
             flexShrink: 0, transition: "all 0.15s", display: "flex", alignItems: "center", gap: "4px",
           }}
         >
-          {saved ? <><CheckCircle size={12} /> Saved</> : "Save"}
+          {saved ? <><CheckCircle size={12} /> {t("apiKeySaved") || "✓ Saved"}</> : (t("apiKeySave") || "Save")}
         </button>
       </div>
+
+      {/* Model picker — live list from the provider's API; empty selection = provider default */}
+      {isConfigured && (
+        <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "8px" }}>
+          <select
+            value={model}
+            onChange={e => pickModel(e.target.value)}
+            onFocus={() => { if (!models.length && !modelsLoading) loadModels(key); }}
+            style={{ flex: 1, padding: "7px 10px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-primary)", fontSize: "12px", outline: "none" }}
+          >
+            <option value="">{t("aiModelDefaultOpt")} ({provider.model})</option>
+            {model && !models.some(m => m.id === model) && <option value={model}>{model}</option>}
+            {models.map(m => <option key={m.id} value={m.id}>{m.label !== m.id ? `${m.label} — ${m.id}` : m.id}</option>)}
+          </select>
+          <button
+            onClick={() => loadModels(key)}
+            title={t("aiModelRefresh")}
+            style={{ padding: "7px 10px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-secondary)", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", gap: "5px", flexShrink: 0 }}
+          >
+            <Sparkles size={12} className={modelsLoading ? "spin" : undefined} /> {modelsLoading ? "…" : t("aiModelRefresh")}
+          </button>
+        </div>
+      )}
+      {isConfigured && modelsErr && (
+        <div style={{ fontSize: "11px", color: "#f87171", marginBottom: "8px" }}>{t("aiModelLoadFail")}</div>
+      )}
 
       {/* Hint + link */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -1107,6 +1464,64 @@ function IndexApiSection() {
         </div>
       </SectionCard>
 
+      {/* ── Bing Webmaster Tools API ── */}
+      <SectionCard>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <div style={{ width: 28, height: 28, borderRadius: "6px", background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 800, color: "#3B82F6" }}>BG</div>
+            <div>
+              <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>Bing Webmaster API</span>
+              <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>{t("bingDesc") || "Used to fetch traffic stats and submit sitemaps directly to Bing Webmaster Tools."}</p>
+              <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
+                {t("bingHowTo")}{" "}
+                <a href="https://www.bing.com/webmasters" target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)" }}>bing.com/webmasters</a>
+                {" · "}
+                <a href="https://github.com/fenjo26/opengsc/blob/main/docs/SEARCH-ENGINES-SETUP.md" target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)" }}>{t("seSetupGuide")}</a>
+              </p>
+            </div>
+          </div>
+          <BingKeyField />
+        </div>
+      </SectionCard>
+
+      {/* ── Yandex.Webmaster API ── */}
+      <SectionCard>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <div style={{ width: 28, height: 28, borderRadius: "6px", background: "rgba(252,63,29,0.12)", border: "1px solid rgba(252,63,29,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 800, color: "#FC3F1D" }}>Я</div>
+            <div>
+              <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>Яндекс.Вебмастер API</span>
+              <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
+                {t("yandexDesc")}{" "}
+                <a href="https://oauth.yandex.ru" target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)" }}>oauth.yandex.ru</a>
+              </p>
+              <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
+                {t("yandexHowTo")}{" "}
+                <a href="https://github.com/fenjo26/opengsc/blob/main/docs/SEARCH-ENGINES-SETUP.md" target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)" }}>{t("seSetupGuide")}</a>
+              </p>
+            </div>
+          </div>
+          <LocalKeyField storageKey="seoKey_yandex" placeholder="y0_AgAAAA..." />
+        </div>
+      </SectionCard>
+
+      {/* ── IndexNow key ── */}
+      <SectionCard>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <div style={{ width: 28, height: 28, borderRadius: "6px", background: "rgba(124,58,237,0.12)", border: "1px solid rgba(124,58,237,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: 800, color: "#7C3AED" }}>IN</div>
+            <div>
+              <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>IndexNow</span>
+              <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
+                {t("indexNowDesc")}{" "}
+                <a href="https://github.com/fenjo26/opengsc/blob/main/docs/SEARCH-ENGINES-SETUP.md" target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)" }}>{t("seSetupGuide")}</a>
+              </p>
+            </div>
+          </div>
+          <LocalKeyField storageKey="seoKey_indexnow" placeholder="IndexNow key (hex)" />
+        </div>
+      </SectionCard>
+
       {/* ── Microsoft Clarity (note: token is per-site, configured in site UX tab) ── */}
       <SectionCard>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -1166,6 +1581,7 @@ const HEALTH_PROVIDERS = [
 ] as const;
 
 function HealthKeyCard({ provider }: { provider: typeof HEALTH_PROVIDERS[number] }) {
+  const { t } = useLanguage();
   const [key, setKey]       = useState("");
   const [visible, setVisible] = useState(false);
   const [saved, setSaved]   = useState(false);
@@ -1191,10 +1607,10 @@ function HealthKeyCard({ provider }: { provider: typeof HEALTH_PROVIDERS[number]
         </div>
         {isConfigured ? (
           <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", color: "#10B981", fontWeight: 600, flexShrink: 0 }}>
-            <CheckCircle size={12} color="#10B981" /> Connected
+            <CheckCircle size={12} color="#10B981" /> {t("scConnected") || "Connected"}
           </span>
         ) : (
-          <span style={{ fontSize: "11px", color: "var(--color-text-secondary)", flexShrink: 0 }}>Not set</span>
+          <span style={{ fontSize: "11px", color: "var(--color-text-secondary)", flexShrink: 0 }}>{t("apiKeyNotConfigured") || "Not set"}</span>
         )}
       </div>
       <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
@@ -1212,35 +1628,36 @@ function HealthKeyCard({ provider }: { provider: typeof HEALTH_PROVIDERS[number]
           </button>
         </div>
         {isConfigured && (
-          <button onClick={handleClear} style={{ padding: "8px 10px", borderRadius: "8px", border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.08)", color: "#f87171", fontSize: "12px", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center" }} title="Remove key">
+          <button onClick={handleClear} style={{ padding: "8px 10px", borderRadius: "8px", border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.08)", color: "#f87171", fontSize: "12px", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center" }} title={t("apiKeyDelete") || "Remove key"}>
             <X size={13} />
           </button>
         )}
         <button onClick={handleSave} disabled={!key.trim()} style={{ padding: "8px 14px", borderRadius: "8px", border: "none", background: saved ? "rgba(16,185,129,0.2)" : key.trim() ? `${provider.color}25` : "rgba(255,255,255,0.06)", color: saved ? "#10B981" : key.trim() ? provider.color : "var(--color-text-secondary)", fontSize: "12px", fontWeight: 600, cursor: key.trim() ? "pointer" : "not-allowed", flexShrink: 0, transition: "all 0.15s", display: "flex", alignItems: "center", gap: "4px" }}>
-          {saved ? <><CheckCircle size={12} /> Saved</> : "Save"}
+          {saved ? <><CheckCircle size={12} /> {t("apiKeySaved") || "✓ Saved"}</> : (t("apiKeySave") || "Save")}
         </button>
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{provider.hint}</span>
-        <a href={provider.docsUrl} target="_blank" rel="noreferrer" style={{ fontSize: "11px", color: "var(--color-accent-blue)", display: "flex", alignItems: "center", gap: "3px", textDecoration: "none", flexShrink: 0 }}>Get key ↗</a>
+        <a href={provider.docsUrl} target="_blank" rel="noreferrer" style={{ fontSize: "11px", color: "var(--color-accent-blue)", display: "flex", alignItems: "center", gap: "3px", textDecoration: "none", flexShrink: 0 }}>{t("healthGetKey") || "Get key ↗"}</a>
       </div>
     </div>
   );
 }
 
 function HealthApiKeysSection() {
+  const { t } = useLanguage();
   return (
     <SectionCard>
       <SectionTitle
         icon={<CheckCircle size={17} color="#10B981" />}
-        title="Health Check API Keys"
-        sub="Used in the Health tab on each site page. SSL is always checked for free. Add keys below to enable Safe Browsing, Core Web Vitals, and VirusTotal checks."
+        title={t("healthApiKeysTitle") || "Health Check API Keys"}
+        sub={t("healthApiKeysSub") || "Used in the Health tab on each site page. SSL is always checked for free. Add keys below to enable Safe Browsing, Core Web Vitals, and VirusTotal checks."}
       />
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
         {HEALTH_PROVIDERS.map(p => <HealthKeyCard key={p.id} provider={p} />)}
       </div>
       <div style={{ marginTop: "14px", padding: "11px 14px", borderRadius: "8px", background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.18)", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
-        💡 Keys are stored in your browser only and sent to the respective APIs when you run a health check. They are never stored on the server.
+        {t("healthApiKeysHint") || "💡 Keys are stored in your browser only and sent to the respective APIs when you run a health check. They are never stored on the server."}
       </div>
     </SectionCard>
   );
@@ -1480,7 +1897,7 @@ export default function SettingsPage() {
   // render with no SSR/hydration mismatch and no Suspense-boundary requirement.
   useEffect(() => {
     const tab = new URLSearchParams(window.location.search).get("tab");
-    const valid: NavItem[] = ["accounts", "teams", "api", "api-keys", "indexing-api", "seo-tools", "members", "preferences", "supersites"];
+    const valid: NavItem[] = ["accounts", "teams", "api", "api-keys", "indexing-api", "seo-tools", "notifications", "members", "preferences", "supersites"];
     if (tab && (valid as string[]).includes(tab)) setNav(tab as NavItem);
   }, []);
 
@@ -1544,6 +1961,7 @@ export default function SettingsPage() {
             <NavBtn id="api" icon={<Key size={14} />} label={t("navApiMcpKeys")} />
             <NavBtn id="indexing-api" icon={<Globe size={14} />} label={t("navIndexingApi")} />
             <NavBtn id="seo-tools" icon={<Sparkles size={14} />} label={t("navSeoTools")} />
+            <NavBtn id="notifications" icon={<Zap size={14} />} label={t("navNotifications")} />
           </div>
 
           {/* Team */}
@@ -1577,6 +1995,7 @@ export default function SettingsPage() {
           {nav === "api"          && <ApiSection />}
           {nav === "indexing-api" && <IndexApiSection />}
           {nav === "seo-tools"    && <SeoToolsSettings />}
+          {nav === "notifications" && <NotificationsSection />}
           {nav === "members"      && <MembersSection user={user} />}
           {nav === "preferences"  && <PreferencesSection user={user} />}
           {nav === "supersites"   && <SuperSitesSection />}

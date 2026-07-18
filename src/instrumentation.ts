@@ -9,5 +9,9 @@ export async function register() {
     startRankScheduler();
     const { startAeoScheduler } = await import('@/lib/aeoScheduler');
     startAeoScheduler();
+    const { startAlertScheduler } = await import('@/lib/alertScheduler');
+    startAlertScheduler();
+    const { startDigestScheduler } = await import('@/lib/digestScheduler');
+    startDigestScheduler();
   }
 }

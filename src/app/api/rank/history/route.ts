@@ -10,7 +10,6 @@ import { getUserGoogleAccounts, queryGsc, isoDaysAgo } from "@/lib/gscQuery";
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
   const userId = (session?.user as any)?.id as string | undefined;
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
   const keywordId = searchParams.get("keywordId") || "";
@@ -18,10 +17,13 @@ export async function GET(req: Request) {
 
   const kw = await prisma.trackedKeyword.findUnique({
     where: { id: keywordId },
-    include: { site: { select: { id: true, userId: true, siteId: true, url: true } } },
+    include: { site: { select: { id: true, userId: true, siteId: true, url: true, shareToken: true, shareEnabled: true } } },
   });
-  if (!kw || kw.site.userId !== userId) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  // Owner session — or a valid share token for the keyword's own site (guest view).
+  const shareToken = searchParams.get("shareToken") || "";
+  const guestOk = !!(kw && shareToken && kw.site.shareEnabled && kw.site.shareToken === shareToken);
+  if (!kw || (!guestOk && kw.site.userId !== userId)) {
+    return NextResponse.json({ error: userId || guestOk ? "Not found" : "Unauthorized" }, { status: userId || guestOk ? 404 : 401 });
   }
 
   const since = new Date(Date.now() - days * 86400000);

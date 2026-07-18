@@ -19,7 +19,7 @@ export async function getUserGoogleAccounts(userId: string): Promise<GscAccount[
   });
 }
 
-function makeOAuth2(account: GscAccount) {
+export function makeOAuth2(account: GscAccount) {
   const oauth2 = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,

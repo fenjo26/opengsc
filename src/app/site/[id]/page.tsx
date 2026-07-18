@@ -9,6 +9,10 @@ import CtrBenchmark from "@/components/CtrBenchmark";
 import { SiteHealthPanel } from "@/components/SiteHealthPanel";
 import { ClarityPanel } from "@/components/ClarityPanel";
 import RankTracker from "@/components/RankTracker";
+import SiteAuditPanel from "@/components/SiteAuditPanel";
+import EngineView, { type AltEngine } from "@/components/EngineView";
+import SearchEnginesPanel from "@/components/SearchEnginesPanel";
+import { withShare } from "@/lib/shareParam";
 import AeoTracker from "@/components/AeoTracker";
 import { ALGO_UPDATES, ALGO_UPDATE_COLORS, algoDateLabel } from "@/lib/algoUpdates";
 import { useParams, useRouter } from "next/navigation";
@@ -1291,6 +1295,31 @@ function PeriodDropdown({ period, onChange }: { period: string; onChange: (p: st
 // Shows/hides the Google algorithm-update reference lines on the Dashboard chart.
 // (Note adding/management itself lives on the "Заметки" tab — the old dropdown
 // here duplicated that with a couple of dead, unwired buttons, so it's gone.)
+// ─── AIO Impact tooltip: raw values + their index vs the base (=100) day ──────
+function AioTooltip({ active, payload, label }: any) {
+  const { t } = useLanguage();
+  if (!active || !payload?.length) return null;
+  const d = payload.reduce((acc: any, p: any) => { acc[p.dataKey] = p.value; return acc; }, {} as any);
+  const row = payload[0]?.payload ?? {};
+  return (
+    <div style={{ background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "10px", padding: "10px 14px", fontSize: "12px", color: "var(--color-text-primary)", boxShadow: "0 4px 20px rgba(0,0,0,0.3)" }}>
+      <p style={{ fontWeight: 600, marginBottom: "6px" }}>{label}</p>
+      {[
+        { idxKey: "clicksIdx", rawKey: "clicks", label: t("clicks"), color: C.clicks },
+        { idxKey: "imprIdx", rawKey: "impressions", label: t("impressions"), color: C.impressions },
+      ].map(({ idxKey, rawKey, label: l, color }) => (
+        <div key={idxKey} style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
+          <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: color, flexShrink: 0, display: "inline-block" }} />
+          <span style={{ color: "var(--color-text-secondary)", flex: 1 }}>{l}</span>
+          <span style={{ fontWeight: 600 }}>{(row[rawKey] ?? 0).toLocaleString()}</span>
+          <span style={{ color: d[idxKey] >= 100 ? "#10B981" : "#EF4444", fontWeight: 700, minWidth: "44px", textAlign: "right" }}>{d[idxKey]}%</span>
+        </div>
+      ))}
+      <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginTop: "5px" }}>{t("aioBaseNote")}</div>
+    </div>
+  );
+}
+
 function GoogleUpdatesToggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   return (
     <button onClick={onToggle} title="Google algorithm updates on chart"
@@ -1578,7 +1607,7 @@ function GA4Tab({ domain, period, setPeriod, periodOptions }: {
   const loadReport = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/ga4/report?domain=${encodeURIComponent(domain)}&period=${encodeURIComponent(period)}`);
+      const res = await fetch(withShare(`/api/ga4/report?domain=${encodeURIComponent(domain)}&period=${encodeURIComponent(period)}`));
       const data: GA4Report = await res.json();
       setReport(data);
       if (!data.linked) { loadProperties(); setBd(null); }
@@ -1593,7 +1622,7 @@ function GA4Tab({ domain, period, setPeriod, periodOptions }: {
 
   const loadBreakdowns = async () => {
     try {
-      const res = await fetch(`/api/ga4/breakdowns?domain=${encodeURIComponent(domain)}&period=${encodeURIComponent(period)}`);
+      const res = await fetch(withShare(`/api/ga4/breakdowns?domain=${encodeURIComponent(domain)}&period=${encodeURIComponent(period)}`));
       const data = await res.json();
       setBd(data.linked && !data.error ? data : null);
     } catch {
@@ -2606,6 +2635,9 @@ function IndexingTab({ siteDbId, domain }: { siteDbId: string; domain: string })
   return (
     <div style={{ padding: "24px 32px", display: "flex", flexDirection: "column", gap: "20px" }}>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+
+      {/* ── Search engines: Bing / Yandex / IndexNow actions ── */}
+      <SearchEnginesPanel siteDbId={siteDbId} domain={domain} />
 
       {/* ── Sitemap sync card ── */}
       <div style={{ background: "var(--color-card)", borderRadius: "12px", border: "1px solid var(--color-border)", overflow: "hidden" }}>
@@ -3710,49 +3742,77 @@ function WinnersLosers({ data, blur, onTrack, tracked }: {
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
-export default function SitePage() {
+interface SitePageProps {
+  siteDbId?: string;
+  domain?: string;
+  readOnly?: boolean;
+  shareToken?: string;
+}
+
+export default function SitePage({
+  siteDbId: propSiteDbId,
+  domain: propDomain,
+  readOnly = false,
+  shareToken,
+}: SitePageProps = {}) {
   const { t } = useLanguage();
   const params = useParams();
   const router = useRouter();
-  const domain = decodeURIComponent(params.id as string);
+  const domain = propDomain || decodeURIComponent(params.id as string);
   const { blur } = usePrivacy();
   const blurStyle: React.CSSProperties = blur
     ? { filter: "blur(6px)", userSelect: "none", transition: "filter 0.25s" }
     : { transition: "filter 0.25s" };
 
+  const getUrl = (url: string) => {
+    if (!shareToken) return url;
+    return `${url}${url.includes('?') ? '&' : '?'}shareToken=${shareToken}`;
+  };
+
   // Ahrefs Domain Rating (free public API, server-cached; attribution required by license).
   const [drValue, setDrValue] = useState<number | null>(null);
   useEffect(() => {
-    fetch(`/api/dr?domains=${encodeURIComponent(domain)}`).then(r => r.ok ? r.json() : null).then(d => {
+    fetch(getUrl(`/api/dr?domains=${encodeURIComponent(domain)}`)).then(r => r.ok ? r.json() : null).then(d => {
       const key = domain.toLowerCase().replace(/^www\./, "");
       const v = d?.ratings?.[key]?.dr;
       if (typeof v === "number") setDrValue(v);
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [domain]);
+  }, [domain, shareToken]);
 
   // Use index so tab state doesn't break on language change
-  const TAB_KEYS = ["dashboard", "positions", "aeo", "ga4", "indexing", "backlinks", "annotations", "optimize", "health", "ux", "settings"] as const;
+  const TAB_KEYS = ["dashboard", "positions", "aeo", "ga4", "indexing", "backlinks", "annotations", "optimize", "health", "audit", "ux", "settings"] as const;
   type TabKey = typeof TAB_KEYS[number];
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [period, setPeriod]       = useState("7d");
   const [siteData, setSiteData]   = useState<any>(null);
   const [dataLoading, setDataLoading] = useState(true);
 
-  const TABS: { key: TabKey; label: string }[] = [
-    { key: "dashboard",   label: t("tabDashboard") },
-    { key: "positions",   label: t("tabPositions") },
-    { key: "aeo",         label: t("tabAeo") },
-    { key: "ga4",         label: t("tabGA4") },
-    { key: "indexing",    label: t("tabIndexing") },
-    { key: "backlinks",   label: t("backlinksTab") },
-    { key: "annotations", label: t("tabAnnotations") },
-    { key: "optimize",    label: t("tabOptimize") },
-    { key: "health",      label: t("tabHealth") },
-    { key: "ux",          label: t("tabUX") },
-    { key: "settings",    label: t("tabSettings") },
-  ];
+  const TABS = useMemo(() => {
+    // Guest (share-link) view: read-only analytics tabs only — no settings, no
+    // action-heavy modules (indexing submits, AI optimize, annotations, backlinks mgmt).
+    if (readOnly) return [
+      { key: "dashboard" as const, label: t("tabDashboard") },
+      { key: "positions" as const, label: t("tabPositions") },
+      { key: "ga4" as const,       label: t("tabGA4") },
+      { key: "health" as const,    label: t("tabHealth") },
+      { key: "audit" as const,     label: t("tabAudit") },
+    ];
+    return [
+      { key: "dashboard" as const,   label: t("tabDashboard") },
+      { key: "positions" as const,   label: t("tabPositions") },
+      { key: "aeo" as const,         label: t("tabAeo") },
+      { key: "ga4" as const,         label: t("tabGA4") },
+      { key: "indexing" as const,    label: t("tabIndexing") },
+      { key: "backlinks" as const,   label: t("backlinksTab") },
+      { key: "annotations" as const, label: t("tabAnnotations") },
+      { key: "optimize" as const,    label: t("tabOptimize") },
+      { key: "health" as const,      label: t("tabHealth") },
+      { key: "audit" as const,       label: t("tabAudit") },
+      { key: "ux" as const,          label: t("tabUX") },
+      { key: "settings" as const,    label: t("tabSettings") },
+    ];
+  }, [readOnly, t]);
 
   const [syncing, setSyncing] = useState(false);
   const [activeMetrics, setActiveMetrics] = useState<Set<Metric>>(new Set(["clicks", "impressions", "ctr", "position"]));
@@ -3768,9 +3828,10 @@ export default function SitePage() {
   const scrollToResults = () => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   const [googleUpdates, setGoogleUpdatesState] = useState(true);
   useEffect(() => {
+    if (readOnly) return;
     const s = localStorage.getItem("site_google_updates");
     if (s !== null) setGoogleUpdatesState(s === "1");
-  }, []);
+  }, [readOnly]);
   const setGoogleUpdates = (fn: (v: boolean) => boolean) => setGoogleUpdatesState(v => {
     const next = fn(v);
     localStorage.setItem("site_google_updates", next ? "1" : "0");
@@ -3781,13 +3842,13 @@ export default function SitePage() {
   const [brandedKeywords, setBrandedKeywords] = useState<string[]>([]);
   const [clusterMetrics, setClusterMetrics] = useState<{ clusters: ClusterRow[]; groups: ClusterRow[] } | null>(null);
   const [clusterLoading, setClusterLoading] = useState(false);
-  const siteDbId = siteData?.siteDbId ?? '';
+  const siteDbId = propSiteDbId || siteData?.siteDbId || '';
   const toggleMetric = (m: Metric) => setActiveMetrics(p => { const n = new Set(p); n.has(m) ? n.delete(m) : n.add(m); return n; });
 
   const fetchClusterMetrics = (p = period) => {
     if (!siteDbId) return;
     setClusterLoading(true);
-    fetch(`/api/gsc/cluster-metrics?siteId=${encodeURIComponent(siteDbId)}&period=${p}`)
+    fetch(getUrl(`/api/gsc/cluster-metrics?siteId=${encodeURIComponent(siteDbId)}&period=${p}`))
       .then(r => r.json())
       .then(d => setClusterMetrics(d))
       .catch(() => {})
@@ -3799,12 +3860,13 @@ export default function SitePage() {
   // vs formatted-time text) and trigger a hydration mismatch (React #418). Load it after mount.
   const [syncedAt, setSyncedAt] = useState<Date | null>(null);
   useEffect(() => {
+    if (readOnly) return;
     const s = localStorage.getItem('gsc_synced_at');
     if (s) setSyncedAt(new Date(s));
-  }, []);
+  }, [readOnly]);
 
   const handleSync = () => {
-    if (syncing) return;
+    if (syncing || readOnly) return;
     setSyncing(true);
 
     fetch('/api/gsc/sync', { method: 'POST' })
@@ -3820,7 +3882,9 @@ export default function SitePage() {
                 const now = new Date();
                 setSyncedAt(now);
                 localStorage.setItem('gsc_synced_at', now.toISOString());
-                fetch(`/api/gsc/site?domain=${encodeURIComponent(domain)}&period=${period}`)
+                // Sync-all: also refresh the live Bing/Yandex views if any are connected.
+                setEngineRefresh(k => k + 1);
+                fetch(getUrl(`/api/gsc/site?domain=${encodeURIComponent(domain)}&period=${period}`))
                   .then(r => r.json())
                   .then(d => { if (d?.chartData) setSiteData(d); })
                   .catch(() => {})
@@ -3838,12 +3902,12 @@ export default function SitePage() {
   // Fetch data from DB whenever domain or period changes
   useEffect(() => {
     setDataLoading(true);
-    fetch(`/api/gsc/site?domain=${encodeURIComponent(domain)}&period=${period}`)
+    fetch(getUrl(`/api/gsc/site?domain=${encodeURIComponent(domain)}&period=${period}`))
       .then(r => r.json())
       .then(d => setSiteData(d))
       .catch(() => {})
       .finally(() => setDataLoading(false));
-  }, [domain, period]);
+  }, [domain, period, shareToken]);
 
   // Fetch cluster metrics whenever siteDbId or period changes
   useEffect(() => {
@@ -3853,11 +3917,11 @@ export default function SitePage() {
   // Fetch branded keywords whenever siteDbId changes
   useEffect(() => {
     if (!siteDbId) return;
-    fetch(`/api/gsc/branded?siteId=${siteDbId}`)
+    fetch(getUrl(`/api/gsc/branded?siteId=${siteDbId}`))
       .then(r => r.json())
       .then(d => { if (Array.isArray(d.branded)) setBrandedKeywords(d.branded); })
       .catch(() => {});
-  }, [siteDbId]);
+  }, [siteDbId, shareToken]);
 
   // Real data or empty fallback
   const chartData = useMemo(() => {
@@ -3868,6 +3932,36 @@ export default function SitePage() {
       return { date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }), clicks: 0, impressions: 0, ctr: 0, position: 0, clicksC: 0, impressionsC: 0, ctrC: 0, positionC: 0 };
     });
   }, [siteData]);
+
+  // ── AIO Impact mode: clicks & impressions normalized to index 100 at the first
+  // non-zero day, drawn on ONE axis. When AI Overviews eat clicks, the impressions
+  // index keeps climbing while the clicks index detaches downward — the divergence
+  // is the impact, which raw dual-axis lines can't show.
+  const [aioMode, setAioMode] = useState(false);
+
+  // ── Search-engine switcher: Google (local GSC data) vs live Bing / Yandex views.
+  // Alt engines appear only when their key/token is configured in Settings.
+  const [engine, setEngine] = useState<"google" | AltEngine>("google");
+  const [engineRefresh, setEngineRefresh] = useState(0); // bumped by Sync to refetch live views
+  const [altEngines, setAltEngines] = useState<AltEngine[]>([]);
+  useEffect(() => {
+    const list: AltEngine[] = [];
+    if (localStorage.getItem("seoKey_bing")) list.push("bing");
+    if (localStorage.getItem("seoKey_yandex")) list.push("yandex");
+    setAltEngines(list);
+  }, []);
+  const aioChartData = useMemo(() => {
+    const rows: any[] = chartData ?? [];
+    const baseClicks = rows.find(r => (r.clicks ?? 0) > 0)?.clicks ?? 0;
+    const baseImpr = rows.find(r => (r.impressions ?? 0) > 0)?.impressions ?? 0;
+    return rows.map(r => ({
+      date: r.date,
+      clicks: r.clicks ?? 0,
+      impressions: r.impressions ?? 0,
+      clicksIdx: baseClicks ? Math.round(((r.clicks ?? 0) / baseClicks) * 100) : 0,
+      imprIdx: baseImpr ? Math.round(((r.impressions ?? 0) / baseImpr) * 100) : 0,
+    }));
+  }, [chartData]);
 
   // Google updates that fall inside the visible chart window
   const visibleAlgoUpdates = useMemo(() => {
@@ -3880,14 +3974,14 @@ export default function SitePage() {
   // ── Rank tracker: which queries are already tracked (for Track buttons) ──────
   const [trackedKws, setTrackedKws] = useState<Set<string>>(new Set());
   useEffect(() => {
-    if (!siteDbId) return;
-    fetch(`/api/rank/keywords?siteId=${encodeURIComponent(siteDbId)}`)
+    if (!siteDbId || readOnly) return;
+    fetch(getUrl(`/api/rank/keywords?siteId=${encodeURIComponent(siteDbId)}`))
       .then(r => r.json())
       .then(d => {
         if (Array.isArray(d.keywords)) setTrackedKws(new Set(d.keywords.map((k: any) => String(k.keyword).toLowerCase())));
       })
       .catch(() => {});
-  }, [siteDbId]);
+  }, [siteDbId, readOnly, shareToken]);
 
   const handleTrack = (label: string) => {
     const kw = label.trim().toLowerCase();
@@ -4056,6 +4150,8 @@ export default function SitePage() {
       {/* ── Health tab ── */}
       {activeTab === "health" && <SiteHealthPanel siteDbId={siteDbId} />}
 
+      {activeTab === "audit" && <SiteAuditPanel siteDbId={siteDbId} />}
+
       {/* ── UX / Clarity tab ── */}
       {activeTab === "ux" && <ClarityPanel siteDbId={siteDbId} domain={domain} />}
 
@@ -4071,7 +4167,7 @@ export default function SitePage() {
         {/* Metric summary + toolbar — same row, no boxed/bordered panel, just sits
             plainly on the page like the metrics next to it. */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "28px" }}>
+          {engine === "google" ? <div style={{ display: "flex", alignItems: "center", gap: "28px" }}>
             {[
               { icon: <Sparkles size={14} style={{ color: C.clicks }} />, val: dataLoading ? "…" : fmtK(totalClicks), chg: summary.clicks.change, invert: false },
               { icon: <Eye size={14} style={{ color: C.impressions }} />, val: dataLoading ? "…" : fmtK(totalImpr), chg: summary.impressions.change, invert: false },
@@ -4084,9 +4180,28 @@ export default function SitePage() {
                 {!dataLoading && chg !== 0 && <Change pct={chg} invert={invert} />}
               </div>
             ))}
-          </div>
+          </div> : <div style={{ fontSize: "14px", fontWeight: 700, color: engine === "bing" ? "#00809D" : "#FC3F1D" }}>{engine === "bing" ? "Bing Webmaster" : t("seEngineYandexFull")} <span style={{ fontWeight: 400, fontSize: "12px", color: "var(--color-text-secondary)" }}>· {t("seLiveData")}</span></div>}
 
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            {/* Engine switcher — shown only when Bing/Yandex keys are configured */}
+            {altEngines.length > 0 && (
+              <div style={{ display: "flex", gap: "2px", background: "rgba(255,255,255,0.06)", borderRadius: "8px", padding: "2px", marginRight: "4px" }}>
+                {(["google", ...altEngines] as ("google" | AltEngine)[]).map(id => (
+                  <button key={id} onClick={() => setEngine(id)}
+                    style={{ padding: "5px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 700, cursor: "pointer", border: "none",
+                      background: engine === id ? "var(--color-card)" : "transparent",
+                      color: engine === id ? (id === "bing" ? "#00809D" : id === "yandex" ? "#FC3F1D" : "var(--color-text-primary)") : "var(--color-text-secondary)" }}>
+                    {id === "google" ? "G" : id === "bing" ? "Bing" : t("seEngineYandexShort")}
+                  </button>
+                ))}
+              </div>
+            )}
+            {engine === "google" && <>
+            {/* AIO Impact: normalized clicks vs impressions on one axis */}
+            <button onClick={() => setAioMode(v => !v)} title={t("aioImpactHint")}
+              style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 10px", borderRadius: "8px", border: `1px solid ${aioMode ? "#8B5CF6" : "var(--color-border)"}`, background: aioMode ? "rgba(139,92,246,0.1)" : "var(--color-card)", color: aioMode ? "#8B5CF6" : "var(--color-text-secondary)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
+              <Sparkles size={13} /> {t("aioImpact")}
+            </button>
             <GoogleUpdatesToggle on={googleUpdates} onToggle={() => setGoogleUpdates(v => !v)} />
             <FilterDd
               positionFilter={positionFilter}
@@ -4112,6 +4227,7 @@ export default function SitePage() {
                 </button>
               );
             })}
+            </>}
             <PeriodDropdown period={period} onChange={setPeriod} />
             <button
               onClick={handleSync}
@@ -4127,10 +4243,13 @@ export default function SitePage() {
           </div>
         </div>
 
-        {/* Main chart */}
+        {/* Main chart — GSC (local) or a live Bing/Yandex view */}
+        {engine !== "google" ? (
+          <EngineView engine={engine} domain={domain} refreshKey={engineRefresh} />
+        ) : (
         <div style={{ background: "var(--color-card)", borderRadius: "12px", padding: "16px", border: "1px solid var(--color-border)" }}>
           <ResponsiveContainer width="100%" height={300}>
-            <ComposedChart data={chartData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
+            <ComposedChart data={aioMode ? aioChartData : chartData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
               <defs>
                 {(["clicks", "impressions", "ctr", "position"] as const).map(m => (
                   <linearGradient key={m} id={`sg-${m}`} x1="0" y1="0" x2="0" y2="1">
@@ -4142,16 +4261,28 @@ export default function SitePage() {
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
               <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "var(--color-text-secondary)" }} />
               <YAxis yAxisId="left"  axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "var(--color-text-secondary)" }} />
-              <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "var(--color-text-secondary)" }} />
-              <Tooltip content={<SiteTooltip />} cursor={{ stroke: "var(--color-border)", strokeWidth: 1 }} />
-              {activeMetrics.has("clicks")      && <Line yAxisId="left"  type="monotone" dataKey="clicksC"      stroke={C.clicks}       strokeWidth={1}   strokeDasharray="4 3" dot={false} legendType="none" />}
-              {activeMetrics.has("impressions") && <Line yAxisId="right" type="monotone" dataKey="impressionsC" stroke={C.impressions}   strokeWidth={1}   strokeDasharray="4 3" dot={false} legendType="none" />}
-              {activeMetrics.has("ctr")         && <Line yAxisId="left"  type="monotone" dataKey="ctrC"         stroke={C.ctr}           strokeWidth={1}   strokeDasharray="4 3" dot={false} legendType="none" />}
-              {activeMetrics.has("position")    && <Line yAxisId="left"  type="monotone" dataKey="positionC"    stroke={C.position}      strokeWidth={1}   strokeDasharray="4 3" dot={false} legendType="none" />}
-              {activeMetrics.has("clicks")      && <Area yAxisId="left"  type="monotone" dataKey="clicks"      stroke={C.clicks}       strokeWidth={2}   fill={`url(#sg-clicks)`}      dot={false} />}
-              {activeMetrics.has("impressions") && <Area yAxisId="right" type="monotone" dataKey="impressions" stroke={C.impressions}   strokeWidth={2}   fill={`url(#sg-impressions)`} dot={false} />}
-              {activeMetrics.has("ctr")         && <Line yAxisId="left"  type="monotone" dataKey="ctr"         stroke={C.ctr}           strokeWidth={1.5} dot={false} />}
-              {activeMetrics.has("position")    && <Line yAxisId="left"  type="monotone" dataKey="position"    stroke={C.position}      strokeWidth={1.5} dot={false} />}
+              {!aioMode && <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "var(--color-text-secondary)" }} />}
+              <Tooltip content={aioMode ? <AioTooltip /> : <SiteTooltip />} cursor={{ stroke: "var(--color-border)", strokeWidth: 1 }} />
+              {aioMode ? (
+                <>
+                  {/* Index 100 baseline = the first non-zero day; divergence below it while
+                      impressions stay above = clicks being absorbed (AI Overviews et al.) */}
+                  <ReferenceLine yAxisId="left" y={100} stroke="var(--color-text-secondary)" strokeDasharray="4 4" strokeOpacity={0.5} />
+                  <Line yAxisId="left" type="monotone" dataKey="imprIdx" stroke={C.impressions} strokeWidth={2} dot={false} />
+                  <Line yAxisId="left" type="monotone" dataKey="clicksIdx" stroke={C.clicks} strokeWidth={2} dot={false} />
+                </>
+              ) : (
+                <>
+                  {activeMetrics.has("clicks")      && <Line yAxisId="left"  type="monotone" dataKey="clicksC"      stroke={C.clicks}       strokeWidth={1}   strokeDasharray="4 3" dot={false} legendType="none" />}
+                  {activeMetrics.has("impressions") && <Line yAxisId="right" type="monotone" dataKey="impressionsC" stroke={C.impressions}   strokeWidth={1}   strokeDasharray="4 3" dot={false} legendType="none" />}
+                  {activeMetrics.has("ctr")         && <Line yAxisId="left"  type="monotone" dataKey="ctrC"         stroke={C.ctr}           strokeWidth={1}   strokeDasharray="4 3" dot={false} legendType="none" />}
+                  {activeMetrics.has("position")    && <Line yAxisId="left"  type="monotone" dataKey="positionC"    stroke={C.position}      strokeWidth={1}   strokeDasharray="4 3" dot={false} legendType="none" />}
+                  {activeMetrics.has("clicks")      && <Area yAxisId="left"  type="monotone" dataKey="clicks"      stroke={C.clicks}       strokeWidth={2}   fill={`url(#sg-clicks)`}      dot={false} />}
+                  {activeMetrics.has("impressions") && <Area yAxisId="right" type="monotone" dataKey="impressions" stroke={C.impressions}   strokeWidth={2}   fill={`url(#sg-impressions)`} dot={false} />}
+                  {activeMetrics.has("ctr")         && <Line yAxisId="left"  type="monotone" dataKey="ctr"         stroke={C.ctr}           strokeWidth={1.5} dot={false} />}
+                  {activeMetrics.has("position")    && <Line yAxisId="left"  type="monotone" dataKey="position"    stroke={C.position}      strokeWidth={1.5} dot={false} />}
+                </>
+              )}
               {/* Google algorithm update markers (core / spam / discover) */}
               {googleUpdates && visibleAlgoUpdates.map(u => (
                 <ReferenceLine key={`${u.name}-${u.date}`} x={algoDateLabel(u.date)} yAxisId="left"
@@ -4161,6 +4292,7 @@ export default function SitePage() {
             </ComposedChart>
           </ResponsiveContainer>
         </div>
+        )}
 
         {/* Topic Clusters + Content Groups */}
         <div>

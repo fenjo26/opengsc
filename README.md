@@ -15,6 +15,8 @@ Self-hosted on your own VPS. No subscriptions, no seat limits, no third party to
 [![GitHub stars](https://img.shields.io/github/stars/fenjo26/opengsc?style=flat)](https://github.com/fenjo26/opengsc/stargazers)
 [![GitHub issues](https://img.shields.io/github/issues/fenjo26/opengsc)](https://github.com/fenjo26/opengsc/issues)
 
+[Русская версия](README.ru.md) · [English version](README.md)
+
 [Website](https://opengsc.org) · [Install](#-installation) · [Features](#-features) · [SEO Tools](#-ai-seo-content-suite-seo-tools) · [Indexer](#-private-indexer-network) · [Docs](docs/)
 
 </div>
@@ -92,7 +94,10 @@ On top of that dashboard, OpenGSC ships two things most GSC tools don't: a full 
 - **Fast period controls** — inline 7d / 28d / 3m / 6m / 12m / 16m buttons, plus Previous-period, Year-over-Year, or a fully custom range comparison.
 - **Clicks / Impressions / CTR / Position** shown as labeled toggles, with an aggregate summary across every visible site that recalculates instantly when you filter by tag.
 - **Tags, favorites, sorting, hiding** — organize hundreds of sites, remember your last sort order between sessions, pin the important projects, hide the dead ones.
+- **Quick Google site search** — next to each site name, a small 'G' badge link opens a Google search for `site:domain.com` in a new tab for instant manual indexing checks.
+- **Portfolio SEO Analytics** — view aggregated Striking Distance keywords, Cannibalization, and Content Decay reports across your entire site network on the main dashboard.
 - **Privacy Blur** — one click blurs every account name, email, domain, and metric — safe to screen-share or screenshot.
+- **Ahrefs DR badges** — every site card (and the site detail header) shows the domain's Domain Rating, pulled from Ahrefs' free public endpoint and cached server-side for 7 days. No API key needed. *Domain Rating by [Ahrefs](https://ahrefs.com/).*
 - **CSV export** with selectable dimensions, and **right-click → open in new tab** on any site card.
 
 <div align="center">
@@ -137,19 +142,59 @@ A curated backlink inventory per site with liveness checks (is the link still th
 
 One panel per site combining SSL certificate inspection (expiry, issuer, grade), a **Google Safe Browsing** blacklist check, a **VirusTotal** reputation check, and **Core Web Vitals** via the PageSpeed Insights API (mobile) — the latter three need their own free API keys, configured once in Settings.
 
+### Site Audit — Built-in Crawler
+
+A free technical audit with **zero external APIs**: OpenGSC crawls your site from your own VPS (up to 500 pages, BFS from the root) and reports broken internal links, missing/too-long/duplicate titles, missing meta descriptions, H1 problems, `noindex` pages, canonical mismatches, thin content, images without alt, and slow responses — rolled up into a health score with a filterable per-page table. Runs as a background job in the site's **Audit** tab; results are kept as audit history.
+
+### Alerts & Digests — Telegram Notifications
+
+Bring your own Telegram bot (one-time @BotFather setup, token pasted in **Settings → Notifications**) and OpenGSC pushes what matters straight to your chat — free, no third-party service:
+
+- **Alerts** (checked hourly, each event fires once): a tracked keyword fell N+ positions, a site's clicks dropped X%+ week-over-week, an SSL certificate is about to expire, a site audit came back with a low health score. Thresholds are configurable per rule.
+- **Digests** (the **Digest** tab): a Markdown summary over all sites *or one tag* — so a site network you care about gets its own report: per-site traffic vs the previous period, winner/loser queries, rank movements, and an optional AI-written conclusion (uses your own AI key). Preview on screen, send on demand, or schedule daily/weekly delivery.
+- A **Slack Incoming Webhook** can be connected alongside (or instead of) Telegram — alerts and digests go to every configured channel.
+
+### Shared Dashboards — Read-Only Guest Links
+
+Share a site's dashboard with a client without giving them an account: **site → Settings → Public Link** generates a tokenized read-only URL (`/share/…`). Guests see that one site's analytics and nothing else; the link can be regenerated or revoked at any time. Pairs well with Privacy Blur for screenshots.
+
+### MCP Server — Connect AI Agents
+
+OpenGSC ships a built-in **MCP (Model Context Protocol) server** at `/api/mcp`, so Claude Code, Claude Desktop, Cursor, Codex, or any MCP client can query your SEO data directly: sites, search performance, striking-distance keywords, cannibalization, rank tracking, AEO visibility, backlinks, Link Monitor mentions, site health, indexing status, audit results, and running arbitrary read-only SQL queries. Generate a token under **Settings → API & MCP**, then:
+
+```bash
+claude mcp add --transport http opengsc https://your-domain.com/api/mcp \
+  --header "Authorization: Bearer <token>"
+```
+
+All tools read from your instance's local store — agent traffic never spends your SERP/AI credits or Google quota. The repo also ships ready-made **agent skills** in [`.agents/skills/`](.agents/skills/) (performance review, link prospecting, AEO review, site triage) — copy them into your agent's skills folder for guided SEO workflows. Details: [`docs/MCP-SETUP.md`](docs/MCP-SETUP.md).
+
 ### Indexing Status Tools
 
 Inside each site's "Indexing" tab: real sitemap discovery and sync (recursive, sitemap-index aware, up to 20k URLs), a searchable per-URL status table, genuine **Google URL Inspection API** checks through your own OAuth token, and three optional paid accelerators for URLs that need a push — **2index.ninja** submission, **NeuralIndexer** (queued slow/fast/Yandex indexing with balance/job polling), and **XML River** index-status verification. Each accelerator is opt-in and needs its own account/API key.
+
+It also includes built-in free integrations:
+- **IndexNow Integration** — push new or updated URLs dynamically to the IndexNow API protocol in one click for instant crawler notification (supported by Bing, Yandex, etc.).
+- **Bing Webmaster Tools** — an engine switcher on the site dashboard shows a full live Bing view next to your GSC data: clicks, impressions, CTR, weighted avg position, traffic chart, top queries, top pages, pages in the Bing index and crawl errors — plus sitemap submission (API or ping) from the Indexing tab.
+- **Yandex.Webmaster** — the same switcher shows the full live Yandex view: SQI (ИКС), pages in search/excluded, clicks/impressions chart, top queries with positions, and Yandex's own site diagnostics (FATAL/CRITICAL problems) — plus sitemap submission and quota-aware URL recrawl via your own OAuth token. The Sync button refreshes every connected engine at once. Setup: [`docs/SEARCH-ENGINES-SETUP.md`](docs/SEARCH-ENGINES-SETUP.md).
+- **Smart Sitemap URL inspection fallback** — if a newly added site has no Search Console traffic or ranking query history, the inspection tool automatically crawls and retrieves up to 20 URLs from the site's `sitemap.xml` (or custom sitemap location) to inspect them.
 
 <br/>
 
 ## 🧠 AI SEO Content Suite (`/seo-tools`)
 
-A full competitor-research-to-published-article pipeline, plus AI-search-visibility auditing — all under one settings screen for your AI/SERP/scraping keys. Everything here is optional and needs **your own** API key (Anthropic, Z.AI, OpenAI, Gemini, OpenRouter, kie.ai, or any custom OpenAI-compatible endpoint) — pay-per-use at cost, no markup.
+A full competitor-research-to-published-article pipeline, plus AI-search-visibility auditing — all under one settings screen for your AI/SERP/scraping keys. Everything here is optional and needs **your own** API key (Anthropic, Z.AI, OpenAI, Gemini, OpenRouter, Kimi/Moonshot, kie.ai, or any custom OpenAI-compatible endpoint) — pay-per-use at cost, no markup. Each provider card in Settings lets you pick the exact model from a live list fetched from the provider's API.
 
 <div align="center">
 <img src="screenshot/seo%20tools.png" alt="SEO Tools suite" width="80%" />
 </div>
+
+<details open>
+<summary><b>Keyword Clustering</b> — SERP-based topic grouping</summary>
+<br/>
+
+Paste a keyword list and OpenGSC pulls a live TOP-10 SERP for each keyword, then hard-clusters keywords whose results share N+ overlapping URLs (threshold selectable, with an in-context guide) — the classic "one cluster = one page" planning method, grounded in what Google actually ranks together rather than semantic guesswork. Optional DataForSEO search volumes per keyword, CSV export, and a one-click handoff of any cluster straight into the Outline Generator. Runs as a background job — close the tab, the result lands in History.
+</details>
 
 <details open>
 <summary><b>Outline Generator</b> — competitor-grounded content briefs</summary>
@@ -206,6 +251,13 @@ Not to be confused with GEO's AI-citation tracking — this tracks classic web-w
 </details>
 
 <details open>
+<summary><b>Link Monitor</b> — competitor backlink watchlist (Ahrefs API)</summary>
+<br/>
+
+Watch any set of competitor brand domains and pull their **fresh quality backlinks** through your own Ahrefs API v3 key, filtered the way link-building pros do (the [detailed.com](https://detailed.com/ai-backlinks-api/) workflow): in-content links only, live, DR ≥ 50 (configurable), first seen within the last 3 months, one per referring domain. The report surfaces **multi-linker domains** — sites that link to two or more of your watched brands, i.e. your highest-probability outreach targets — plus an AI insights pass over the data: which content types earn links, in what context authors mention the brands, anchor patterns, and concrete content/PR opportunities. Not to be confused with the per-site **Backlinks Checker** above, which tracks *your own* curated link inventory.
+</details>
+
+<details open>
 <summary><b>Editorial Policy</b> — one style guide, applied everywhere</summary>
 <br/>
 
@@ -216,7 +268,7 @@ Define — or have AI draft, grounded in your own brand pages — a reusable edi
 <summary><b>History</b> — every generation, resumable</summary>
 <br/>
 
-A unified log across Outline, Text, Analysis, and Landing runs. Generation jobs run server-side and fire-and-forget, so you can close the tab; History polls for completed jobs, auto-imports them, and auto-fails anything stuck "processing" for more than 20 minutes so nothing spins forever.
+A unified log across Cluster, Outline, Text, Analysis, and Landing runs. Generation jobs run server-side and fire-and-forget, so you can close the tab; History polls for completed jobs, auto-imports them, and auto-fails anything stuck "processing" for more than 20 minutes so nothing spins forever. History — along with your API keys, provider/model choices, and Editorial Policies — is **automatically backed up server-side**, so clearing browser data or switching browsers no longer loses your generations or settings: everything is restored on the next page load.
 </details>
 
 <br/>
@@ -258,6 +310,8 @@ Tested on **Ubuntu 22.04 LTS**; other Debian-based distros also work. CentOS/RHE
 <br/>
 
 ## 🚀 Installation
+
+> **Prefer Docker?** `cp .env.template .env`, fill it in, `docker compose up -d` — full guide in [`docs/DOCKER-SETUP.md`](docs/DOCKER-SETUP.md). The steps below cover the recommended one-line VPS install.
 
 ### 1. Create a Google OAuth app (~5 minutes)
 
@@ -453,8 +507,9 @@ Check <code>pm2 logs opengsc</code> for a line starting with <code>[LLM]</code> 
 - **NextAuth v4** — Google OAuth authentication
 - **Recharts** — charts and graphs
 - **Google Search Console API** / **Google Analytics Data & Admin APIs** — first-party data sources
-- **Anthropic / Z.AI / OpenAI / Gemini / OpenRouter / kie.ai** — pluggable AI providers for the SEO Tools suite
-- **Serper / DataForSEO / ScrapingRobot** — SERP data providers; **Firecrawl** — scraping fallback
+- **Anthropic / Z.AI / OpenAI / Gemini / OpenRouter / Kimi (Moonshot) / kie.ai** — pluggable AI providers for the SEO Tools suite
+- **MCP server** (`/api/mcp`) — connect Claude Code / Claude Desktop / Cursor / any MCP client to your data
+- **Serper / DataForSEO / ScrapingRobot** — SERP data providers; **Firecrawl** — scraping fallback; **Ahrefs API** — Domain Rating badges & Link Monitor backlinks
 - **PM2** — process manager · **Nginx** — reverse proxy · **Let's Encrypt** — SSL · **UFW** — firewall
 
 <br/>
@@ -469,14 +524,16 @@ src/
     login/page.tsx
     settings/page.tsx            # Global settings — Google accounts, AI/SERP/API keys
     seo-tools/                   # AI SEO Content Suite
+      cluster/page.tsx           # Keyword Clustering (SERP URL-overlap)
       outline/page.tsx           # Outline Generator
       text/page.tsx              # Text Generator
       analysis/page.tsx          # Content Gap Analysis
       landing/page.tsx           # Landing Page Builder (TZ / wireframe / text)
       geo/page.tsx                # GEO Audit (Generative Engine Optimization)
       citations/page.tsx         # Citation & Sentiment Tracker
+      links/page.tsx             # Link Monitor (Ahrefs competitor backlinks)
       policy/page.tsx            # Editorial Policy builder
-      history/page.tsx           # Unified generation history
+      history/page.tsx           # Unified generation history (server-backed)
       settings/page.tsx          # Redirects to global Settings
     indexer/                     # Private Indexer Network
       domains/page.tsx           # Doorway domain management
@@ -495,6 +552,10 @@ src/
       rank/                      # Rank Tracker
       aeo/                       # AEO Tracker (AI answer-engine citations)
       backlinks/                 # Backlink inventory & liveness/index checks
+      dr/                        # Ahrefs Domain Rating proxy (7-day SQLite cache)
+      linkwatch/                 # Link Monitor: brands, Ahrefs v3 pull, AI insights
+      audit/                     # Site Audit: built-in crawler (start/poll/results)
+      mcp/                       # MCP server endpoint (Streamable HTTP, token auth)
       indexing/                  # Sitemap sync/inspection + 2index.ninja / NeuralIndexer / XML River
       indexer/                   # Doorway domains, queue, dictionary, stats, logs, webhook
       seo/                       # Outline, text, analysis, landing, geo, citations, policy,
@@ -513,12 +574,19 @@ src/
   components/
     StrikingDistanceKeywords.tsx / KeywordCannibalization.tsx / ContentDecayMap.tsx / CtrBenchmark.tsx
     RankTracker.tsx / AeoTracker.tsx / ClarityPanel.tsx / SiteSettingsTab.tsx
+  lib/
+    mcp/tools.ts                 # MCP tool registry (read-only, Prisma-backed)
+    audit/crawler.ts             # Site Audit crawler (BFS, regex extraction, issue detection)
 prisma/
   schema.prisma                  # Full data model
+.agents/skills/                  # Ready-made agent skills for the MCP server
 install.sh                       # One-command VPS installer (Ubuntu/Debian)
+Dockerfile / compose.yaml        # Docker deployment (docs/DOCKER-SETUP.md)
 docs/
   GA4-SETUP.md
   INDEXER-SETUP.md
+  MCP-SETUP.md
+  DOCKER-SETUP.md
   ARCHITECTURE.md
 ```
 
@@ -526,8 +594,11 @@ docs/
 
 ## Documentation
 
-- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — how the app is built: the background job system, the multi-pass SEO generation pipeline, the multi-provider LLM abstraction, the indexer's cloaking/verification mechanism, and the full data model.
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — how the app is built: the background job system, the multi-pass SEO generation pipeline, the multi-provider LLM abstraction, the MCP server, the audit crawler, the indexer's cloaking/verification mechanism, and the full data model.
 - **[docs/GA4-SETUP.md](docs/GA4-SETUP.md)** — connecting Google Analytics 4, step by step.
+- **[docs/MCP-SETUP.md](docs/MCP-SETUP.md)** — connecting AI agents (Claude Code, Claude Desktop, Cursor, Codex) to your instance.
+- **[docs/SEARCH-ENGINES-SETUP.md](docs/SEARCH-ENGINES-SETUP.md)** — Bing Webmaster, Yandex.Webmaster and IndexNow: getting the keys/tokens and what data each engine provides.
+- **[docs/DOCKER-SETUP.md](docs/DOCKER-SETUP.md)** — running OpenGSC with Docker instead of the VPS installer.
 - **[docs/INDEXER-SETUP.md](docs/INDEXER-SETUP.md)** — deploying and operating the private indexer network.
 
 <br/>

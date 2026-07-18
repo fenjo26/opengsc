@@ -103,16 +103,13 @@ function aggregate(
 
 // ─── GET /api/gsc/cluster-metrics?siteId=&period= ────────────────────────────
 export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  const userId = (session?.user as any)?.id as string | undefined;
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
   const { searchParams } = new URL(req.url);
-  const siteId = searchParams.get('siteId') ?? '';
-  const period = searchParams.get('period') ?? '28d';
+  const siteId = searchParams.get('siteId') || '';
 
-  const site = await prisma.site.findFirst({ where: { id: siteId, userId } });
-  if (!site) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const auth = await verifyAuthOrShare(req, siteId, false);
+  if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { userId, site } = auth;
+  const period = searchParams.get('period') ?? '28d';
 
   const [clusterDefs, groupDefs] = await Promise.all([
     (prisma as any).topicCluster.findMany({ where: { siteId }, orderBy: { createdAt: 'asc' } }),

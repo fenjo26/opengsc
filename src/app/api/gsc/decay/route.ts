@@ -49,8 +49,18 @@ function bucketIndex(date: Date, buckets: ReturnType<typeof buildBuckets>): numb
 // GET /api/gsc/decay?siteId=&metric=clicks|impressions&period=month|week&cols=16&top=20
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
-  const userId = (session?.user as any)?.id as string | undefined;
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  let userId = (session?.user as any)?.id as string | undefined;
+  if (!userId) {
+    // Guest access via a share link: the token must match the requested site (never 'all').
+    const sp = new URL(req.url).searchParams;
+    const shareToken = sp.get('shareToken') ?? '';
+    const sharedSiteId = sp.get('siteId') ?? '';
+    if (shareToken && sharedSiteId && sharedSiteId !== 'all') {
+      const shared = await prisma.site.findFirst({ where: { id: sharedSiteId, shareToken, shareEnabled: true } });
+      if (shared) userId = shared.userId;
+    }
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   const { searchParams } = new URL(req.url);
   const siteId    = searchParams.get('siteId') ?? '';
@@ -59,8 +69,19 @@ export async function GET(req: Request) {
   const cols      = Math.min(Math.max(parseInt(searchParams.get('cols') ?? '16'), 4), 24);
   const topN      = Math.min(parseInt(searchParams.get('top') ?? '20'), 50);
 
-  const site = await prisma.site.findFirst({ where: { id: siteId, userId } });
-  if (!site) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  let siteIds: string[];
+  let siteMap: Map<string, any>;
+
+  if (siteId === 'all' || !siteId) {
+    const sites = await prisma.site.findMany({ where: { userId } });
+    siteIds = sites.map(s => s.id);
+    siteMap = new Map(sites.map(s => [s.id, s]));
+  } else {
+    const site = await prisma.site.findFirst({ where: { id: siteId, userId } });
+    if (!site) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    siteIds = [site.id];
+    siteMap = new Map([[site.id, site]]);
+  }
 
   // ── Build time buckets ────────────────────────────────────────────────────────
   const buckets = buildBuckets(periodType, cols);
@@ -70,41 +91,56 @@ export async function GET(req: Request) {
   // ── Top N URLs by metric in range ─────────────────────────────────────────────
   // query='' ensures we only get URL-level rows (not query+URL rows)
   const topUrls = await prisma.dailyMetric.groupBy({
-    by: ['url'],
-    where: { siteId, query: '', date: { gte: rangeStart, lte: rangeEnd } },
+    by: ['siteId', 'url'],
+    where: { siteId: { in: siteIds }, query: '', date: { gte: rangeStart, lte: rangeEnd } },
     _sum: { clicks: true, impressions: true },
     orderBy: { _sum: { [metric]: 'desc' } },
-    take: topN + 1, // +1 to account for possible url='' aggregate row we filter below
+    take: topN * 2, // Take a larger list so we get plenty of actual page URLs across sites
   });
 
   // Exclude the site-level aggregate row (url='') — only keep actual page URLs
-  const urls = topUrls.map((u: any) => u.url as string).filter(u => u !== '');
+  const urls = topUrls.filter(u => u.url !== '');
   if (urls.length === 0) return NextResponse.json({ pages: [], cols: buckets.map(b => b.label), allVals: [], decay: [] });
   const topNUrls = urls.slice(0, topN);
 
   // ── Fetch daily records for those URLs ───────────────────────────────────────
   const records = await prisma.dailyMetric.findMany({
-    where: { siteId, url: { in: topNUrls }, query: '', date: { gte: rangeStart, lte: rangeEnd } },
-    select: { url: true, date: true, clicks: true, impressions: true },
+    where: {
+      siteId: { in: siteIds },
+      url: { in: topNUrls.map(u => u.url) },
+      query: '',
+      date: { gte: rangeStart, lte: rangeEnd }
+    },
+    select: { siteId: true, url: true, date: true, clicks: true, impressions: true },
   });
 
   // ── Bucket aggregation ────────────────────────────────────────────────────────
   const urlBuckets = new Map<string, number[]>();
-  for (const url of topNUrls) urlBuckets.set(url, new Array(cols).fill(0));
+  for (const u of topNUrls) {
+    urlBuckets.set(`${u.siteId}::${u.url}`, new Array(cols).fill(0));
+  }
 
   for (const r of records) {
-    const arr = urlBuckets.get(r.url);
+    const key = `${r.siteId}::${r.url}`;
+    const arr = urlBuckets.get(key);
     if (!arr) continue;
     const idx = bucketIndex(new Date(r.date), buckets);
     if (idx >= 0) arr[idx] += metric === 'clicks' ? r.clicks : r.impressions;
   }
 
   // ── Build page matrix ─────────────────────────────────────────────────────────
-  const pages = topNUrls.map(url => ({
-    url,
-    path: url.replace(/^https?:\/\/[^/]+/, '') || '/',
-    vals: urlBuckets.get(url)!,
-  }));
+  const pages = topNUrls.map(u => {
+    const key = `${u.siteId}::${u.url}`;
+    const site = siteMap.get(u.siteId);
+    const domain = site ? site.url.replace("sc-domain:", "").replace(/^https?:\/\//, "").replace(/\/$/, "") : "";
+    return {
+      siteId: u.siteId,
+      siteName: domain,
+      url: u.url,
+      path: u.url.replace(/^https?:\/\/[^/]+/, '') || '/',
+      vals: urlBuckets.get(key)!,
+    };
+  });
 
   const allVals = new Array(cols).fill(0);
   for (const { vals } of pages) vals.forEach((v, i) => { allVals[i] += v; });
@@ -120,6 +156,8 @@ export async function GET(req: Request) {
       if (changePct >= -5) return null; // not declining
       const status: 'Warning' | 'Critical' = changePct <= -25 ? 'Critical' : 'Warning';
       return {
+        siteId: p.siteId,
+        siteName: p.siteName,
         page:   p.path,
         url:    p.url,
         clicksLast2m:    curr - prev,
@@ -133,7 +171,7 @@ export async function GET(req: Request) {
     .sort((a: any, b: any) => a.clicksLast2mPct - b.clicksLast2mPct);
 
   return NextResponse.json({
-    pages:   pages.map(p => ({ url: p.path, vals: p.vals })),
+    pages:   pages.map(p => ({ url: p.path, vals: p.vals, siteName: p.siteName })),
     cols:    buckets.map(b => b.label),
     years:   periodType === 'month' ? buckets.map(b => b.year) : undefined,
     allVals,

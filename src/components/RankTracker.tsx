@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { Plus, RefreshCw, Trash2, ChevronDown, ChevronUp, ChevronsUpDown, ExternalLink, Search, MapPin, Globe } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
+import { withShare, isGuestView } from "@/lib/shareParam";
 import { usePrivacy } from "@/lib/PrivacyContext";
 import { COUNTRIES, LANGUAGES } from "@/lib/seo/regions";
 
@@ -88,7 +89,7 @@ function HistoryChart({ keywordId }: { keywordId: string }) {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/rank/history?keywordId=${encodeURIComponent(keywordId)}&days=90`)
+    fetch(withShare(`/api/rank/history?keywordId=${encodeURIComponent(keywordId)}&days=90`))
       .then(r => r.json())
       .then(d => setData(d))
       .catch(() => {})
@@ -125,6 +126,7 @@ function HistoryChart({ keywordId }: { keywordId: string }) {
 
 export default function RankTracker({ siteDbId }: { siteDbId: string; domain?: string }) {
   const { t } = useLanguage();
+  const guest = isGuestView();
   const { blur } = usePrivacy();
   const blurStyle: React.CSSProperties = blur ? { filter: "blur(5px)", userSelect: "none" } : {};
 
@@ -150,7 +152,7 @@ export default function RankTracker({ siteDbId }: { siteDbId: string; domain?: s
   const load = useCallback(async () => {
     if (!siteDbId) return;
     try {
-      const r = await fetch(`/api/rank/keywords?siteId=${encodeURIComponent(siteDbId)}&gsc=1`);
+      const r = await fetch(withShare(`/api/rank/keywords?siteId=${encodeURIComponent(siteDbId)}&gsc=1`));
       const d = await r.json();
       if (Array.isArray(d.keywords)) {
         setRows(d.keywords);
@@ -321,16 +323,16 @@ export default function RankTracker({ siteDbId }: { siteDbId: string; domain?: s
               <Globe size={11} /> {provider}
             </a>
           )}
-          <button onClick={checkAll} disabled={!!busy || !rows.length}
+          {!guest && <button onClick={checkAll} disabled={!!busy || !rows.length}
             style={{ ...(rows.length ? primaryBtn : ghostBtn), cursor: busy || !rows.length ? "not-allowed" : "pointer", opacity: busy || !rows.length ? 0.6 : 1 }}>
             <RefreshCw size={13} style={{ animation: busy === "check" ? "spin 1.2s linear infinite" : "none" }} />
             {busy === "check" ? (progress || t("rankChecking")) : t("rankCheckAll")}
-          </button>
+          </button>}
         </div>
       </div>
 
       {/* ── No key warning ── */}
-      {!loading && !hasKey && (
+      {!loading && !hasKey && !guest && (
         <div style={{ padding: "12px 16px", borderRadius: "10px", border: "1px solid rgba(245,158,11,0.35)", background: "rgba(245,158,11,0.08)", color: "#F59E0B", fontSize: "13px" }}>
           ⚠ {t("rankNoKey")}{" "}
           <a href="/settings?tab=api-keys" style={{ color: "#F59E0B", fontWeight: 700, textDecoration: "underline" }}>Settings → API Keys</a>
@@ -355,8 +357,8 @@ export default function RankTracker({ siteDbId }: { siteDbId: string; domain?: s
         </div>
       )}
 
-      {/* ── Add keywords card ── */}
-      <div style={{ background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "12px", padding: "16px" }}>
+      {/* ── Add keywords card (owners only) ── */}
+      {!guest && <div style={{ background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "12px", padding: "16px" }}>
         <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "10px" }}>
           {t("rankAddBtn")}
         </div>
@@ -390,7 +392,7 @@ export default function RankTracker({ siteDbId }: { siteDbId: string; domain?: s
         <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "8px", lineHeight: 1.5 }}>
           💡 {t("rankHintAdd")}
         </div>
-      </div>
+      </div>}
 
       {/* ── Search ── */}
       {rows.length > 8 && (
@@ -479,14 +481,14 @@ export default function RankTracker({ siteDbId }: { siteDbId: string; domain?: s
                       {r.lastCheckedAt ? new Date(r.lastCheckedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
                     </td>
                     <td style={{ padding: "10px 12px", whiteSpace: "nowrap", textAlign: "right" }} onClick={e => e.stopPropagation()}>
-                      <button onClick={() => checkOne(r.id)} disabled={!!busy} title={t("rankCheckAll")}
+                      {!guest && <><button onClick={() => checkOne(r.id)} disabled={!!busy} title={t("rankCheckAll")}
                         style={{ background: "none", border: "none", cursor: busy ? "not-allowed" : "pointer", color: "var(--color-text-secondary)", padding: "4px" }}>
                         <RefreshCw size={13} />
                       </button>
                       <button onClick={() => del(r.id)} title={t("rankDeleteConfirm")}
                         style={{ background: "none", border: "none", cursor: "pointer", color: "#EF4444", padding: "4px", opacity: 0.7 }}>
                         <Trash2 size={13} />
-                      </button>
+                      </button></>}
                     </td>
                   </tr>
                   {expanded === r.id && (

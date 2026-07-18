@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { verifyAuthOrShare } from '@/lib/authShare';
 
 async function fetchLLM(prompt: string, provider: string, apiKey: string): Promise<string | null> {
   try {
@@ -58,18 +59,15 @@ async function fetchLLM(prompt: string, provider: string, apiKey: string): Promi
 
 // GET /api/gsc/branded?siteId=  — returns saved keywords (+ AI suggest if ?suggest=1&aiProvider=&aiApiKey=)
 export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  const userId = (session?.user as any)?.id as string | undefined;
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
   const { searchParams } = new URL(req.url);
   const siteId   = searchParams.get('siteId') ?? '';
   const suggest  = searchParams.get('suggest') === '1';
   const provider = searchParams.get('aiProvider') ?? 'anthropic';
   const apiKey   = searchParams.get('aiApiKey') ?? '';
 
-  const site = await prisma.site.findFirst({ where: { id: siteId, userId } });
-  if (!site) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const auth = await verifyAuthOrShare(req, siteId, false);
+  if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { userId, site } = auth;
 
   // Return saved keywords if not asking for suggestions
   if (!suggest) {

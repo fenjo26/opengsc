@@ -49,6 +49,19 @@ model User {
   // clearing the browser storage doesn't lose configured API keys. Accessed via raw SQL.
   seoSettings String?
 
+  // MCP access token (Bearer) for the /api/mcp endpoint — lets AI agents (Claude Code,
+  // Cursor, etc.) query this user's SEO data. Generated in Settings → API & MCP.
+  mcpToken String? @unique
+
+  // Notifications: user-owned Telegram bot (BotFather token + detected chat id) and
+  // JSON settings for the alert rules / digest schedule. Accessed via raw SQL (same
+  // graceful-degradation convention as seoSettings).
+  telegramBotToken String?
+  telegramChatId   String?
+  slackWebhook     String? // Slack Incoming Webhook URL — optional second delivery channel
+  alertSettings    String? // JSON: { rankDrop: {on,threshold}, trafficDrop: {on,percent}, ssl: {on,days}, audit: {on,minScore} }
+  digestSettings   String? // JSON: { enabled, frequency: "daily"|"weekly", hourUtc, tag, days, ai, lastSentAt }
+
   // Third-party API integrations
   neuralIndexerToken String?
   xmlRiverUserId     String?
@@ -98,6 +111,7 @@ model Site {
   sitemapUrls           SitemapUrl[]
   indexingOperations    IndexingOperation[]
   backlinks             Backlink[]
+  siteAudits            SiteAudit[]
   claritySnapshots      ClaritySnapshot[]
   trackedKeywords       TrackedKeyword[]
   trackedQuestions      TrackedQuestion[]
@@ -110,6 +124,10 @@ model Site {
   // Google Analytics 4 integration
   ga4PropertyId         String?   // GA4 numeric property ID (e.g. "123456789")
   ga4PropertyName       String?   // GA4 property display name (cached for UI)
+
+  // Client read-only share settings
+  shareEnabled          Boolean   @default(false)
+  shareToken            String?   @unique
 
   @@unique([userId, siteId])
 }
@@ -222,6 +240,82 @@ model TrackedKeyword {
   @@unique([siteId, keyword, device, country])
   @@index([siteId])
   @@index([lastCheckedAt])
+}
+
+// ─── Notifications (alerts + digests, delivered via the user's Telegram bot) ──
+model AlertEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // "rank_drop" | "traffic_drop" | "ssl_expiry" | "audit_score"
+  siteId    String?
+  title     String
+  message   String
+  dedupeKey String   // stable key per logical event occurrence — prevents repeat alerts
+  sent      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, createdAt])
+}
+
+model Digest {
+  id        String   @id @default(cuid())
+  userId    String
+  tag       String   @default("") // empty = all sites
+  days      Int      @default(7)
+  content   String   // rendered Markdown
+  sentTo    String?  // "telegram" when delivered, null for on-screen only
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// ─── Site Audit (built-in crawler — no external APIs) ────────────────────────
+// One row per audit run. The crawler BFS-walks same-host pages from the site root,
+// extracts on-page SEO signals with no headless browser (plain fetch + HTML parsing),
+// and stores per-page results in SiteAuditPage. Fire-and-forget job, same pattern
+// as SeoJob (§1 of docs/ARCHITECTURE.md).
+model SiteAudit {
+  id           String    @id @default(cuid())
+  siteId       String
+  status       String    @default("running") // "running" | "completed" | "error"
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+  maxPages     Int       @default(200)
+  pagesCrawled Int       @default(0)
+  summary      String?   // JSON: issue counts, totals
+  error        String?
+
+  site  Site            @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  pages SiteAuditPage[]
+
+  @@index([siteId, startedAt])
+}
+
+model SiteAuditPage {
+  id              String  @id @default(cuid())
+  auditId         String
+  url             String
+  httpStatus      Int     @default(0)   // 0 = fetch failed
+  redirectTo      String?
+  contentType     String  @default("")
+  title           String  @default("")
+  metaDescription String  @default("")
+  h1Count         Int     @default(0)
+  canonical       String?
+  noindex         Boolean @default(false)
+  internalLinks   Int     @default(0)
+  externalLinks   Int     @default(0)
+  imagesNoAlt     Int     @default(0)
+  wordCount       Int     @default(0)
+  loadMs          Int     @default(0)
+  depth           Int     @default(0)
+  issues          String? // JSON array of issue codes, e.g. ["title_missing","broken_links"]
+  brokenLinks     String? // JSON array of hrefs on this page that resolved 4xx/5xx
+
+  audit SiteAudit @relation(fields: [auditId], references: [id], onDelete: Cascade)
+
+  @@index([auditId])
 }
 
 model RankCheck {

@@ -1,5 +1,5 @@
 // Shared multi-provider LLM caller. Mirrors the providers supported elsewhere
-// in the app (Anthropic, Z.AI, OpenAI, Gemini, OpenRouter, Kie.ai).
+// in the app (Anthropic, Z.AI, OpenAI, Gemini, OpenRouter, Kie.ai, Kimi/Moonshot).
 
 // Kie.ai's "Codex" endpoint (GPT-5.5) speaks the OpenAI *Responses* API shape, not classic
 // chat-completions: `input` is an array of {role, content:[...]} messages (content items are
@@ -102,21 +102,31 @@ async function fetchLLMOnce(
       }
       const data = await res.json();
       text = data.content?.[0]?.text ?? '';
-    } else if (provider === 'openai') {
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    } else if (provider === 'openai' || provider === 'deepseek' || provider === 'qwen') {
+      // GPT-5.x models reject the legacy `max_tokens` param — `max_completion_tokens` is the
+      // replacement and is also accepted by every still-supported older model.
+      let url = 'https://api.openai.com/v1/chat/completions';
+      if (provider === 'deepseek') url = 'https://api.deepseek.com/chat/completions';
+      if (provider === 'qwen') url = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
+
+      const defaultModel = provider === 'deepseek' ? 'deepseek-v4-flash' : provider === 'qwen' ? 'qwen-max' : 'gpt-5.6-luna';
+      const model = modelOverride ?? defaultModel;
+      const tokenParam = (provider === 'deepseek' || provider === 'qwen') ? 'max_tokens' : 'max_completion_tokens';
+
+      const res = await fetch(url, {
         method: 'POST', signal: sig,
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: modelOverride ?? 'gpt-4o-mini', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
+        body: JSON.stringify({ model, [tokenParam]: maxTokens, messages: [{ role: 'user', content: prompt }] }),
       });
       if (!res.ok) {
         const bodyText = await res.text().catch(() => '');
-        console.error('[LLM] openai', res.status, bodyText);
-        return { text: null, retryable: retryableStatus(res.status), errorDetail: extractErrorDetail('openai', res.status, bodyText) };
+        console.error(`[LLM] ${provider}`, res.status, bodyText);
+        return { text: null, retryable: retryableStatus(res.status), errorDetail: extractErrorDetail(provider, res.status, bodyText) };
       }
       const data = await res.json();
       text = data.choices?.[0]?.message?.content ?? '';
     } else if (provider === 'gemini') {
-      const gModel = modelOverride ?? 'gemini-1.5-flash';
+      const gModel = modelOverride ?? 'gemini-3-flash';
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${gModel}:generateContent?key=${apiKey}`, {
         method: 'POST', signal: sig,
         headers: { 'Content-Type': 'application/json' },
@@ -133,12 +143,28 @@ async function fetchLLMOnce(
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST', signal: sig,
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: modelOverride ?? 'anthropic/claude-3.5-haiku', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
+        body: JSON.stringify({ model: modelOverride ?? 'anthropic/claude-haiku-4.5', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
       });
       if (!res.ok) {
         const bodyText = await res.text().catch(() => '');
         console.error('[LLM] openrouter', res.status, bodyText);
         return { text: null, retryable: retryableStatus(res.status), errorDetail: extractErrorDetail('openrouter', res.status, bodyText) };
+      }
+      const data = await res.json();
+      text = data.choices?.[0]?.message?.content ?? '';
+    } else if (provider === 'kimi') {
+      // Kimi (Moonshot AI) — OpenAI-compatible chat completions. Default: Kimi K3
+      // (flagship, 1M context, vision). baseUrl override supported for the .cn endpoint.
+      const root = (baseUrl || 'https://api.moonshot.ai/v1').replace(/\/+$/, '');
+      const res = await fetch(`${root}/chat/completions`, {
+        method: 'POST', signal: sig,
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: modelOverride ?? 'kimi-k3', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
+      });
+      if (!res.ok) {
+        const bodyText = await res.text().catch(() => '');
+        console.error('[LLM] kimi', res.status, bodyText);
+        return { text: null, retryable: retryableStatus(res.status), errorDetail: extractErrorDetail('kimi', res.status, bodyText) };
       }
       const data = await res.json();
       text = data.choices?.[0]?.message?.content ?? '';
@@ -227,7 +253,7 @@ export async function fetchLLMVision(
       const data = await res.json();
       text = data.content?.[0]?.text ?? '';
     } else if (provider === 'gemini') {
-      const gModel = modelOverride ?? 'gemini-1.5-flash';
+      const gModel = modelOverride ?? 'gemini-3-flash';
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${gModel}:generateContent?key=${apiKey}`, {
         method: 'POST', signal: sig,
         headers: { 'Content-Type': 'application/json' },
@@ -236,24 +262,29 @@ export async function fetchLLMVision(
       if (!res.ok) { console.error('[LLM vision] gemini', res.status); return null; }
       const data = await res.json();
       text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-    } else if (provider === 'openai' || provider === 'openrouter' || provider === 'custom') {
+    } else if (provider === 'openai' || provider === 'openrouter' || provider === 'custom' || provider === 'kimi' || provider === 'deepseek' || provider === 'qwen') {
       const dataUrl = `data:${mimeType};base64,${b64}`;
       const content = [
         { type: 'text', text: prompt },
         { type: 'image_url', image_url: { url: dataUrl } },
       ];
       let url = 'https://api.openai.com/v1/chat/completions';
-      let model = modelOverride ?? 'gpt-4o-mini';
-      if (provider === 'openrouter') { url = 'https://openrouter.ai/api/v1/chat/completions'; model = modelOverride ?? 'anthropic/claude-3.5-haiku'; }
+      let model = modelOverride ?? 'gpt-5.6-luna';
+      let tokenParam = 'max_completion_tokens'; // GPT-5.x rejects legacy max_tokens
+      if (provider === 'deepseek') { url = 'https://api.deepseek.com/chat/completions'; model = modelOverride ?? 'deepseek-v4-flash'; tokenParam = 'max_tokens'; }
+      if (provider === 'qwen') { url = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions'; model = modelOverride ?? 'qwen-vl-plus'; tokenParam = 'max_tokens'; }
+      if (provider === 'openrouter') { url = 'https://openrouter.ai/api/v1/chat/completions'; model = modelOverride ?? 'anthropic/claude-haiku-4.5'; tokenParam = 'max_tokens'; }
+      if (provider === 'kimi') { url = `${(baseUrl || 'https://api.moonshot.ai/v1').replace(/\/+$/, '')}/chat/completions`; model = modelOverride ?? 'kimi-k3'; tokenParam = 'max_tokens'; }
       if (provider === 'custom') {
         const root = (baseUrl || '').replace(/\/+$/, '');
         if (!root) { console.error('[LLM vision] custom: no baseUrl'); return null; }
         url = /\/chat\/completions$/.test(root) ? root : `${root}/chat/completions`;
+        tokenParam = 'max_tokens';
       }
       const res = await fetch(url, {
         method: 'POST', signal: sig,
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'user', content }] }),
+        body: JSON.stringify({ model, [tokenParam]: maxTokens, messages: [{ role: 'user', content }] }),
       });
       if (!res.ok) { console.error('[LLM vision]', provider, res.status, await res.text().catch(() => '')); return null; }
       const data = await res.json();

@@ -12,8 +12,18 @@ const BENCHMARKS: Record<number, number> = {
 // GET /api/gsc/ctr?siteId=&days=90&minImpressions=10&limit=200
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
-  const userId = (session?.user as any)?.id as string | undefined;
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  let userId = (session?.user as any)?.id as string | undefined;
+  if (!userId) {
+    // Guest access via a share link: the token must match the requested site (never 'all').
+    const sp = new URL(req.url).searchParams;
+    const shareToken = sp.get('shareToken') ?? '';
+    const sharedSiteId = sp.get('siteId') ?? '';
+    if (shareToken && sharedSiteId && sharedSiteId !== 'all') {
+      const shared = await prisma.site.findFirst({ where: { id: sharedSiteId, shareToken, shareEnabled: true } });
+      if (shared) userId = shared.userId;
+    }
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   const { searchParams } = new URL(req.url);
   const siteId  = searchParams.get('siteId') ?? '';

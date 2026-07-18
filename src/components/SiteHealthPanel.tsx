@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { withShare, isGuestView } from "@/lib/shareParam";
+import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import {
   ShieldCheck, ShieldAlert, Lock, Unlock, Zap, ZapOff,
   Bug, AlertTriangle, RefreshCw, ExternalLink, Info,
@@ -96,18 +98,19 @@ function CardShell({ icon, title, children, topRight, loading }:
 
 // ─── SSL Card ─────────────────────────────────────────────────────────────────
 function SslCard({ data, loading }: { data: SslData | null; loading: boolean }) {
+  const { t } = useLanguage();
   const ok   = data?.valid && (data?.daysLeft ?? 0) > 14;
   const warn = data?.valid && (data?.daysLeft ?? 0) <= 14;
 
   return (
     <CardShell
       icon={ok ? <Lock size={16} color="#10B981" /> : warn ? <Lock size={16} color="#F59E0B" /> : <Unlock size={16} color="#EF4444" />}
-      title="SSL Certificate"
+      title={t("healthSslCert") || "SSL Certificate"}
       loading={loading}
       topRight={data ? <GradeChip grade={data.grade} /> : undefined}
     >
       {!data && !loading && (
-        <p style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>Not checked yet</p>
+        <p style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>{t("healthNotChecked") || "Not checked yet"}</p>
       )}
       {data && (
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -115,14 +118,14 @@ function SslCard({ data, loading }: { data: SslData | null; loading: boolean }) 
             {data.error && data.error !== "Timeout" ? (
               <StatusBadge ok={false} label={data.error} />
             ) : (
-              <StatusBadge ok={ok} warn={warn} label={data.valid ? `Valid · ${data.daysLeft}d left` : "Expired"} />
+              <StatusBadge ok={ok} warn={warn} label={data.valid ? (t("healthSslValid") || "Valid · {days}d left").replace("{days}", String(data.daysLeft)) : (t("healthSslExpired") || "Expired")} />
             )}
           </div>
           {!data.error && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
               {[
-                { l: "Issuer",   v: data.issuer   || "—" },
-                { l: "Protocol", v: data.protocol || "—" },
+                { l: t("healthSslIssuer") || "Issuer",   v: data.issuer   || "—" },
+                { l: t("healthSslProtocol") || "Protocol", v: data.protocol || "—" },
               ].map(({ l, v }) => (
                 <div key={l} style={{ background: "rgba(255,255,255,0.04)", borderRadius: "8px", padding: "8px 10px" }}>
                   <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginBottom: "2px" }}>{l}</div>
@@ -139,26 +142,27 @@ function SslCard({ data, loading }: { data: SslData | null; loading: boolean }) 
 
 // ─── Safe Browsing Card ───────────────────────────────────────────────────────
 function SafeBrowsingCard({ data, loading, noKey }: { data: SafeBrowsingData | null; loading: boolean; noKey: boolean }) {
+  const { t } = useLanguage();
   return (
     <CardShell
       icon={data?.safe === false ? <ShieldAlert size={16} color="#EF4444" /> : <ShieldCheck size={16} color="#10B981" />}
-      title="Google Safe Browsing"
+      title={t("healthGoogleSb") || "Google Safe Browsing"}
       loading={loading}
-      topRight={data && !noKey ? <StatusBadge ok={data.safe} label={data.safe ? "Clean" : "Flagged"} /> : undefined}
+      topRight={data && !noKey ? <StatusBadge ok={data.safe} label={data.safe ? (t("healthSbClean") || "Clean") : (t("healthSbFlagged") || "Flagged")} /> : undefined}
     >
       {noKey && (
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
           <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
-            Add a <strong style={{ color: "var(--color-text-primary)" }}>Google Safe Browsing API key</strong> in Settings → API Keys to enable this check.
+            {t("healthSbNoKey") || "Add a Google Safe Browsing API key in Settings → API Keys to enable this check."}
           </p>
           <a href="https://developers.google.com/safe-browsing/v4/get-started" target="_blank" rel="noreferrer"
             style={{ fontSize: "11px", color: "var(--color-accent-blue)", display: "inline-flex", alignItems: "center", gap: "3px" }}>
-            Get API key <ExternalLink size={10} />
+            {t("healthSbGetApiKey") || "Get API key"} <ExternalLink size={10} />
           </a>
         </div>
       )}
       {!noKey && !data && !loading && (
-        <p style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>Not checked yet</p>
+        <p style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>{t("healthNotChecked") || "Not checked yet"}</p>
       )}
       {!noKey && data && (
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -170,7 +174,7 @@ function SafeBrowsingCard({ data, loading, noKey }: { data: SafeBrowsingData | n
             </div>
           ) : (
             <p style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
-              {data.error ? `Error: ${data.error}` : "No threats detected across all categories."}
+              {data.error ? `Error: ${data.error}` : (t("healthSbNoThreats") || "No threats detected across all categories.")}
             </p>
           )}
         </div>
@@ -181,6 +185,7 @@ function SafeBrowsingCard({ data, loading, noKey }: { data: SafeBrowsingData | n
 
 // ─── Core Web Vitals Card ─────────────────────────────────────────────────────
 function VitalsCard({ data, loading, noKey }: { data: VitalsData | null; loading: boolean; noKey: boolean }) {
+  const { t } = useLanguage();
   const score = data?.score ?? null;
   return (
     <CardShell
@@ -188,23 +193,23 @@ function VitalsCard({ data, loading, noKey }: { data: VitalsData | null; loading
         score >= 90 ? <Zap size={16} color="#10B981" /> :
         score >= 50 ? <Zap size={16} color="#F59E0B" /> :
         <ZapOff size={16} color="#EF4444" />}
-      title="Core Web Vitals"
+      title={t("healthVitalsTitle") || "Core Web Vitals"}
       loading={loading}
-      topRight={score != null ? <StatusBadge ok={score >= 90} warn={score >= 50 && score < 90} label={data?.category === "good" ? "Good" : data?.category === "needs_improvement" ? "Needs Work" : "Poor"} /> : undefined}
+      topRight={score != null ? <StatusBadge ok={score >= 90} warn={score >= 50 && score < 90} label={data?.category === "good" ? (t("healthVitalsGood") || "Good") : data?.category === "needs_improvement" ? (t("healthVitalsNeedsWork") || "Needs Work") : (t("healthVitalsPoor") || "Poor")} /> : undefined}
     >
       {noKey && (
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
           <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
-            Add a <strong style={{ color: "var(--color-text-primary)" }}>Google API key</strong> (PageSpeed Insights) in Settings → API Keys to enable this check.
+            {t("healthVitalsNoKey") || "Add a Google API key (PageSpeed Insights) in Settings → API Keys to enable this check."}
           </p>
           <a href="https://developers.google.com/speed/docs/insights/v5/get-started" target="_blank" rel="noreferrer"
             style={{ fontSize: "11px", color: "var(--color-accent-blue)", display: "inline-flex", alignItems: "center", gap: "3px" }}>
-            Get API key <ExternalLink size={10} />
+            {t("healthSbGetApiKey") || "Get API key"} <ExternalLink size={10} />
           </a>
         </div>
       )}
       {!noKey && !data && !loading && (
-        <p style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>Not checked yet</p>
+        <p style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>{t("healthNotChecked") || "Not checked yet"}</p>
       )}
       {!noKey && data && (
         <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
@@ -224,37 +229,38 @@ function VitalsCard({ data, loading, noKey }: { data: VitalsData | null; loading
 
 // ─── VirusTotal Card ──────────────────────────────────────────────────────────
 function VirusTotalCard({ data, loading, noKey }: { data: VirusTotalData | null; loading: boolean; noKey: boolean }) {
+  const { t } = useLanguage();
   const flagged = data && !data.clean;
   return (
     <CardShell
       icon={flagged ? <Bug size={16} color="#EF4444" /> : <Bug size={16} color={data?.clean ? "#10B981" : "var(--color-text-secondary)"} />}
-      title="VirusTotal"
+      title={t("healthVtTitle") || "VirusTotal"}
       loading={loading}
-      topRight={data && !noKey ? <StatusBadge ok={data.clean} label={data.clean ? "Clean" : `${data.malicious + data.suspicious} threats`} /> : undefined}
+      topRight={data && !noKey ? <StatusBadge ok={data.clean} label={data.clean ? (t("healthSbClean") || "Clean") : (t("healthVtThreats") || "{count} threats").replace("{count}", String(data.malicious + data.suspicious))} /> : undefined}
     >
       {noKey && (
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
           <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
-            Add a <strong style={{ color: "var(--color-text-primary)" }}>VirusTotal API key</strong> in Settings → API Keys to enable this check.
+            {t("healthVtNoKey") || "Add a VirusTotal API key in Settings → API Keys to enable this check."}
           </p>
           <a href="https://www.virustotal.com/gui/my-apikey" target="_blank" rel="noreferrer"
             style={{ fontSize: "11px", color: "var(--color-accent-blue)", display: "inline-flex", alignItems: "center", gap: "3px" }}>
-            Get API key <ExternalLink size={10} />
+            {t("healthSbGetApiKey") || "Get API key"} <ExternalLink size={10} />
           </a>
         </div>
       )}
       {!noKey && !data && !loading && (
-        <p style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>Not checked yet</p>
+        <p style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>{t("healthNotChecked") || "Not checked yet"}</p>
       )}
       {!noKey && data && (
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
           {data.total > 0 && (
             <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
               {[
-                { l: "Malicious",  v: data.malicious,  color: data.malicious  > 0 ? "#EF4444" : "#10B981" },
-                { l: "Suspicious", v: data.suspicious, color: data.suspicious > 0 ? "#F59E0B" : "#10B981" },
-                { l: "Clean",      v: data.undetected, color: "var(--color-text-secondary)" },
-                { l: "Total",      v: data.total,      color: "var(--color-text-secondary)" },
+                { l: t("healthVtMalicious") || "Malicious",  v: data.malicious,  color: data.malicious  > 0 ? "#EF4444" : "#10B981" },
+                { l: t("healthVtSuspicious") || "Suspicious", v: data.suspicious, color: data.suspicious > 0 ? "#F59E0B" : "#10B981" },
+                { l: t("healthVtClean") || "Clean",      v: data.undetected, color: "var(--color-text-secondary)" },
+                { l: t("healthVtTotal") || "Total",      v: data.total,      color: "var(--color-text-secondary)" },
               ].map(({ l, v, color }) => (
                 <div key={l} style={{ textAlign: "center" }}>
                   <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginBottom: "2px" }}>{l}</div>
@@ -272,6 +278,7 @@ function VirusTotalCard({ data, loading, noKey }: { data: VirusTotalData | null;
 
 // ─── Main Panel ───────────────────────────────────────────────────────────────
 export function SiteHealthPanel({ siteDbId }: { siteDbId: string }) {
+  const { t } = useLanguage();
   const [health, setHealth]     = useState<HealthData | null>(null);
   const [loading, setLoading]   = useState(false);
   const [checking, setChecking] = useState(false);
@@ -291,7 +298,7 @@ export function SiteHealthPanel({ siteDbId }: { siteDbId: string }) {
     if (!siteDbId) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/gsc/health?siteId=${encodeURIComponent(siteDbId)}`);
+      const res = await fetch(withShare(`/api/gsc/health?siteId=${encodeURIComponent(siteDbId)}`));
       const data = await res.json();
       setHealth(data);
     } catch {}
@@ -329,13 +336,13 @@ export function SiteHealthPanel({ siteDbId }: { siteDbId: string }) {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
         <div>
-          <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>Site Health</h2>
+          <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>{t("healthTitle") || "Site Health"}</h2>
           <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: "4px 0 0" }}>
-            SSL, Safe Browsing, Core Web Vitals, and malware checks.
-            {ageLabel && <span style={{ marginLeft: "8px" }}><Clock size={11} style={{ display: "inline", verticalAlign: "middle", marginRight: "3px" }} />Checked {ageLabel}</span>}
+            {t("healthDesc") || "SSL, Safe Browsing, Core Web Vitals, and malware checks."}
+            {ageLabel && <span style={{ marginLeft: "8px" }}><Clock size={11} style={{ display: "inline", verticalAlign: "middle", marginRight: "3px" }} />{(t("healthChecked") || "Checked {time}").replace("{time}", ageLabel)}</span>}
           </p>
         </div>
-        <button
+        {!isGuestView() && <button
           onClick={runChecks}
           disabled={checking || loading}
           style={{
@@ -347,8 +354,8 @@ export function SiteHealthPanel({ siteDbId }: { siteDbId: string }) {
           }}
         >
           <RefreshCw size={13} style={{ animation: checking ? "spin 1s linear infinite" : "none" }} />
-          {checking ? "Checking…" : hasAnyData ? "Re-check" : "Run Checks"}
-        </button>
+          {checking ? (t("healthChecking") || "Checking…") : hasAnyData ? (t("healthRecheck") || "Re-check") : (t("healthRunChecks") || "Run Checks")}
+        </button>}
       </div>
 
       {/* Cards grid */}
@@ -363,9 +370,8 @@ export function SiteHealthPanel({ siteDbId }: { siteDbId: string }) {
       <div style={{ display: "flex", alignItems: "flex-start", gap: "8px", padding: "12px 14px", background: "rgba(255,255,255,0.04)", borderRadius: "8px", border: "1px solid var(--color-border)" }}>
         <Info size={14} style={{ color: "var(--color-text-secondary)", flexShrink: 0, marginTop: "1px" }} />
         <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.6, margin: 0 }}>
-          Results are cached for 24 hours. SSL check runs directly from your server with no API key needed.
-          Safe Browsing, Core Web Vitals, and VirusTotal require API keys — add them in{" "}
-          <a href="/settings" style={{ color: "var(--color-accent-blue)" }}>Settings → API Keys</a>.
+          {t("healthCacheNote") || "Results are cached for 24 hours. SSL check runs directly from your server with no API key needed. Safe Browsing, Core Web Vitals, and VirusTotal require API keys — add them in"}{" "}
+          <a href="/settings" style={{ color: "var(--color-accent-blue)" }}>{t("healthSettingsApiKeys") || "Settings → API Keys"}</a>.
         </p>
       </div>
 
@@ -379,7 +385,7 @@ export function useHealthStatus(siteDbId: string | null) {
 
   useEffect(() => {
     if (!siteDbId) return;
-    fetch(`/api/gsc/health?siteId=${encodeURIComponent(siteDbId)}`)
+    fetch(withShare(`/api/gsc/health?siteId=${encodeURIComponent(siteDbId)}`))
       .then(r => r.json())
       .then((d: HealthData) => {
         if (!d.ssl && !d.safeBrowsing && !d.virusTotal) { setStatus(null); return; }

@@ -81,19 +81,17 @@ async function queryGSC(
   return [];
 }
 
-export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  const userId = (session?.user as any)?.id as string | undefined;
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+import { verifyAuthOrShare } from '@/lib/authShare';
 
+export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const domain = searchParams.get('domain') || '';
   const period = searchParams.get('period') || '7d';
   const days = periodToDays(period);
 
-  // Find site in DB
-  const site = await prisma.site.findFirst({ where: { userId, url: domain } });
-  if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 });
+  const auth = await verifyAuthOrShare(req, domain, true);
+  if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { userId, site } = auth;
 
   // ── Date windows ──────────────────────────────────────────────────────────────
   // GSC 'final' data lags ~2 days

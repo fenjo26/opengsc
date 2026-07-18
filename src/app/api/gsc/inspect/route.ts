@@ -43,6 +43,55 @@ export async function GET(req: Request) {
   return NextResponse.json({ inspections });
 }
 
+// Helper to fetch and parse Sitemap URLs as fallback for URL inspection
+async function getSitemapUrlsFallback(siteId: string, siteUrl: string, customSitemapUrl?: string | null): Promise<string[]> {
+  try {
+    // 1. Try querying existing SitemapUrl records
+    const existing = await prisma.sitemapUrl.findMany({
+      where: { siteId },
+      select: { url: true },
+      take: 20,
+    });
+    if (existing.length > 0) {
+      return existing.map(u => u.url);
+    }
+
+    // 2. Try fetching sitemap.xml directly
+    const targetSitemap = customSitemapUrl || `${siteUrl.replace(/\/$/, '')}/sitemap.xml`;
+    const res = await fetch(targetSitemap, {
+      signal: AbortSignal.timeout(10000),
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OpenGSCCrawler/1.0)' },
+    });
+    if (res.ok) {
+      const text = await res.text();
+      const locRe = /<loc>\s*(https?:\/\/[^\s<]+)\s*<\/loc>/gi;
+      const urls: string[] = [];
+      let m;
+      while ((m = locRe.exec(text)) !== null) {
+        urls.push(m[1].trim());
+        if (urls.length >= 20) break;
+      }
+      
+      if (urls.length > 0) {
+        // Save them to database in background
+        prisma.$transaction(
+          urls.map(url =>
+            prisma.sitemapUrl.upsert({
+              where: { siteId_url: { siteId, url } },
+              create: { siteId, url },
+              update: {},
+            })
+          )
+        ).catch(() => {});
+        return urls;
+      }
+    }
+  } catch {}
+
+  // 3. Ultimate fallback: homepage
+  return [siteUrl];
+}
+
 // ─── POST { siteId, urls?, forceRefresh? } → inspect & cache ─────────────────
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
@@ -78,11 +127,16 @@ export async function POST(req: Request) {
       orderBy: { _sum: { impressions: 'desc' } },
       take: 20,
     });
-    urlsToProcess = topUrls.map(u => u.url);
+    urlsToProcess = topUrls.map(u => u.url).filter(u => u !== '');
+    
+    // FALLBACK: If no URLs are found from traffic data, fetch from Sitemap or DB
+    if (urlsToProcess.length === 0) {
+      urlsToProcess = await getSitemapUrlsFallback(siteId, site.url, site.sitemapUrl);
+    }
   }
 
   if (urlsToProcess.length === 0) {
-    return NextResponse.json({ inspections: [], inspected: 0, message: 'No URLs found — sync GSC data first.' });
+    return NextResponse.json({ inspections: [], inspected: 0, message: 'No URLs found.' });
   }
 
   // ── Decide which URLs actually need a fresh API call (24h TTL) ───────────────

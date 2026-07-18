@@ -11,10 +11,16 @@ export function getAiCreds(): { provider: string; apiKey: string } {
   return { provider, apiKey };
 }
 
-export const AI_PROVIDER_IDS = ["anthropic", "openai", "gemini", "openrouter", "zai", "kie", "custom"] as const;
+export const AI_PROVIDER_IDS = ["anthropic", "openai", "gemini", "openrouter", "zai", "kimi", "kie", "custom"] as const;
 export const AI_PROVIDER_NAMES: Record<string, string> = {
-  anthropic: "Anthropic", openai: "OpenAI", gemini: "Google Gemini", openrouter: "OpenRouter", zai: "Z.AI", kie: "Kie.ai (GPT-5.5)", custom: "Custom (OpenAI-compatible)",
+  anthropic: "Anthropic", openai: "OpenAI", gemini: "Google Gemini", openrouter: "OpenRouter", zai: "Z.AI", kimi: "Kimi (Moonshot AI)", kie: "Kie.ai (GPT-5.5)", custom: "Custom (OpenAI-compatible)",
 };
+
+// Per-provider model chosen in Settings → API Keys (aiModel_<provider>); empty = provider default.
+export function getProviderModel(provider: string): string {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem(`aiModel_${provider}`) || "";
+}
 
 // Custom OpenAI-compatible provider (e.g. kie.ai): base URL + key + default model, stored separately.
 export function getCustomProvider(): { baseUrl: string; apiKey: string; model: string } {
@@ -48,7 +54,7 @@ export function getTaskCreds(task: SeoTask): { provider: string; apiKey: string;
     return { provider, apiKey: c.apiKey, model, baseUrl: c.baseUrl };
   }
   const apiKey = localStorage.getItem(`aiKey_${provider}`) || localStorage.getItem("aiApiKey") || "";
-  const model = localStorage.getItem(`seoTaskModel_${task}`) || localStorage.getItem("seoModel") || "";
+  const model = localStorage.getItem(`seoTaskModel_${task}`) || localStorage.getItem("seoModel") || getProviderModel(provider);
   return { provider, apiKey, model };
 }
 
@@ -58,7 +64,7 @@ export function getSeoGenCreds(): { provider: string; apiKey: string; model: str
   if (typeof window === "undefined") return { provider: "anthropic", apiKey: "", model: "" };
   const provider = localStorage.getItem("seoProvider") || localStorage.getItem("aiProvider") || "anthropic";
   const apiKey = localStorage.getItem(`aiKey_${provider}`) || localStorage.getItem("aiApiKey") || "";
-  const model = localStorage.getItem("seoModel") || "";
+  const model = localStorage.getItem("seoModel") || getProviderModel(provider);
   return { provider, apiKey, model };
 }
 

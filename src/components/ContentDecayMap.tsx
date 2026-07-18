@@ -2,17 +2,20 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
+import { ScatterChart, Scatter, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { withShare, isGuestView } from "@/lib/shareParam";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 type HeatMetric = "clicks" | "impressions";
 type HeatPeriod = "month" | "week";
 
-interface PageRow { url: string; vals: number[] }
+interface PageRow { url: string; vals: number[]; siteName?: string }
 interface DecayRow {
   page: string; url: string;
   clicksLast2m: number; clicksLast2mPct: number;
   clicksYoY: number | null; clicks: number;
   status: "Warning" | "Critical";
+  siteId?: string; siteName?: string;
 }
 interface DecayData {
   pages: PageRow[]; cols: string[]; years?: (number | undefined)[];
@@ -127,8 +130,16 @@ function DecayingPagesTable({ rows }: { rows: DecayRow[] }) {
             background: i % 2 === 0 ? "var(--color-card)" : "rgba(255,255,255,0.02)",
             alignItems: "center", fontSize: "13px",
           }}>
-            <div style={{ color: "#3B82F6", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-              title={row.url}>{row.page}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0, overflow: "hidden" }}>
+              <span style={{ color: "#3B82F6", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={row.url}>
+                {row.page}
+              </span>
+              {row.siteName && (
+                <span style={{ fontSize: "10px", color: "var(--color-text-secondary)", background: "rgba(255,255,255,0.06)", padding: "2px 6px", borderRadius: "4px", flexShrink: 0 }} title={row.siteName}>
+                  {row.siteName}
+                </span>
+              )}
+            </div>
 
             <div style={{ textAlign: "right", color: "#EF4444", fontWeight: 600 }}>
               <span style={{ fontSize: "11px" }}>↘</span>{" "}
@@ -194,9 +205,9 @@ function Heatmap({
     if (!siteDbId) return;
     setLoading(true); setError("");
     try {
-      const res = await fetch(
+      const res = await fetch(withShare(
         `/api/gsc/decay?siteId=${encodeURIComponent(siteDbId)}&metric=${m}&period=${p}&cols=16&top=20`
-      );
+      ));
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Failed");
       setData(json);
@@ -320,7 +331,7 @@ function Heatmap({
               )}
               <tr>
                 <th style={{ textAlign: "left", fontSize: "11px", color: "var(--color-text-secondary)", fontWeight: 600, paddingBottom: "6px", paddingRight: "12px", minWidth: "200px" }}>
-                  {domain.toUpperCase()}
+                  {(domain || "PORTFOLIO").toUpperCase()}
                 </th>
                 {cols.map((c, ci) => (
                   <th key={ci} style={{ textAlign: "center", fontSize: "10px", color: "var(--color-text-secondary)", fontWeight: 500, paddingBottom: "6px", minWidth: "42px", width: "42px" }}>
@@ -346,12 +357,17 @@ function Heatmap({
                 </td>
               </tr>
               {/* Page rows */}
-              {pages.map(({ url, vals }) => {
-                const total = vals.reduce((a, b) => a + b, 0);
+              {pages.map((p) => {
+                const total = p.vals.reduce((a, b) => a + b, 0);
                 return (
-                  <tr key={url}>
-                    <td style={{ fontSize: "12px", color: "#3B82F6", fontWeight: 500, paddingRight: "12px", paddingBottom: "3px", maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {url}
+                  <tr key={p.url}>
+                    <td style={{ fontSize: "12px", color: "#3B82F6", fontWeight: 500, paddingRight: "12px", paddingBottom: "3px", maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "4px" }}>
+                      <span title={p.url}>{p.url}</span>
+                      {p.siteName && (
+                        <span style={{ fontSize: "9px", color: "var(--color-text-secondary)", background: "rgba(255,255,255,0.05)", padding: "1px 5px", borderRadius: "3px", flexShrink: 0 }}>
+                          {p.siteName}
+                        </span>
+                      )}
                     </td>
                     {vals.map((v, ci) => (
                       <td key={ci} style={{ padding: "1px" }}>
@@ -372,6 +388,119 @@ function Heatmap({
   );
 }
 
+// ─── Position Decay Scatter Plot ──────────────────────────────────────────────
+function PositionDecayScatter({ siteDbId }: { siteDbId: string }) {
+  const { t } = useLanguage();
+  const [points, setPoints] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!siteDbId) return;
+    setLoading(true); setError("");
+    fetch(withShare(`/api/gsc/decay/position?siteId=${encodeURIComponent(siteDbId)}`))
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) setError(d.error);
+        else setPoints(d.points ?? []);
+      })
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false));
+  }, [siteDbId]);
+
+  if (loading) {
+    return (
+      <div style={{ padding: "40px", textAlign: "center", color: "var(--color-text-secondary)" }}>
+        <div style={{ width: "24px", height: "24px", border: "2px solid var(--color-border)", borderTopColor: "#3B82F6", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 10px" }} />
+        Loading scatter plot...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: "40px", textAlign: "center", color: "#EF4444" }}>
+        Error: {error}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: "20px 28px" }}>
+      <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "14px" }}>
+        {t("cdmScatterTitle") || "Position Decay Scatter Plot (Last 30 Days vs Previous 30 Days)"}
+      </div>
+      <p style={{ fontSize: "12.5px", color: "var(--color-text-secondary)", marginBottom: "20px", lineHeight: "1.6" }}>
+        {t("cdmScatterDesc") || "X-axis is the query position 30-60 days ago. Y-axis is today's position. The diagonal represents no change. Points above the diagonal represent search queries that declined; points below improved."}
+      </p>
+
+      {points.length === 0 ? (
+        <div style={{ padding: "40px", textAlign: "center", color: "var(--color-text-secondary)" }}>
+          No sufficient search queries found in both periods to plot.
+        </div>
+      ) : (
+        <div style={{ height: "420px", background: "var(--color-bg)", borderRadius: "8px", padding: "16px", border: "1px solid var(--color-border)" }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+              <XAxis 
+                type="number" 
+                dataKey="prevPos" 
+                name="Position 30d Ago" 
+                domain={[1, 100]} 
+                reversed={true}
+                tick={{ fill: "var(--color-text-secondary)", fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis 
+                type="number" 
+                dataKey="currPos" 
+                name="Current Position" 
+                domain={[1, 100]} 
+                reversed={true}
+                tick={{ fill: "var(--color-text-secondary)", fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <Tooltip 
+                cursor={{ strokeDasharray: '3 3' }} 
+                contentStyle={{ background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 12 }}
+                content={({ active, payload }) => {
+                  if (active && payload && payload.length) {
+                    const data = payload[0].payload;
+                    const diff = data.currPos - data.prevPos;
+                    return (
+                      <div style={{ padding: "8px 12px" }}>
+                        <div style={{ fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "4px" }}>{data.query}</div>
+                        <div style={{ color: "var(--color-text-secondary)" }}>{t("prevPosition") || "Position 30d Ago"}: <b style={{ color: "var(--color-text-primary)" }}>{data.prevPos}</b></div>
+                        <div style={{ color: "var(--color-text-secondary)" }}>{t("currPosition") || "Current Position"}: <b style={{ color: "var(--color-text-primary)" }}>{data.currPos}</b></div>
+                        <div style={{ marginTop: "4px", color: diff > 0 ? "#EF4444" : "#10B981", fontWeight: 600 }}>
+                          {diff > 0 ? `Dropped by ${diff.toFixed(1)} positions` : diff < 0 ? `Improved by ${Math.abs(diff).toFixed(1)} positions` : "No change"}
+                        </div>
+                        <div style={{ fontSize: "11px", color: "var(--color-text-tertiary)", marginTop: "4px" }}>Clicks: {data.clicks.toLocaleString()} | Impr: {data.impressions.toLocaleString()}</div>
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
+              />
+              <Scatter name="Queries" data={points}>
+                {points.map((entry, index) => {
+                  const isDecayed = entry.currPos > entry.prevPos;
+                  const isCritical = isDecayed && (entry.currPos - entry.prevPos >= 5);
+                  const color = isCritical ? "#EF4444" : isDecayed ? "#F59E0B" : "#10B981";
+                  return <Cell key={`cell-${index}`} fill={color} style={{ cursor: "pointer" }} />;
+                })}
+              </Scatter>
+            </ScatterChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main export ───────────────────────────────────────────────────────────────
 export default function ContentDecayMap({ domain, siteDbId }: { domain: string; siteDbId: string }) {
   const { t } = useLanguage();
@@ -380,14 +509,15 @@ export default function ContentDecayMap({ domain, siteDbId }: { domain: string; 
   const [period,    setPeriod]    = useState<HeatPeriod>("month");
   const [data,      setData]      = useState<DecayData | null>(null);
   const [loading,   setLoading]   = useState(false);
+  const [view,      setView]      = useState<"heatmap" | "scatter">("heatmap");
 
   const fetchData = useCallback(async (m: HeatMetric, p: HeatPeriod) => {
     if (!siteDbId) return;
     setLoading(true);
     try {
-      const res = await fetch(
+      const res = await fetch(withShare(
         `/api/gsc/decay?siteId=${encodeURIComponent(siteDbId)}&metric=${m}&period=${p}&cols=16&top=20`
-      );
+      ));
       const json = await res.json();
       if (res.ok) setData(json);
     } catch {}
@@ -403,7 +533,26 @@ export default function ContentDecayMap({ domain, siteDbId }: { domain: string; 
     }}>
       <HowItWorks />
       <DecayingPagesTable rows={data?.decay ?? []} />
-      <Heatmap domain={domain} siteDbId={siteDbId} />
+      
+      {/* Toggle View buttons */}
+      <div style={{ display: "flex", gap: "10px", padding: "16px 28px", borderBottom: "1px solid var(--color-border)", background: "rgba(255,255,255,0.01)" }}>
+        {(["heatmap", "scatter"] as const).map(v => (
+          <button key={v} onClick={() => setView(v)} style={{
+            padding: "6px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600,
+            cursor: "pointer", border: `1px solid ${view === v ? "#3B82F6" : "var(--color-border)"}`,
+            background: view === v ? "rgba(59,130,246,0.1)" : "transparent",
+            color: view === v ? "#3B82F6" : "var(--color-text-secondary)", transition: "all 0.15s"
+          }}>
+            {v === "heatmap" ? (t("cdmViewHeatmap") || "Heatmap View") : (t("cdmViewScatter") || "Decay Scatter Plot")}
+          </button>
+        ))}
+      </div>
+
+      {view === "heatmap" ? (
+        <Heatmap domain={domain} siteDbId={siteDbId} />
+      ) : (
+        <PositionDecayScatter siteDbId={siteDbId} />
+      )}
     </div>
   );
 }

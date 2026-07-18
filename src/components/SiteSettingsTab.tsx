@@ -510,24 +510,39 @@ function GroupsSection({ siteDbId }: { siteDbId: string }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 function SharedLinkSection({ siteDbId, domain }: { siteDbId: string; domain: string }) {
   const { t } = useLanguage();
-  const storageKey = `shareToken_${siteDbId}`;
+  const [enabled, setEnabled] = useState(false);
   const [token, setToken]     = useState<string | null>(null);
   const [copied, setCopied]   = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setToken(localStorage.getItem(storageKey));
-  }, [storageKey]);
+    if (!siteDbId) return;
+    setLoading(true);
+    fetch(`/api/gsc/site/share?siteId=${siteDbId}`)
+      .then(r => r.json())
+      .then(d => {
+        setEnabled(!!d.shareEnabled);
+        setToken(d.shareToken || null);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [siteDbId]);
 
-  const generate = () => {
-    const t = cuidFront() + cuidFront();
-    localStorage.setItem(storageKey, t);
-    setToken(t);
-  };
-
-  const revoke = () => {
-    localStorage.removeItem(storageKey);
-    setToken(null);
-    setCopied(false);
+  const updateShare = async (action: 'generate' | 'revoke' | 'toggle', val?: boolean) => {
+    try {
+      const res = await fetch('/api/gsc/site/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          siteId: siteDbId,
+          action: action !== 'toggle' ? action : undefined,
+          shareEnabled: action === 'toggle' ? val : undefined,
+        }),
+      });
+      const d = await res.json();
+      setEnabled(!!d.shareEnabled);
+      setToken(d.shareToken || null);
+    } catch {}
   };
 
   const shareUrl = token ? `${typeof window !== 'undefined' ? window.location.origin : ''}/share/${siteDbId}/${token}` : '';
@@ -537,6 +552,14 @@ function SharedLinkSection({ siteDbId, domain }: { siteDbId: string; domain: str
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  if (loading) {
+    return (
+      <div style={{ background: "var(--color-card)", borderRadius: "12px", border: "1px solid var(--color-border)", padding: "24px", textAlign: "center", color: "var(--color-text-secondary)", fontSize: "13px" }}>
+        {t("shareSettingsLoading") || "Loading share settings..."}
+      </div>
+    );
+  }
 
   return (
     <div style={{ background: "var(--color-card)", borderRadius: "12px", border: "1px solid var(--color-border)", padding: "24px" }}>
@@ -553,27 +576,38 @@ function SharedLinkSection({ siteDbId, domain }: { siteDbId: string; domain: str
       <p style={{ fontSize: "13px", color: "var(--color-text-primary)", marginBottom: "4px" }}>
         {t("setSharedLinkDesc1").replace("{domain}", domain)}
       </p>
-      <p style={{ fontSize: "13px", color: "var(--color-text-primary)", marginBottom: "20px" }}>
+      <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", marginBottom: "20px" }}>
         {t("setSharedLinkDesc3")}
       </p>
 
       {token ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          <div style={{
-            display: "flex", alignItems: "center", gap: "8px",
-            padding: "10px 14px", borderRadius: "8px",
-            background: "var(--color-bg)", border: "1px solid var(--color-border)",
-          }}>
-            <span style={{ flex: 1, fontSize: "12px", fontFamily: "monospace", color: "#3B82F6", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {shareUrl}
-            </span>
-            <button onClick={copy} style={{ display: "flex", alignItems: "center", gap: "4px", padding: "4px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: copied ? "rgba(16,185,129,0.1)" : "transparent", color: copied ? "#10B981" : "var(--color-text-secondary)", fontSize: "12px", cursor: "pointer", flexShrink: 0 }}>
-              {copied ? <Check size={12} /> : <Copy size={12} />}
-              {copied ? t("setCopied") : t("setCopy")}
+          <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", fontSize: "14px", fontWeight: 600, color: "var(--color-text-primary)", cursor: "pointer" }}>
+            <input type="checkbox" checked={enabled} onChange={e => updateShare('toggle', e.target.checked)} />
+            {t("shareActiveCheckbox") || "Enable read-only guest access link"}
+          </label>
+          
+          {enabled && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: "8px",
+              padding: "10px 14px", borderRadius: "8px",
+              background: "var(--color-bg)", border: "1px solid var(--color-border)",
+            }}>
+              <span style={{ flex: 1, fontSize: "12px", fontFamily: "monospace", color: "#3B82F6", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {shareUrl}
+              </span>
+              <button onClick={copy} style={{ display: "flex", alignItems: "center", gap: "4px", padding: "4px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: copied ? "rgba(16,185,129,0.1)" : "transparent", color: copied ? "#10B981" : "var(--color-text-secondary)", fontSize: "12px", cursor: "pointer", flexShrink: 0 }}>
+                {copied ? <Check size={12} /> : <Copy size={12} />}
+                {copied ? t("setCopied") : t("setCopy")}
+              </button>
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: "10px", marginTop: "4px" }}>
+            <button onClick={() => updateShare('generate')} style={{ padding: "8px 14px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-primary)", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+              {t("setRegenerateLink") || "Reset link"}
             </button>
-          </div>
-          <div style={{ display: "flex", gap: "10px" }}>
-            <button onClick={revoke} style={{ padding: "8px 16px", borderRadius: "8px", border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.05)", color: "#EF4444", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+            <button onClick={() => updateShare('revoke')} style={{ padding: "8px 16px", borderRadius: "8px", border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.05)", color: "#EF4444", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
               {t("setRevokeLink")}
             </button>
           </div>
@@ -582,8 +616,8 @@ function SharedLinkSection({ siteDbId, domain }: { siteDbId: string; domain: str
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           <button
-            onClick={generate}
-            style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "10px 16px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "14px", fontWeight: 600, cursor: "pointer" }}
+            onClick={() => updateShare('generate')}
+            style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "10px 16px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "14px", fontWeight: 600, cursor: "pointer", width: "fit-content" }}
           >
             {t("setGenerateLink")}
           </button>

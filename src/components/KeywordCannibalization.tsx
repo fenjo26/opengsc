@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
+import { withShare, isGuestView } from "@/lib/shareParam";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 interface CannibalPage {
@@ -10,6 +11,7 @@ interface CannibalPage {
 }
 interface CannibalGroup {
   query: string; pages: CannibalPage[]; isTrue: boolean;
+  siteId?: string; siteName?: string;
 }
 
 type SortKey = "impressions" | "clicks" | "position";
@@ -85,9 +87,9 @@ function CannibalizationTable({ siteDbId }: { siteDbId: string }) {
     if (!siteDbId) return;
     setLoading(true); setError("");
     try {
-      const res = await fetch(
+      const res = await fetch(withShare(
         `/api/gsc/cannibalization?siteId=${encodeURIComponent(siteDbId)}&days=${d}&minImpressions=30&limit=60`
-      );
+      ));
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed");
       setGroups(data.groups ?? []);
@@ -266,6 +268,11 @@ function CannibalizationTable({ siteDbId }: { siteDbId: string }) {
                       background: group.isTrue ? "#EF4444" : "#F59E0B",
                       boxShadow: group.isTrue ? "0 0 6px rgba(239,68,68,0.5)" : "0 0 6px rgba(245,158,11,0.5)" }} />
                     <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)" }}>{group.query}</span>
+                    {group.siteName && (
+                      <span style={{ fontSize: "10px", color: "var(--color-text-secondary)", background: "rgba(255,255,255,0.06)", padding: "2px 6px", borderRadius: "4px", flexShrink: 0 }} title={group.siteName}>
+                        {group.siteName}
+                      </span>
+                    )}
                     <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: "20px",
                       background: group.isTrue ? "rgba(239,68,68,0.1)" : "rgba(245,158,11,0.1)",
                       color: group.isTrue ? "#EF4444" : "#F59E0B",

@@ -46,19 +46,39 @@ mid-job would otherwise leave a phantom row "processing" forever.
 |---|---|
 | Auth | `Account`, `Session`, `User`, `VerificationToken` |
 | GSC core | `Site`, `SitemapUrl`, `IndexingOperation`, `DailyMetric`, `PageInspection`, `PageInspectionHistory` |
-| Growth tools | `TrackedKeyword`, `RankCheck` (Rank Tracker), `TrackedQuestion`, `AeoCheck` (AEO Tracker), `Backlink`, `ContentGroup`, `TopicCluster` |
+| Growth tools | `TrackedKeyword`, `RankCheck` (Rank Tracker), `TrackedQuestion`, `AeoCheck` (AEO Tracker), `Backlink`, `ContentGroup`, `TopicCluster`, `LinkWatchBrand`, `LinkMention` (Link Monitor), `DrCache` (Ahrefs DR cache) |
 | Integrations | `ClaritySnapshot`, `SiteHealth` |
 | Indexer | `IndexerDomain`, `IndexerLog`, `IndexerQueue`, `IndexerDictionary` |
-| SEO Tools | `SeoJob`, `GeoAudit`, `RagSlot`, `RagCasino` |
+| SEO Tools | `SeoJob`, `SeoHistory`, `GeoAudit`, `RagSlot`, `RagCasino` |
+| Site Audit | `SiteAudit`, `SiteAuditPage` (built-in crawler) |
+| Notifications | `AlertEvent` (fired alerts, dedupe), `Digest` (digest history) |
 
-Notably, **most of the SEO Tools module is client-side only.** Outline/Text/Analysis/Landing
-results live in the browser's `localStorage` (`src/lib/seo/history.ts`), capped at 40 records with
-oldest-first eviction on quota errors — the `SeoJob` table only exists to survive a page reload
-*during* generation (see §1); once a job's result is imported into local History, the server row
-is deleted (`src/lib/seo/jobs.ts:importJob`). Editorial **Policy** is `localStorage`-only with no
-server table at all. **GEO Audit** is the one exception that's fully server-persisted
-(`GeoAudit`), since audits are expensive enough that users expect them to survive indefinitely
-across devices/browsers.
+Notably, **the SEO Tools module treats the browser as its working store, with the server as a
+backup.** Outline/Text/Analysis/Landing/Cluster results live in the browser's `localStorage`
+(`src/lib/seo/history.ts`), capped at 40 records with oldest-first eviction on quota errors — and
+are mirrored to the `SeoHistory` table via `/api/seo/history`: every save schedules a debounced
+push, and on app mount `syncHistoryFromServer()` restores any records missing locally. Pushes are
+blocked until that initial pull has finished, so a freshly-wiped browser can never clobber the
+server backup with an empty list. The `SeoJob` table only exists to survive a page reload *during*
+generation (see §1); once a job's result is imported into local History, the server row is deleted
+(`src/lib/seo/jobs.ts:importJob`). API keys, provider/model choices, and Editorial **Policies**
+follow the same localStorage-first pattern with a per-user server snapshot (`User.seoSettings`),
+synced by the invisible `SeoKeysSync` component through `/api/settings/seo-sync` — restore on
+mount, push every 20s and on tab-hide when changed. **GEO Audit** is fully server-persisted
+(`GeoAudit`) with no localStorage copy at all, since audits are expensive enough that users expect
+them to survive indefinitely across devices/browsers.
+
+Two smaller server-backed features sit outside the generation pipeline. **`/api/dr`** proxies
+Ahrefs' free public Domain Rating endpoint behind a 7-day `DrCache` (the dashboard batches up to
+100 domains per request, 60 fetched fresh per call with bounded concurrency; the UI must keep the
+"Domain Rating by Ahrefs" attribution wherever DR is shown). **Link Monitor**
+(`/seo-tools/links` → `/api/linkwatch`, models `LinkWatchBrand`/`LinkMention`) pulls watched
+brands' fresh backlinks from the Ahrefs v3 `all-backlinks` endpoint — in-content, live, DR ≥ 50
+by default, first seen in the last 3 months, one per referring domain, requested sequentially to
+respect Ahrefs' per-minute rate limits — and offers an LLM insights pass over the stored mentions
+via `fetchLLM`. Both features (and the history/keys sync above) are written with raw SQL
+(`$queryRawUnsafe`) so they degrade gracefully — returning empty results instead of crashing — on
+a database that hasn't run `prisma db push` yet.
 
 ## 3. The SEO generation pipeline (`src/lib/seo/generate.ts`)
 
@@ -191,7 +211,85 @@ in as internal links) are purely data feeding the next content-generation pass o
 they don't call any external service, they just shape what the script's word-mashing logic links
 to.
 
-## 5. Extending the project
+## 5. MCP server (`src/app/api/mcp/route.ts`)
+
+OpenGSC speaks MCP (Model Context Protocol) over the **Streamable HTTP** transport in
+stateless mode: every JSON-RPC message arrives as a POST and is answered with a plain JSON
+body (the spec allows this in place of an SSE stream), so the endpoint needs no session
+state and survives process restarts trivially. Authentication is a per-user bearer token
+(`User.mcpToken`, managed in **Settings → API & MCP** via `/api/settings/mcp-token`).
+
+The tool registry lives in `src/lib/mcp/tools.ts`. Two rules keep it safe and cheap:
+
+1. **Read-only** — no tool mutates user-visible state (the one exception: `inspect_url`
+   refreshes the `PageInspection` cache with what it just fetched, which only makes the
+   Indexing tab fresher).
+2. **Local-first, never paid** — the default tools read what the app has already synced
+   (`DailyMetric`, `TrackedKeyword`, `LinkMention`, `SiteAuditPage`, …). Exactly two tools,
+   explicitly labeled LIVE in their descriptions (`query_gsc_live`, `inspect_url`), call
+   Google's own APIs through the user's stored OAuth token — free but quota-limited, and the
+   `initialize` instructions tell agents to prefer the local tools. Nothing ever calls a paid
+   provider (SERP/AI/Ahrefs), so an agent hammering the endpoint can't burn credits.
+
+Tool-level failures (bad site name, empty data) are returned as MCP tool results with
+`isError: true` rather than JSON-RPC protocol errors — agents can read the message and
+self-correct (e.g. call `list_sites` after a "site not found"). Adding a tool = adding one
+object to `MCP_TOOLS` (name, description, JSON schema, handler); `tools/list` and
+`tools/call` pick it up automatically. Ready-made agent skills that orchestrate these tools
+ship in `.agents/skills/`.
+
+## 6. Site Audit crawler (`src/lib/audit/crawler.ts`)
+
+A deliberately dependency-free technical audit: plain `fetch` + regex extraction, no headless
+browser — the audited signals (status codes, titles/meta, H1s, canonicals, `noindex`, link
+graph, word counts) all live in raw HTML. The crawler BFS-walks same-host pages from the site
+root (≤500 pages, 4 workers, manual-redirect mode so 3xx chains are visible, a politeness
+delay per request), then a **second pass** computes issues that need the whole crawl map:
+broken internal links (a link is "broken" if its target was crawled and returned ≥400) and
+duplicate titles. Results land in `SiteAuditPage` rows plus a JSON summary (issue counts +
+health score) on `SiteAudit`.
+
+Runs as the same fire-and-forget job pattern as `SeoJob` (§1): `POST /api/audit` creates the
+row and calls `runAudit()` without awaiting; the client polls `GET /api/audit?siteId=`, and
+rows stuck `running` for >30 min are auto-failed on the next list read. One running audit per
+site is enforced at start.
+
+## 7. Notifications (alerts + digests)
+
+Delivery is the user's **own Telegram bot** (`src/lib/notify.ts`): BotFather token +
+auto-detected chat id stored on `User` (raw-SQL convention), messages sent straight to the
+Bot API — no third-party notification service, nothing to pay for. Two in-process
+schedulers (started from `instrumentation.ts`, same pattern as rank-cron):
+
+- **alert-cron** (`src/lib/alertScheduler.ts`, hourly) evaluates per-user rules over data
+  the app already holds — rank drops (`TrackedKeyword.lastPosition` vs `prevPosition`),
+  week-over-week click drops (`DailyMetric`), SSL expiry (`SiteHealth`), low audit scores
+  (`SiteAudit`). Every fired alert is an `AlertEvent` row whose **unique `dedupeKey`**
+  (e.g. `rank_drop:<kwId>:<date>`) makes re-firing a silent no-op, so a user is never
+  spammed twice for the same occurrence.
+- **digest-cron** (`src/lib/digestScheduler.ts`, hourly gate on `hourUtc` + weekday)
+  renders `buildDigest()` (`src/lib/digest.ts`) — per-site traffic vs previous period,
+  cross-site winner/loser queries, rank movements — optionally topped with an LLM summary
+  that reuses the server-side key backup (`User.seoSettings`, same trick as
+  `getUserSerpCreds`). `lastSentAt` inside `digestSettings` prevents double sends across
+  ticks and restarts. Digests are filterable by **site tag**, so one tag = one network's
+  own report; history lives in the `Digest` table and the `/digest` tab.
+
+Delivery channels: the Telegram bot and/or a **Slack Incoming Webhook** (`sendSlack` in
+`notify.ts`, with Telegram-style Markdown converted to Slack's `mrkdwn`); `notifyUser()`
+fans out to every configured channel.
+
+## 8. Shared dashboards
+
+A site can expose a **read-only guest link**: `Site.shareToken` (+ `shareEnabled`) is a
+random token generated from the site's Settings tab; the public page
+`/share/[siteId]/[token]` reuses the regular site-dashboard component with the token passed
+down, and `verifyAuthOrShare()` (`src/lib/authShare.ts`) lets GSC data routes accept
+*either* a session *or* a valid `shareToken` scoped to that one site. Revoking/regenerating
+the token invalidates old links instantly. Share pages render outside the app shell (no
+TopBar) via the `AUTH_PATHS` exclusion in `DashboardShell`.
+
+## 9. Extending the project
 
 - **Add an LLM provider**: extend the `if/else if` chain in `fetchLLMOnce()`
   (`src/lib/llm.ts`) with the new provider's request/response shape, plus a matching branch in
