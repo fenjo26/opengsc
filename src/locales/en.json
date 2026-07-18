@@ -1,6 +1,8 @@
 {
   "menu": "Menu",
-  "menuDashboard": "Dashboard",
+  "menuDashboard": "Sites",
+  "menuStriking": "Potential",
+  "menuDecay": "Decay",
   "menuPortfolio": "Portfolio Sites",
   "menuPerformance": "Performance",
   "menuCannibalization": "Cannibalization",
@@ -1984,5 +1986,8 @@
   "seEngineYandex": "Yandex",
   "seEngineYandexFull": "Yandex.Webmaster",
   "seEngineYandexShort": "Ya",
-  "auditColTitle": "Title"
+  "auditColTitle": "Title",
+  "prevPosition": "Position 30d Ago",
+  "currPosition": "Current Position",
+  "seIndexNowOk": "IndexNow submission successful"
 }

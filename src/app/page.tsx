@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Search, Eye, EyeOff, Star, ExternalLink,
   ArrowUpDown, SlidersHorizontal, Sparkles, Percent, MoveUp,
@@ -14,6 +14,9 @@ import { AreaChart, Area, ResponsiveContainer, Tooltip } from "recharts";
 import { usePrivacy } from "@/lib/PrivacyContext";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { useHealthStatus } from "@/components/SiteHealthPanel";
+import StrikingDistanceKeywords from "@/components/StrikingDistanceKeywords";
+import KeywordCannibalization from "@/components/KeywordCannibalization";
+import ContentDecayMap from "@/components/ContentDecayMap";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Metric = "clicks" | "impressions" | "ctr" | "position";
@@ -504,10 +507,11 @@ const tbBtn = (active = false): React.CSSProperties => ({
 });
 
 // ─── Main page ────────────────────────────────────────────────────────────────
-export default function PortfolioPage() {
+function PortfolioPageContent() {
   const { t } = useLanguage();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"sites" | "striking" | "cannibalization" | "decay">("sites");
+  const searchParams = useSearchParams();
+  const activeTab = (searchParams.get("tab") as "sites" | "striking" | "cannibalization" | "decay") || "sites";
   const [sites, setSites]       = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState("");
@@ -1158,13 +1162,6 @@ export default function PortfolioPage() {
                 DR {Math.round(drMap[domain.toLowerCase().replace(/^www\./,"")])}
               </span>
             )}
-            {/* Quick manual indexing check: opens Google `site:` search in a new tab */}
-            <a href={`https://www.google.com/search?q=site:${encodeURIComponent(domain.replace(/^www\./,""))}`}
-              target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
-              title={`site:${domain} — Google`}
-              style={{fontSize:"10px",fontWeight:700,padding:"1px 6px",borderRadius:"6px",alignSelf:"flex-start",background:"rgba(66,133,244,0.12)",color:"#4285F4",textDecoration:"none",filter:blur?"blur(4px)":"none",transition:"filter 0.25s"}}>
-              G
-            </a>
           </div>
 
           {/* Metrics 2×2 */}
@@ -1239,6 +1236,17 @@ export default function PortfolioPage() {
 
             {/* Action buttons */}
             <div style={{display:"flex",gap:"2px",flexShrink:0}}>
+              {/* Google Search Link (site: domain) */}
+              <CardBtn
+                tooltip={`site:${domain} — Google`}
+                onClick={e => {
+                  e.stopPropagation();
+                  window.open(`https://www.google.com/search?q=site:${encodeURIComponent(domain.replace(/^www\./,""))}`, '_blank', 'noreferrer');
+                }}
+              >
+                <span style={{ fontSize: "11px", fontWeight: 800, fontFamily: "sans-serif" }}>G</span>
+              </CardBtn>
+
               {/* Export */}
               <CardBtn
                 tooltip={t("advancedExport")}
@@ -1319,39 +1327,7 @@ export default function PortfolioPage() {
         </div>
       )}
 
-      {/* ─── Portfolio Tab Switcher ─── */}
-      <div style={{ display: "flex", gap: "8px", marginBottom: "18px", borderBottom: "1px solid var(--color-border)", paddingBottom: "12px" }}>
-        {(["sites", "striking", "cannibalization", "decay"] as const).map(tab => {
-          const isActive = activeTab === tab;
-          const labels = {
-            sites: t("tabDashboard") || "Sites",
-            striking: t("optStriking") || "Striking Distance",
-            cannibalization: t("optCannibalization") || "Cannibalization",
-            decay: t("optContentDecay") || "Content Decay",
-          };
-          return (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              style={{
-                padding: "8px 16px",
-                borderRadius: "8px",
-                fontSize: "13px",
-                fontWeight: 600,
-                cursor: "pointer",
-                border: "none",
-                background: isActive ? "rgba(59,130,246,0.15)" : "transparent",
-                color: isActive ? "#3B82F6" : "var(--color-text-secondary)",
-                transition: "all 0.15s",
-              }}
-              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
-              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
-            >
-              {labels[tab]}
-            </button>
-          );
-        })}
-      </div>
+
 
       {activeTab === "sites" ? (
         <>
@@ -1558,5 +1534,19 @@ export default function PortfolioPage() {
       {/* Export modal */}
       {exportSite && <ExportModal domain={exportSite} onClose={()=>setExportSite(null)} />}
     </div>
+  );
+}
+
+export default function PortfolioPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ padding: "40px", textAlign: "center", color: "var(--color-text-secondary)" }}>
+        <div style={{ width: "24px", height: "24px", border: "2px solid var(--color-border)", borderTopColor: "#3B82F6", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 10px" }} />
+        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+        Loading page content...
+      </div>
+    }>
+      <PortfolioPageContent />
+    </Suspense>
   );
 }

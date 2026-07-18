@@ -1,8 +1,8 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { Settings, LogOut, Sparkles, Globe, Newspaper } from "lucide-react";
 import { usePrivacy } from "@/lib/PrivacyContext";
 import { useTheme } from "@/lib/ThemeContext";
@@ -438,10 +438,76 @@ function ChromeExtensionModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+// ─── NavLinks component for top navigation ────────────────────────────────────
+function NavLinks() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { t } = useLanguage();
+
+  const activeTab = searchParams.get("tab") || "sites";
+
+  const items = [
+    { href: "/?tab=sites", label: t("menuDashboard"), key: "sites", isRootTab: true },
+    { href: "/?tab=striking", label: t("menuStriking"), key: "striking", isRootTab: true },
+    { href: "/?tab=cannibalization", label: t("menuCannibalization"), key: "cannibalization", isRootTab: true },
+    { href: "/?tab=decay", label: t("menuDecay"), key: "decay", isRootTab: true },
+    { href: "/seo-tools", label: t("seoNavTitle"), key: "seo-tools", icon: <Sparkles size={14} /> },
+    { href: "/indexer", label: t("indexerNavTitle"), key: "indexer", icon: <Globe size={14} /> },
+    { href: "/digest", label: t("digestNavTitle"), key: "digest", icon: <Newspaper size={14} /> },
+  ];
+
+  return (
+    <nav style={{ display: "flex", alignItems: "center", gap: "4px", marginLeft: "20px", flex: 1 }}>
+      {items.map(item => {
+        const isActive = item.isRootTab
+          ? (pathname === "/" && activeTab === item.key)
+          : pathname?.startsWith(item.href);
+
+        const activeColor = item.key === "seo-tools" 
+          ? "var(--color-accent-purple)" 
+          : item.key === "indexer" 
+            ? "var(--color-accent-blue)" 
+            : item.key === "digest" 
+              ? "var(--color-accent-green, #34c759)" 
+              : "var(--color-accent-blue)";
+
+        const bgActive = item.key === "seo-tools" 
+          ? "rgba(191,90,242,0.12)" 
+          : item.key === "indexer" 
+            ? "rgba(41,151,255,0.12)" 
+            : item.key === "digest" 
+              ? "rgba(52,199,89,0.12)" 
+              : "rgba(59,130,246,0.12)";
+
+        return (
+          <button
+            key={item.href}
+            onClick={() => router.push(item.href)}
+            style={{
+              display: "flex", alignItems: "center", gap: "6px",
+              padding: "6px 14px", borderRadius: "8px",
+              fontSize: "13px", fontWeight: isActive ? 700 : 500,
+              cursor: "pointer", border: "none",
+              color: isActive ? activeColor : "var(--color-text-secondary)",
+              background: isActive ? bgActive : "transparent",
+              transition: "all 0.15s",
+            }}
+            onMouseOver={e => { if (!isActive) e.currentTarget.style.background = "var(--color-card-hover)"; }}
+            onMouseOut={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
+          >
+            {item.icon}
+            {item.label}
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
 // ─── Top bar ──────────────────────────────────────────────────────────────────
 function TopBar() {
   const router = useRouter();
-  const pathname = usePathname();
   const { data: session } = useSession();
   const { blur, setBlur } = usePrivacy();
   const { dark, setDark } = useTheme();
@@ -483,74 +549,9 @@ function TopBar() {
       </button>
 
       {/* Primary nav tabs */}
-      <nav style={{ display: "flex", alignItems: "center", gap: "4px", marginLeft: "20px", flex: 1 }}>
-        {(() => {
-          const active = pathname?.startsWith("/seo-tools");
-          return (
-            <button
-              onClick={() => router.push("/seo-tools")}
-              style={{
-                display: "flex", alignItems: "center", gap: "7px",
-                padding: "6px 14px", borderRadius: "8px",
-                fontSize: "13px", fontWeight: active ? 700 : 500,
-                cursor: "pointer", border: "none",
-                color: active ? "var(--color-accent-purple)" : "var(--color-text-secondary)",
-                background: active ? "rgba(191,90,242,0.12)" : "transparent",
-                transition: "all 0.15s",
-              }}
-              onMouseOver={e => { if (!active) e.currentTarget.style.background = "var(--color-card-hover)"; }}
-              onMouseOut={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
-            >
-              <Sparkles size={15} />
-              {t("seoNavTitle")}
-            </button>
-          );
-        })()}
-        {(() => {
-          const active = pathname?.startsWith("/indexer");
-          return (
-            <button
-              onClick={() => router.push("/indexer")}
-              style={{
-                display: "flex", alignItems: "center", gap: "7px",
-                padding: "6px 14px", borderRadius: "8px",
-                fontSize: "13px", fontWeight: active ? 700 : 500,
-                cursor: "pointer", border: "none",
-                color: active ? "var(--color-accent-blue)" : "var(--color-text-secondary)",
-                background: active ? "rgba(41,151,255,0.12)" : "transparent",
-                transition: "all 0.15s",
-              }}
-              onMouseOver={e => { if (!active) e.currentTarget.style.background = "var(--color-card-hover)"; }}
-              onMouseOut={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
-            >
-              <Globe size={15} />
-              {t("indexerNavTitle")}
-            </button>
-          );
-        })()}
-        {(() => {
-          const active = pathname?.startsWith("/digest");
-          return (
-            <button
-              onClick={() => router.push("/digest")}
-              style={{
-                display: "flex", alignItems: "center", gap: "7px",
-                padding: "6px 14px", borderRadius: "8px",
-                fontSize: "13px", fontWeight: active ? 700 : 500,
-                cursor: "pointer", border: "none",
-                color: active ? "var(--color-accent-green, #34c759)" : "var(--color-text-secondary)",
-                background: active ? "rgba(52,199,89,0.12)" : "transparent",
-                transition: "all 0.15s",
-              }}
-              onMouseOver={e => { if (!active) e.currentTarget.style.background = "var(--color-card-hover)"; }}
-              onMouseOut={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
-            >
-              <Newspaper size={15} />
-              {t("digestNavTitle")}
-            </button>
-          );
-        })()}
-      </nav>
+      <Suspense fallback={<div style={{ flex: 1 }} />}>
+        <NavLinks />
+      </Suspense>
 
       {/* Avatar */}
       {user && (

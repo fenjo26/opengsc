@@ -369,7 +369,7 @@ function Heatmap({
                         </span>
                       )}
                     </td>
-                    {vals.map((v, ci) => (
+                    {p.vals.map((v: number, ci: number) => (
                       <td key={ci} style={{ padding: "1px" }}>
                         <div style={cellStyle(v)}>{v === 0 ? <span style={{ opacity: 0.25 }}>·</span> : fmt(v)}</div>
                       </td>

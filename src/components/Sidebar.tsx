@@ -2,7 +2,7 @@
 
 import { LayoutDashboard, Globe, Settings, TrendingUp, Anchor, BarChart2, LogOut, ChevronDown } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useState } from "react";
 
@@ -75,12 +75,14 @@ export default function Sidebar() {
   const { data: session } = useSession();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
+  const searchParams = useSearchParams();
+  const activeTab = searchParams.get("tab") || "sites";
+
   const navItems = [
-    { href: "/", icon: <LayoutDashboard size={18} />, label: t("menuDashboard") },
-    { href: "/portfolio", icon: <Globe size={18} />, label: t("menuPortfolio") },
-    { href: "/performance", icon: <TrendingUp size={18} />, label: t("menuPerformance") },
-    { href: "/cannibalization", icon: <Anchor size={18} />, label: t("menuCannibalization") },
-    { href: "/testing", icon: <BarChart2 size={18} />, label: t("menuTesting") },
+    { href: "/?tab=sites", icon: <Globe size={18} />, label: t("menuDashboard"), tabKey: "sites" },
+    { href: "/?tab=striking", icon: <TrendingUp size={18} />, label: t("menuStriking"), tabKey: "striking" },
+    { href: "/?tab=cannibalization", icon: <Anchor size={18} />, label: t("menuCannibalization"), tabKey: "cannibalization" },
+    { href: "/?tab=decay", icon: <BarChart2 size={18} />, label: t("menuDecay"), tabKey: "decay" },
   ];
 
   const user = session?.user;
@@ -102,12 +104,12 @@ export default function Sidebar() {
             {t("menu")}
           </div>
 
-          {navItems.map(({ href, icon, label }) => {
-            const isActive = pathname === href;
+          {navItems.map((item) => {
+            const isActive = pathname === "/" ? activeTab === item.tabKey : false;
             return (
               <button
-                key={href}
-                onClick={() => router.push(href)}
+                key={item.href}
+                onClick={() => router.push(item.href)}
                 style={{
                   display: "flex", alignItems: "center", gap: "12px",
                   padding: "10px 12px", borderRadius: "8px",
@@ -119,8 +121,8 @@ export default function Sidebar() {
                 onMouseOver={e => { if (!isActive) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.05)"; }}
                 onMouseOut={e => { if (!isActive) e.currentTarget.style.backgroundColor = "transparent"; }}
               >
-                {icon}
-                <span style={{ fontSize: "14px", fontWeight: isActive ? 600 : 400 }}>{label}</span>
+                {item.icon}
+                <span style={{ fontSize: "14px", fontWeight: isActive ? 600 : 400 }}>{item.label}</span>
               </button>
             );
           })}

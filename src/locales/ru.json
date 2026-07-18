@@ -1,6 +1,8 @@
 {
   "menu": "Меню",
-  "menuDashboard": "Дашборд",
+  "menuDashboard": "Сайты",
+  "menuStriking": "Потенциал",
+  "menuDecay": "Устаревание",
   "menuPortfolio": "Сайты (Портфолио)",
   "menuPerformance": "Производительность",
   "menuCannibalization": "Каннибализация",
@@ -1984,5 +1986,8 @@
   "seEngineYandex": "Яндекс",
   "seEngineYandexFull": "Яндекс.Вебмастер",
   "seEngineYandexShort": "Я",
-  "auditColTitle": "Заголовок"
+  "auditColTitle": "Заголовок",
+  "prevPosition": "Позиция 30 дней назад",
+  "currPosition": "Текущая позиция",
+  "seIndexNowOk": "Отправка в IndexNow выполнена успешно"
 }
