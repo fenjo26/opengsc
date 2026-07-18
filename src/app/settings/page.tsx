@@ -284,6 +284,23 @@ function GoogleIcon({ size = 16 }: { size?: number }) {
   );
 }
 
+function BingIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+      <path d="M10.1 2.3v27.4l9.2-5.4 6.2 9.2 4.4-2-13.6-19.8 4.3-2.6-10.5-6.8z" fill="#0078d4" />
+    </svg>
+  );
+}
+
+function YandexIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="12" fill="#FC3F1D" />
+      <path d="M14.3 16.5V7.5h-2.1c-1.9 0-3.3.9-3.3 2.7 0 1.5 1 2.4 2.5 2.6L9.3 16.5h2.2l1.9-3.7h.9v3.7h2zM12.2 11.2c-.9 0-1.5-.4-1.5-1.2s.6-1.1 1.5-1.1h.6v2.3h-.6z" fill="#fff" />
+    </svg>
+  );
+}
+
 // ─── Section: My Google Accounts ──────────────────────────────────────────────
 function AccountsSection({ user, accounts, loadingAccounts, removing, onAdd, onRemove, onReauth }: {
   user: any; accounts: ConnectedAccount[]; loadingAccounts: boolean;
@@ -2081,8 +2098,8 @@ export default function SettingsPage() {
             <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "2px" }}>{t("sidebarAccount")}</div>
             <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "10px" }}>{user?.email}</div>
             <NavBtn id="accounts" icon={<GoogleIcon size={14} />} label={t("navMyGoogleAccounts")} />
-            <NavBtn id="bing" icon={<div style={{ width: 14, height: 14, borderRadius: "4px", background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "8px", fontWeight: 800, color: "#3B82F6" }}>B</div>} label="Bing Webmaster" />
-            <NavBtn id="yandex" icon={<div style={{ width: 14, height: 14, borderRadius: "4px", background: "rgba(252,63,29,0.12)", border: "1px solid rgba(252,63,29,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 800, color: "#FC3F1D" }}>Я</div>} label="Яндекс.Вебмастер" />
+            <NavBtn id="bing" icon={<BingIcon size={14} />} label="Bing Webmaster" />
+            <NavBtn id="yandex" icon={<YandexIcon size={14} />} label="Яндекс.Вебмастер" />
             <NavBtn id="teams" icon={<Users size={14} />} label={t("myTeams")} />
             <NavBtn id="api-keys" icon={<KeyRound size={14} />} label={t("navApiKeys")} />
             <NavBtn id="api" icon={<Key size={14} />} label={t("navApiMcpKeys")} />
