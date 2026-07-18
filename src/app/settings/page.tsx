@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import SeoToolsSettings, { SeoProviderKeysSection, AeoProviderKeysSection } from "@/components/SeoToolsSettings";
 
-type NavItem = "accounts" | "teams" | "api" | "api-keys" | "indexing-api" | "seo-tools" | "notifications" | "members" | "preferences" | "supersites";
+type NavItem = "accounts" | "bing" | "yandex" | "teams" | "api" | "api-keys" | "indexing-api" | "seo-tools" | "notifications" | "members" | "preferences" | "supersites";
 
 interface ConnectedAccount {
   id: string; email: string; picture: string | null; connected: boolean; gscAccess: boolean; ga4Access?: boolean;
@@ -1628,39 +1628,7 @@ function IndexApiSection() {
         </div>
       </SectionCard>
 
-      {/* ── Bing Webmaster Tools API ── */}
-      <SectionCard>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-          <div style={{ width: 28, height: 28, borderRadius: "6px", background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 800, color: "#3B82F6" }}>BG</div>
-          <div>
-            <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>Bing Webmaster API</span>
-            <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px", margin: 0 }}>
-              {t("bingDesc") || "Used to fetch traffic stats and submit sitemaps directly to Bing Webmaster Tools."}{" "}
-              <a href="https://www.bing.com/webmasters" target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)" }}>bing.com/webmasters</a>
-              {" · "}
-              <a href="https://github.com/fenjo26/opengsc/blob/main/docs/SEARCH-ENGINES-SETUP.md" target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)" }}>{t("seSetupGuide")}</a>
-            </p>
-          </div>
-        </div>
-        <BingAccountsManager />
-      </SectionCard>
 
-      {/* ── Yandex.Webmaster API ── */}
-      <SectionCard>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-          <div style={{ width: 28, height: 28, borderRadius: "6px", background: "rgba(252,63,29,0.12)", border: "1px solid rgba(252,63,29,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 800, color: "#FC3F1D" }}>Я</div>
-          <div>
-            <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>Яндекс.Вебмастер API</span>
-            <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px", margin: 0 }}>
-              {t("yandexDesc")}{" "}
-              <a href="https://oauth.yandex.ru" target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)" }}>oauth.yandex.ru</a>
-              {" · "}
-              <a href="https://github.com/fenjo26/opengsc/blob/main/docs/SEARCH-ENGINES-SETUP.md" target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)" }}>{t("seSetupGuide")}</a>
-            </p>
-          </div>
-        </div>
-        <YandexAccountsManager />
-      </SectionCard>
 
       {/* ── IndexNow key ── */}
       <SectionCard>
@@ -2054,7 +2022,7 @@ export default function SettingsPage() {
   // render with no SSR/hydration mismatch and no Suspense-boundary requirement.
   useEffect(() => {
     const tab = new URLSearchParams(window.location.search).get("tab");
-    const valid: NavItem[] = ["accounts", "teams", "api", "api-keys", "indexing-api", "seo-tools", "notifications", "members", "preferences", "supersites"];
+    const valid: NavItem[] = ["accounts", "bing", "yandex", "teams", "api", "api-keys", "indexing-api", "seo-tools", "notifications", "members", "preferences", "supersites"];
     if (tab && (valid as string[]).includes(tab)) setNav(tab as NavItem);
   }, []);
 
@@ -2113,6 +2081,8 @@ export default function SettingsPage() {
             <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "2px" }}>{t("sidebarAccount")}</div>
             <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "10px" }}>{user?.email}</div>
             <NavBtn id="accounts" icon={<GoogleIcon size={14} />} label={t("navMyGoogleAccounts")} />
+            <NavBtn id="bing" icon={<div style={{ width: 14, height: 14, borderRadius: "4px", background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "8px", fontWeight: 800, color: "#3B82F6" }}>B</div>} label="Bing Webmaster" />
+            <NavBtn id="yandex" icon={<div style={{ width: 14, height: 14, borderRadius: "4px", background: "rgba(252,63,29,0.12)", border: "1px solid rgba(252,63,29,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 800, color: "#FC3F1D" }}>Я</div>} label="Яндекс.Вебмастер" />
             <NavBtn id="teams" icon={<Users size={14} />} label={t("myTeams")} />
             <NavBtn id="api-keys" icon={<KeyRound size={14} />} label={t("navApiKeys")} />
             <NavBtn id="api" icon={<Key size={14} />} label={t("navApiMcpKeys")} />
@@ -2147,6 +2117,40 @@ export default function SettingsPage() {
         {/* Main content */}
         <div style={{ flex: 1, minWidth: 0 }}>
           {nav === "accounts"     && <AccountsSection user={user} accounts={accounts} loadingAccounts={loadingAccounts} removing={removing} onAdd={handleAdd} onRemove={handleRemove} onReauth={handleReauth} />}
+          {nav === "bing"         && (
+            <SectionCard>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                <div style={{ width: 28, height: 28, borderRadius: "6px", background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 800, color: "#3B82F6" }}>BG</div>
+                <div>
+                  <h2 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>Bing Webmaster API</h2>
+                  <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px", margin: 0 }}>
+                    {t("bingDesc") || "Used to fetch traffic stats and submit sitemaps directly to Bing Webmaster Tools."}{" "}
+                    <a href="https://www.bing.com/webmasters" target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)" }}>bing.com/webmasters</a>
+                    {" · "}
+                    <a href="https://github.com/fenjo26/opengsc/blob/main/docs/SEARCH-ENGINES-SETUP.md" target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)" }}>{t("seSetupGuide")}</a>
+                  </p>
+                </div>
+              </div>
+              <BingAccountsManager />
+            </SectionCard>
+          )}
+          {nav === "yandex"       && (
+            <SectionCard>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                <div style={{ width: 28, height: 28, borderRadius: "6px", background: "rgba(252,63,29,0.12)", border: "1px solid rgba(252,63,29,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 800, color: "#FC3F1D" }}>Я</div>
+                <div>
+                  <h2 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>Яндекс.Вебмастер API</h2>
+                  <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px", margin: 0 }}>
+                    {t("yandexDesc")}{" "}
+                    <a href="https://oauth.yandex.ru" target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)" }}>oauth.yandex.ru</a>
+                    {" · "}
+                    <a href="https://github.com/fenjo26/opengsc/blob/main/docs/SEARCH-ENGINES-SETUP.md" target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)" }}>{t("seSetupGuide")}</a>
+                  </p>
+                </div>
+              </div>
+              <YandexAccountsManager />
+            </SectionCard>
+          )}
           {nav === "teams"        && <TeamsSection user={user} />}
           {nav === "api-keys"     && <ApiKeysSection />}
           {nav === "api"          && <ApiSection />}
