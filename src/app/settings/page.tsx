@@ -2137,7 +2137,7 @@ export default function SettingsPage() {
           {nav === "bing"         && (
             <SectionCard>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-                <div style={{ width: 28, height: 28, borderRadius: "6px", background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 800, color: "#3B82F6" }}>BG</div>
+                <div style={{ width: 28, height: 28, borderRadius: "6px", background: "rgba(0,131,115,0.10)", border: "1px solid rgba(0,131,115,0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}><BingIcon size={18} /></div>
                 <div>
                   <h2 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>Bing Webmaster API</h2>
                   <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px", margin: 0 }}>
@@ -2154,7 +2154,7 @@ export default function SettingsPage() {
           {nav === "yandex"       && (
             <SectionCard>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-                <div style={{ width: 28, height: 28, borderRadius: "6px", background: "rgba(252,63,29,0.12)", border: "1px solid rgba(252,63,29,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 800, color: "#FC3F1D" }}>Я</div>
+                <div style={{ width: 28, height: 28, borderRadius: "6px", background: "rgba(214,30,59,0.10)", border: "1px solid rgba(214,30,59,0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}><YandexIcon size={18} /></div>
                 <div>
                   <h2 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>Яндекс.Вебмастер API</h2>
                   <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px", margin: 0 }}>
