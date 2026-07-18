@@ -287,8 +287,8 @@ function GoogleIcon({ size = 16 }: { size?: number }) {
 function BingIcon({ size = 16 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 512 512" fill="none">
-      <polygon points="166.685,38.682 52.904,0 52.904,422.118 166.685,321.987" fill="currentColor" />
-      <polygon points="206.501,133.117 253.157,249.166 319.397,270.361 56.324,431.215 170.095,512 459.096,336.78 459.096,216.17" fill="currentColor" />
+      <polygon points="166.685,38.682 52.904,0 52.904,422.118 166.685,321.987" fill="#008373" />
+      <polygon points="206.501,133.117 253.157,249.166 319.397,270.361 56.324,431.215 170.095,512 459.096,336.78 459.096,216.17" fill="#008373" />
     </svg>
   );
 }
