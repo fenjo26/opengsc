@@ -286,16 +286,17 @@ function GoogleIcon({ size = 16 }: { size?: number }) {
 
 function BingIcon({ size = 16 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <path d="M5 2v20l7.5-4.5 5 7.5 3.5-1.5-11-16L12 12V4.5L5 2z" fill="#00809D" />
+    <svg width={size} height={size} viewBox="0 0 512 512" fill="none">
+      <polygon points="166.685,38.682 52.904,0 52.904,422.118 166.685,321.987" fill="currentColor" />
+      <polygon points="206.501,133.117 253.157,249.166 319.397,270.361 56.324,431.215 170.095,512 459.096,336.78 459.096,216.17" fill="currentColor" />
     </svg>
   );
 }
 
 function YandexIcon({ size = 16 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <path d="M19 2H11C7.13 2 4 5.13 4 9c0 2.82 1.67 5.25 4.09 6.34L4.75 22h4.55l3.2-6h1.5v6H19V2zm-5 8h-3c-1.1 0-2-.9-2-2s.9-2 2-2h3v4z" fill="#FC3F1D" />
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+      <path d="M21.88,2h-4c-4,0-8.07,3-8.07,9.62a8.33,8.33,0,0,0,4.14,7.66L9,28.13A1.25,1.25,0,0,0,9,29.4a1.21,1.21,0,0,0,1,.6h2.49a1.24,1.24,0,0,0,1.2-.75l4.59-9h.34v8.62A1.14,1.14,0,0,0,19.82,30H22a1.12,1.12,0,0,0,1.16-1.06V3.22A1.19,1.19,0,0,0,22,2ZM18.7,16.28h-.59c-2.3,0-3.66-1.87-3.66-5,0-3.9,1.73-5.29,3.34-5.29h.94Z" fill="#d61e3b" />
     </svg>
   );
 }
