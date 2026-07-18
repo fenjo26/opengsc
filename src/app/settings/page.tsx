@@ -151,7 +151,7 @@ function BingAccountsManager() {
         <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", background: "rgba(255,255,255,0.02)", padding: "10px", borderRadius: "8px", border: "1px dashed var(--color-border)" }}>
           <div style={{ flex: 1 }}>
             <label style={{ fontSize: "11px", color: "var(--color-text-secondary)", display: "block", marginBottom: "4px" }}>Account Name</label>
-            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Gambling Sites" style={{ width: "100%", padding: "7px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "12px", outline: "none" }} />
+            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. White Sites" style={{ width: "100%", padding: "7px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "12px", outline: "none" }} />
           </div>
           <div style={{ flex: 2 }}>
             <label style={{ fontSize: "11px", color: "var(--color-text-secondary)", display: "block", marginBottom: "4px" }}>API Key</label>
@@ -240,7 +240,7 @@ function YandexAccountsManager() {
         <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", background: "rgba(255,255,255,0.02)", padding: "10px", borderRadius: "8px", border: "1px dashed var(--color-border)" }}>
           <div style={{ flex: 1 }}>
             <label style={{ fontSize: "11px", color: "var(--color-text-secondary)", display: "block", marginBottom: "4px" }}>Account Name</label>
-            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Gambling Sites" style={{ width: "100%", padding: "7px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "12px", outline: "none" }} />
+            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. White Sites" style={{ width: "100%", padding: "7px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "12px", outline: "none" }} />
           </div>
           <div style={{ flex: 2 }}>
             <label style={{ fontSize: "11px", color: "var(--color-text-secondary)", display: "block", marginBottom: "4px" }}>OAuth Token</label>
