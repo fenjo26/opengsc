@@ -30,6 +30,9 @@ type Tpl = {
   losers: string;
   rankMoves: string;
   aiSummary: string;
+  unitClicks: string;
+  unitImpr: string;
+  allTime: string;
 };
 
 export const NOTIFY_L: Record<NotifyLang, Tpl> = {
@@ -53,6 +56,9 @@ export const NOTIFY_L: Record<NotifyLang, Tpl> = {
     losers: "*⚠️ Loser queries:*",
     rankMoves: "*📍 Rank movements:*",
     aiSummary: "🤖 *AI summary:*",
+    unitClicks: "clicks",
+    unitImpr: "impressions",
+    allTime: "all time",
   },
   ru: {
     rankDropTitle: kw => `📉 Падение позиции: ${kw}`,
@@ -74,6 +80,9 @@ export const NOTIFY_L: Record<NotifyLang, Tpl> = {
     losers: "*⚠️ Упавшие запросы:*",
     rankMoves: "*📍 Движения позиций:*",
     aiSummary: "🤖 *AI-выжимка:*",
+    unitClicks: "кликов",
+    unitImpr: "показов",
+    allTime: "всё время",
   },
   uk: {
     rankDropTitle: kw => `📉 Падіння позиції: ${kw}`,
@@ -95,5 +104,8 @@ export const NOTIFY_L: Record<NotifyLang, Tpl> = {
     losers: "*⚠️ Запити, що впали:*",
     rankMoves: "*📍 Рухи позицій:*",
     aiSummary: "🤖 *AI-вижимка:*",
+    unitClicks: "кліків",
+    unitImpr: "показів",
+    allTime: "весь час",
   },
 };

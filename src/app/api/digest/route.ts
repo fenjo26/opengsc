@@ -57,7 +57,8 @@ export async function POST(req: Request) {
   const b = await req.json().catch(() => ({}));
   const action = String(b.action ?? "");
   const tag = String(b.tag ?? "");
-  const days = Math.min(90, Math.max(1, parseInt(String(b.days ?? 7), 10) || 7));
+  const rawDays = parseInt(String(b.days ?? 7), 10) || 7;
+  const days = rawDays === 0 ? 0 : Math.min(3650, Math.max(1, rawDays));
   const ai = !!b.ai;
   const lang = (b.lang === "ru" || b.lang === "uk" ? b.lang : "en") as "en" | "ru" | "uk";
 
@@ -82,7 +83,7 @@ export async function POST(req: Request) {
   if (action === "settings") {
     const s = { ...DEFAULT_DIGEST_SETTINGS, ...(b.settings ?? {}) };
     s.hourUtc = Math.min(23, Math.max(0, parseInt(String(s.hourUtc), 10) || 8));
-    s.days = Math.min(90, Math.max(1, parseInt(String(s.days), 10) || 7));
+    s.days = s.days === 0 ? 0 : Math.min(3650, Math.max(1, parseInt(String(s.days), 10) || 7));
     s.frequency = s.frequency === "daily" ? "daily" : "weekly";
     try {
       await saveDigestSettings(userId, s);

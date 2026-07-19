@@ -1992,5 +1992,19 @@
   "auditColTitle": "Заголовок",
   "prevPosition": "Позиция 30 дней назад",
   "currPosition": "Текущая позиция",
-  "seIndexNowOk": "Отправка в IndexNow выполнена успешно"
+  "seIndexNowOk": "Отправка в IndexNow выполнена успешно",
+  "digestPeriod7": "7 дней",
+  "digestPeriod14": "14 дней",
+  "digestPeriod30": "30 дней",
+  "digestPeriod90": "3 мес",
+  "digestPeriod180": "6 мес",
+  "digestPeriod365": "1 год",
+  "digestPeriodAll": "Всё время",
+  "digestPeriodLabel": "Период",
+  "digestPreviewTitle": "Предпросмотр дайджеста",
+  "digestPeriodAllShort": "Всё",
+  "digestDaysShort": "д",
+  "strikingPageSub": "Запросы на пороге топ-10 по всем вашим сайтам — самые быстрые точки роста.",
+  "cannibalizationPageSub": "Запросы, по которым несколько ваших страниц конкурируют между собой, по всем сайтам.",
+  "decayPageSub": "Страницы, теряющие трафик со временем, по всему портфелю."
 }

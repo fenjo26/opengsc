@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { Loader2, AlertTriangle } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
+import { severityMeta, problemLabel } from "@/lib/yandexDiagnostics";
 
 export type AltEngine = "bing" | "yandex";
 
@@ -71,7 +72,8 @@ function RowsTable({ title, rows, keyLabel, t }: { title: string; rows: Row[]; k
 }
 
 export default function EngineView({ engine, domain, refreshKey }: { engine: AltEngine; domain: string; refreshKey: number }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage() as any;
+  const lang = (language === "ru" || language === "uk" ? language : "en") as "en" | "ru" | "uk";
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [series, setSeries] = useState<{ date: string; clicks: number; impressions: number }[]>([]);
@@ -154,12 +156,15 @@ export default function EngineView({ engine, domain, refreshKey }: { engine: Alt
       {problems.length > 0 && (
         <div style={{ ...card, display: "flex", flexDirection: "column", gap: "6px" }}>
           <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)" }}>{t("seYandexProblems")}</div>
-          {problems.map(p => (
-            <div key={p.code} style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px" }}>
-              <span style={{ fontSize: "10px", fontWeight: 700, padding: "1px 7px", borderRadius: "5px", background: p.severity === "FATAL" ? "rgba(255,55,95,0.15)" : p.severity === "CRITICAL" ? "rgba(255,159,10,0.15)" : "rgba(142,142,147,0.15)", color: p.severity === "FATAL" ? "#ff375f" : p.severity === "CRITICAL" ? "#ff9f0a" : "var(--color-text-secondary)" }}>{p.severity}</span>
-              <span style={{ color: "var(--color-text-primary)", fontFamily: "monospace", fontSize: "11px" }}>{p.code}</span>
-            </div>
-          ))}
+          {problems.map(p => {
+            const sev = severityMeta(p.severity, lang);
+            return (
+              <div key={p.code} style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px" }}>
+                <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: "5px", background: sev.bg, color: sev.color, whiteSpace: "nowrap", flexShrink: 0 }}>{sev.label}</span>
+                <span style={{ color: "var(--color-text-primary)" }}>{problemLabel(p.code, lang)}</span>
+              </div>
+            );
+          })}
         </div>
       )}
 

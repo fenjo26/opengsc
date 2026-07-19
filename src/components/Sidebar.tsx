@@ -2,7 +2,7 @@
 
 import { LayoutDashboard, Globe, Settings, TrendingUp, Anchor, BarChart2, LogOut, ChevronDown } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useState } from "react";
 
@@ -75,14 +75,11 @@ export default function Sidebar() {
   const { data: session } = useSession();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
-  const searchParams = useSearchParams();
-  const activeTab = searchParams.get("tab") || "sites";
-
   const navItems = [
-    { href: "/?tab=sites", icon: <Globe size={18} />, label: t("menuDashboard"), tabKey: "sites" },
-    { href: "/?tab=striking", icon: <TrendingUp size={18} />, label: t("menuStriking"), tabKey: "striking" },
-    { href: "/?tab=cannibalization", icon: <Anchor size={18} />, label: t("menuCannibalization"), tabKey: "cannibalization" },
-    { href: "/?tab=decay", icon: <BarChart2 size={18} />, label: t("menuDecay"), tabKey: "decay" },
+    { href: "/", icon: <Globe size={18} />, label: t("menuDashboard") },
+    { href: "/striking", icon: <TrendingUp size={18} />, label: t("menuStriking") },
+    { href: "/cannibalization", icon: <Anchor size={18} />, label: t("menuCannibalization") },
+    { href: "/decay", icon: <BarChart2 size={18} />, label: t("menuDecay") },
   ];
 
   const user = session?.user;
@@ -105,7 +102,7 @@ export default function Sidebar() {
           </div>
 
           {navItems.map((item) => {
-            const isActive = pathname === "/" ? activeTab === item.tabKey : false;
+            const isActive = pathname === item.href;
             return (
               <button
                 key={item.href}

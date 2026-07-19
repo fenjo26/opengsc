@@ -14,9 +14,6 @@ import { AreaChart, Area, ResponsiveContainer, Tooltip } from "recharts";
 import { usePrivacy } from "@/lib/PrivacyContext";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { useHealthStatus } from "@/components/SiteHealthPanel";
-import StrikingDistanceKeywords from "@/components/StrikingDistanceKeywords";
-import KeywordCannibalization from "@/components/KeywordCannibalization";
-import ContentDecayMap from "@/components/ContentDecayMap";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Metric = "clicks" | "impressions" | "ctr" | "position";
@@ -511,7 +508,13 @@ function PortfolioPageContent() {
   const { t } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const activeTab = (searchParams.get("tab") as "sites" | "striking" | "cannibalization" | "decay") || "sites";
+  // Legacy: the striking/cannibalization/decay views moved to their own routes
+  // (/striking, /cannibalization, /decay). Redirect old ?tab= bookmarks there.
+  useEffect(() => {
+    const legacy = searchParams.get("tab");
+    if (legacy && legacy !== "sites") router.replace(`/${legacy}`);
+    else if (legacy === "sites") router.replace("/");
+  }, [searchParams, router]);
   const [sites, setSites]       = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState("");
@@ -1329,7 +1332,7 @@ function PortfolioPageContent() {
 
 
 
-      {activeTab === "sites" ? (
+      {(
         <>
           {/* ─── Period quick buttons + Metric text toggles ─── */}
           <div style={{display:"flex",alignItems:"center",gap:"6px",flexWrap:"wrap",marginBottom:"8px"}}>
@@ -1523,12 +1526,6 @@ function PortfolioPageContent() {
         </>
       )}
       </>
-      ) : activeTab === "striking" ? (
-        <StrikingDistanceKeywords siteDbId="all" />
-      ) : activeTab === "cannibalization" ? (
-        <KeywordCannibalization siteDbId="all" />
-      ) : (
-        <ContentDecayMap domain="" siteDbId="all" />
       )}
 
       {/* Export modal */}

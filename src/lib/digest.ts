@@ -48,6 +48,11 @@ const hasTag = (tagsField: string | null, tag: string): boolean => {
 const clean = (u: string) => u.replace(/^https?:\/\//, "").replace(/^sc-domain:/, "").replace(/\/$/, "");
 const sign = (n: number) => (n > 0 ? `+${n}` : `${n}`);
 const arrow = (cur: number, prev: number) => (cur > prev ? "🟢" : cur < prev ? "🔴" : "⚪️");
+const fmtNum = (n: number) => {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+};
 
 export async function buildDigest(userId: string, tag: string, days: number, lang: NotifyLang = "en"): Promise<{ content: string; sites: number }> {
   const L = NOTIFY_L[normalizeLang(lang)];
@@ -59,9 +64,14 @@ export async function buildDigest(userId: string, tag: string, days: number, lan
   const prevStart = new Date(now); prevStart.setDate(prevStart.getDate() - days * 2);
   const siteIds = sites.map(s => s.id);
 
+  // days=0 means "all time" — use a very old start date
+  const effectiveCurStart = days === 0 ? new Date("2000-01-01") : curStart;
+  const effectivePrevStart = days === 0 ? new Date("2000-01-01") : prevStart;
+  const showDelta = days > 0; // no delta comparison for "all time"
+
   const lines: string[] = [];
   lines.push(`*${tag ? L.digestTitleTag(tag) : L.digestTitleAll}*`);
-  lines.push(L.digestWindow(days, now.toISOString().slice(0, 10)));
+  lines.push(days === 0 ? `_${L.allTime} · ${now.toISOString().slice(0, 10)}_` : L.digestWindow(days, now.toISOString().slice(0, 10)));
 
   if (!siteIds.length) {
     lines.push("", tag ? L.digestNoSitesTag(tag) : L.digestNoSites);
@@ -69,11 +79,18 @@ export async function buildDigest(userId: string, tag: string, days: number, lan
   }
 
   // ── per-site traffic table
+  // CRITICAL: GSC sync writes THREE row kinds per site into DailyMetric — date-only totals
+  // (url:'' query:''), page rows (url:X query:''), and query rows (url:X query:X). Summing
+  // without a filter triple-counts. The date-only rows are the accurate daily totals, so we
+  // scope every site/total aggregate to `url:'' , query:''`.
+  const dateOnly = { url: "", query: "" };
   const perSite: { name: string; cur: number; prev: number; impr: number }[] = [];
   for (const site of sites) {
     const [cur, prev] = await Promise.all([
-      prisma.dailyMetric.aggregate({ where: { siteId: site.id, date: { gte: curStart } }, _sum: { clicks: true, impressions: true } }),
-      prisma.dailyMetric.aggregate({ where: { siteId: site.id, date: { gte: prevStart, lt: curStart } }, _sum: { clicks: true } }),
+      prisma.dailyMetric.aggregate({ where: { siteId: site.id, ...dateOnly, date: { gte: effectiveCurStart, lte: now } }, _sum: { clicks: true, impressions: true } }),
+      showDelta
+        ? prisma.dailyMetric.aggregate({ where: { siteId: site.id, ...dateOnly, date: { gte: effectivePrevStart, lt: effectiveCurStart } }, _sum: { clicks: true } })
+        : Promise.resolve({ _sum: { clicks: 0 } }),
     ]);
     perSite.push({ name: clean(site.url), cur: cur._sum.clicks ?? 0, prev: prev._sum.clicks ?? 0, impr: cur._sum.impressions ?? 0 });
   }
@@ -81,19 +98,21 @@ export async function buildDigest(userId: string, tag: string, days: number, lan
   const totCur = perSite.reduce((s, x) => s + x.cur, 0);
   const totPrev = perSite.reduce((s, x) => s + x.prev, 0);
 
-  lines.push("", `${L.totalClicks(totCur, sign(totCur - totPrev))} ${arrow(totCur, totPrev)}`, "");
+  lines.push("", `${L.totalClicks(totCur, showDelta ? sign(totCur - totPrev) : "")} ${showDelta ? arrow(totCur, totPrev) : ""}`, "");
   for (const s of perSite.slice(0, 25)) {
-    lines.push(`${arrow(s.cur, s.prev)} ${s.name} — ${s.cur} (${sign(s.cur - s.prev)}) · ${s.impr} impr`);
+    const delta = showDelta ? ` (${sign(s.cur - s.prev)})` : "";
+    const ico = showDelta ? `${arrow(s.cur, s.prev)} ` : "";
+    lines.push(`${ico}${s.name} — ${fmtNum(s.cur)} ${L.unitClicks}${delta} · ${fmtNum(s.impr)} ${L.unitImpr}`);
   }
   if (perSite.length > 25) lines.push(L.moreSites(perSite.length - 25));
 
   // ── winners / losers queries across the tag's sites
   const agg = (gte: Date, lt?: Date) => prisma.dailyMetric.groupBy({
     by: ["query"],
-    where: { siteId: { in: siteIds }, date: lt ? { gte, lt } : { gte }, query: { not: "" } },
+    where: { siteId: { in: siteIds }, date: lt ? { gte, lt } : { gte, lte: now }, query: { not: "" } },
     _sum: { clicks: true },
   });
-  const [curQ, prevQ] = await Promise.all([agg(curStart), agg(prevStart, curStart)]);
+  const [curQ, prevQ] = await Promise.all([agg(effectiveCurStart, undefined), showDelta ? agg(effectivePrevStart, effectiveCurStart) : Promise.resolve([])]);
   const prevMap = new Map<string, number>(prevQ.map(r => [r.query, r._sum.clicks ?? 0] as [string, number]));
   const curMap = new Map<string, number>(curQ.map(r => [r.query, r._sum.clicks ?? 0] as [string, number]));
   const deltas: { q: string; d: number; cur: number; prev: number }[] = [];

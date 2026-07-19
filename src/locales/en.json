@@ -1992,5 +1992,19 @@
   "auditColTitle": "Title",
   "prevPosition": "Position 30d Ago",
   "currPosition": "Current Position",
-  "seIndexNowOk": "IndexNow submission successful"
+  "seIndexNowOk": "IndexNow submission successful",
+  "digestPeriod7": "7 days",
+  "digestPeriod14": "14 days",
+  "digestPeriod30": "30 days",
+  "digestPeriod90": "3 months",
+  "digestPeriod180": "6 months",
+  "digestPeriod365": "1 year",
+  "digestPeriodAll": "All time",
+  "digestPeriodLabel": "Period",
+  "digestPreviewTitle": "Digest preview",
+  "digestPeriodAllShort": "All",
+  "digestDaysShort": "d",
+  "strikingPageSub": "Queries ranking just off page 1 across all your sites — your fastest wins.",
+  "cannibalizationPageSub": "Queries where several of your own pages compete against each other, across all sites.",
+  "decayPageSub": "Pages losing traffic over time across your whole portfolio."
 }

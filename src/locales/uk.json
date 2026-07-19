@@ -1992,5 +1992,19 @@
   "auditColTitle": "Заголовок",
   "prevPosition": "Позиція 30 днів тому",
   "currPosition": "Поточна позиція",
-  "seIndexNowOk": "Надсилання в IndexNow виконано успішно"
+  "seIndexNowOk": "Надсилання в IndexNow виконано успішно",
+  "digestPeriod7": "7 днів",
+  "digestPeriod14": "14 днів",
+  "digestPeriod30": "30 днів",
+  "digestPeriod90": "3 міс",
+  "digestPeriod180": "6 міс",
+  "digestPeriod365": "1 рік",
+  "digestPeriodAll": "Весь час",
+  "digestPeriodLabel": "Період",
+  "digestPreviewTitle": "Попередній перегляд дайджесту",
+  "digestPeriodAllShort": "Все",
+  "digestDaysShort": "д",
+  "strikingPageSub": "Запити на порозі топ-10 по всіх ваших сайтах — найшвидші точки зростання.",
+  "cannibalizationPageSub": "Запити, за якими кілька ваших сторінок конкурують між собою, по всіх сайтах.",
+  "decayPageSub": "Сторінки, що втрачають трафік із часом, по всьому портфелю."
 }
