@@ -52,101 +52,111 @@ async function resolveHost(token: string, siteUrl: string): Promise<{ userId?: n
 }
 
 export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!(session?.user as any)?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const session = await getServerSession(authOptions);
+    if (!(session?.user as any)?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { searchParams } = new URL(req.url);
-  const siteUrl = searchParams.get("siteUrl") || "";
-  const token = searchParams.get("token") || "";
-  if (!siteUrl || !token) return NextResponse.json({ error: "Missing siteUrl or token" }, { status: 400 });
+    const { searchParams } = new URL(req.url);
+    const siteUrl = searchParams.get("siteUrl") || "";
+    const token = searchParams.get("token") || "";
+    if (!siteUrl || !token) return NextResponse.json({ error: "Missing siteUrl or token" }, { status: 400 });
 
-  const host = await resolveHost(token, siteUrl);
-  if (host.error) return NextResponse.json({ error: host.error }, { status: host.error === "invalid_token" ? 401 : 400 });
-  const p = `/user/${host.userId}/hosts/${host.hostId}`;
+    const host = await resolveHost(token, siteUrl);
+    if (host.error) return NextResponse.json({ error: host.error }, { status: host.error === "invalid_token" ? 401 : 400 });
+    const p = `/user/${host.userId}/hosts/${encodeURIComponent(host.hostId!)}`;
 
-  const days = Math.min(180, Math.max(7, parseInt(searchParams.get("days") ?? "28", 10) || 28));
-  const from = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
-  const today = new Date().toISOString().slice(0, 10);
+    const days = Math.min(180, Math.max(7, parseInt(searchParams.get("days") ?? "28", 10) || 28));
+    const from = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+    const today = new Date().toISOString().slice(0, 10);
 
-  const [summary, queries, quota, history, diagnostics] = await Promise.all([
-    yFetch(`${p}/summary/`, token),
-    yFetch(`${p}/search-queries/popular/?order_by=TOTAL_SHOWS&query_indicator=TOTAL_SHOWS&query_indicator=TOTAL_CLICKS&query_indicator=AVG_SHOW_POSITION&date_from=${from}&date_to=${today}&limit=25`, token),
-    yFetch(`${p}/recrawl/quota/`, token),
-    yFetch(`${p}/search-queries/all/history/?query_indicator=TOTAL_SHOWS&query_indicator=TOTAL_CLICKS&date_from=${from}&date_to=${today}`, token),
-    yFetch(`${p}/diagnostics/`, token),
-  ]);
+    const [summary, queries, quota, history, diagnostics] = await Promise.all([
+      yFetch(`${p}/summary/`, token),
+      yFetch(`${p}/search-queries/popular/?order_by=TOTAL_SHOWS&query_indicator=TOTAL_SHOWS&query_indicator=TOTAL_CLICKS&query_indicator=AVG_SHOW_POSITION&date_from=${from}&date_to=${today}&limit=25`, token),
+      yFetch(`${p}/recrawl/quota/`, token),
+      yFetch(`${p}/search-queries/all/history/?query_indicator=TOTAL_SHOWS&query_indicator=TOTAL_CLICKS&date_from=${from}&date_to=${today}`, token),
+      yFetch(`${p}/diagnostics/`, token),
+    ]);
 
-  // Merge the per-indicator date arrays into one chart-friendly series.
-  let series: { date: string; clicks: number; impressions: number }[] = [];
-  if (history.ok) {
-    const ind = history.body.indicators ?? {};
-    const byDate = new Map<string, { date: string; clicks: number; impressions: number }>();
-    for (const pnt of ind.TOTAL_SHOWS ?? []) {
-      const d = String(pnt.date).slice(0, 10);
-      byDate.set(d, { date: d, clicks: 0, impressions: Math.round(pnt.value ?? 0) });
+    // Merge the per-indicator date arrays into one chart-friendly series.
+    let series: { date: string; clicks: number; impressions: number }[] = [];
+    if (history.ok) {
+      const ind = history.body.indicators ?? {};
+      const byDate = new Map<string, { date: string; clicks: number; impressions: number }>();
+      for (const pnt of ind.TOTAL_SHOWS ?? []) {
+        const d = String(pnt.date).slice(0, 10);
+        byDate.set(d, { date: d, clicks: 0, impressions: Math.round(pnt.value ?? 0) });
+      }
+      for (const pnt of ind.TOTAL_CLICKS ?? []) {
+        const d = String(pnt.date).slice(0, 10);
+        const row = byDate.get(d) ?? { date: d, clicks: 0, impressions: 0 };
+        row.clicks = Math.round(pnt.value ?? 0);
+        byDate.set(d, row);
+      }
+      series = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
     }
-    for (const pnt of ind.TOTAL_CLICKS ?? []) {
-      const d = String(pnt.date).slice(0, 10);
-      const row = byDate.get(d) ?? { date: d, clicks: 0, impressions: 0 };
-      row.clicks = Math.round(pnt.value ?? 0);
-      byDate.set(d, row);
+
+    // Diagnostics: surface only problems that are actually PRESENT, sorted by severity.
+    let problems: { code: string; severity: string }[] = [];
+    if (diagnostics.ok) {
+      const probs = diagnostics.body.problems ?? {};
+      problems = Object.entries(probs)
+        .filter(([, v]: [string, any]) => v?.state === "PRESENT")
+        .map(([code, v]: [string, any]) => ({ code, severity: v.severity ?? "POSSIBLE_PROBLEM" }))
+        .sort((a, b) => (a.severity === "FATAL" ? -1 : a.severity === "CRITICAL" ? 0 : 1) - (b.severity === "FATAL" ? -1 : b.severity === "CRITICAL" ? 0 : 1));
     }
-    series = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
-  }
 
-  // Diagnostics: surface only problems that are actually PRESENT, sorted by severity.
-  let problems: { code: string; severity: string }[] = [];
-  if (diagnostics.ok) {
-    const probs = diagnostics.body.problems ?? {};
-    problems = Object.entries(probs)
-      .filter(([, v]: [string, any]) => v?.state === "PRESENT")
-      .map(([code, v]: [string, any]) => ({ code, severity: v.severity ?? "POSSIBLE_PROBLEM" }))
-      .sort((a, b) => (a.severity === "FATAL" ? -1 : a.severity === "CRITICAL" ? 0 : 1) - (b.severity === "FATAL" ? -1 : b.severity === "CRITICAL" ? 0 : 1));
+    return NextResponse.json({
+      hostId: host.hostId,
+      summary: summary.ok ? summary.body : null,
+      queries: queries.ok ? (queries.body.queries ?? []) : [],
+      recrawlQuota: quota.ok ? quota.body : null,
+      series,
+      problems,
+    });
+  } catch (e: any) {
+    console.error("[yandex GET]", e);
+    return NextResponse.json({ error: e?.message ?? "Internal server error" }, { status: 500 });
   }
-
-  return NextResponse.json({
-    hostId: host.hostId,
-    summary: summary.ok ? summary.body : null,
-    queries: queries.ok ? (queries.body.queries ?? []) : [],
-    recrawlQuota: quota.ok ? quota.body : null,
-    series,
-    problems,
-  });
 }
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!(session?.user as any)?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const session = await getServerSession(authOptions);
+    if (!(session?.user as any)?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const b = await req.json().catch(() => ({}));
-  const action = String(b.action ?? "");
-  const siteUrl = String(b.siteUrl ?? "");
-  const token = String(b.token ?? "");
-  if (!siteUrl || !token) return NextResponse.json({ error: "Missing siteUrl or token" }, { status: 400 });
+    const b = await req.json().catch(() => ({}));
+    const action = String(b.action ?? "");
+    const siteUrl = String(b.siteUrl ?? "");
+    const token = String(b.token ?? "");
+    if (!siteUrl || !token) return NextResponse.json({ error: "Missing siteUrl or token" }, { status: 400 });
 
-  const host = await resolveHost(token, siteUrl);
-  if (host.error) return NextResponse.json({ error: host.error }, { status: host.error === "invalid_token" ? 401 : 400 });
-  const p = `/user/${host.userId}/hosts/${host.hostId}`;
+    const host = await resolveHost(token, siteUrl);
+    if (host.error) return NextResponse.json({ error: host.error }, { status: host.error === "invalid_token" ? 401 : 400 });
+    const p = `/user/${host.userId}/hosts/${encodeURIComponent(host.hostId!)}`;
 
-  if (action === "sitemap") {
-    const sitemapUrl = String(b.sitemapUrl ?? "");
-    if (!sitemapUrl) return NextResponse.json({ error: "Missing sitemapUrl" }, { status: 400 });
-    const r = await yFetch(`${p}/user-added-sitemaps/`, token, { method: "POST", body: JSON.stringify({ url: sitemapUrl }) });
-    // 409 = sitemap already added — treat as success for idempotent UX.
-    if (r.ok || r.status === 409) return NextResponse.json({ ok: true, alreadyAdded: r.status === 409 });
-    return NextResponse.json({ error: r.body?.error_message ?? `yandex ${r.status}` }, { status: 400 });
-  }
-
-  if (action === "recrawl") {
-    const urls: string[] = (Array.isArray(b.urls) ? b.urls : []).map(String).filter(u => u.startsWith("http")).slice(0, 10);
-    if (!urls.length) return NextResponse.json({ error: "Missing urls" }, { status: 400 });
-    const results: { url: string; ok: boolean; error?: string }[] = [];
-    for (const url of urls) {
-      const r = await yFetch(`${p}/recrawl/queue/`, token, { method: "POST", body: JSON.stringify({ url }) });
-      results.push({ url, ok: r.ok, ...(r.ok ? {} : { error: r.body?.error_message ?? `yandex ${r.status}` }) });
+    if (action === "sitemap") {
+      const sitemapUrl = String(b.sitemapUrl ?? "");
+      if (!sitemapUrl) return NextResponse.json({ error: "Missing sitemapUrl" }, { status: 400 });
+      const r = await yFetch(`${p}/user-added-sitemaps/`, token, { method: "POST", body: JSON.stringify({ url: sitemapUrl }) });
+      // 409 = sitemap already added — treat as success for idempotent UX.
+      if (r.ok || r.status === 409) return NextResponse.json({ ok: true, alreadyAdded: r.status === 409 });
+      return NextResponse.json({ error: r.body?.error_message ?? `yandex ${r.status}` }, { status: 400 });
     }
-    return NextResponse.json({ ok: results.some(r => r.ok), results });
-  }
 
-  return NextResponse.json({ error: "unknown_action" }, { status: 400 });
+    if (action === "recrawl") {
+      const urls: string[] = (Array.isArray(b.urls) ? b.urls : []).map(String).filter((u: string) => u.startsWith("http")).slice(0, 10);
+      if (!urls.length) return NextResponse.json({ error: "Missing urls" }, { status: 400 });
+      const results: { url: string; ok: boolean; error?: string }[] = [];
+      for (const url of urls) {
+        const r = await yFetch(`${p}/recrawl/queue/`, token, { method: "POST", body: JSON.stringify({ url }) });
+        results.push({ url, ok: r.ok, ...(r.ok ? {} : { error: r.body?.error_message ?? `yandex ${r.status}` }) });
+      }
+      return NextResponse.json({ ok: results.some(r => r.ok), results });
+    }
+
+    return NextResponse.json({ error: "unknown_action" }, { status: 400 });
+  } catch (e: any) {
+    console.error("[yandex POST]", e);
+    return NextResponse.json({ error: e?.message ?? "Internal server error" }, { status: 500 });
+  }
 }

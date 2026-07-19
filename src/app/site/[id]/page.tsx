@@ -3033,6 +3033,23 @@ function GoogleIcon({ size = 14 }: { size?: number }) {
   );
 }
 
+function BingIconSite({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 512 512" style={{ flexShrink: 0 }}>
+      <polygon points="166.685,38.682 52.904,0 52.904,422.118 166.685,321.987" fill="#008373" />
+      <polygon points="206.501,133.117 253.157,249.166 319.397,270.361 56.324,431.215 170.095,512 459.096,336.78 459.096,216.17" fill="#008373" />
+    </svg>
+  );
+}
+
+function YandexIconSite({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" style={{ flexShrink: 0 }}>
+      <path d="M21.88,2h-4c-4,0-8.07,3-8.07,9.62a8.33,8.33,0,0,0,4.14,7.66L9,28.13A1.25,1.25,0,0,0,9,29.4a1.21,1.21,0,0,0,1,.6h2.49a1.24,1.24,0,0,0,1.2-.75l4.59-9h.34v8.62A1.14,1.14,0,0,0,19.82,30H22a1.12,1.12,0,0,0,1.16-1.06V3.22A1.19,1.19,0,0,0,22,2ZM18.7,16.28h-.59c-2.3,0-3.66-1.87-3.66-5,0-3.9,1.73-5.29,3.34-5.29h.94Z" fill="#d61e3b" />
+    </svg>
+  );
+}
+
 // ─── Annotations Filter Dropdown ──────────────────────────────────────────────
 function AnnotationsFilterDd({ onSetupBranded }: { onSetupBranded?: () => void }) {
   const [open, setOpen] = useState(false);
@@ -4189,9 +4206,10 @@ export default function SitePage({
                 {(["google", ...altEngines] as ("google" | AltEngine)[]).map(id => (
                   <button key={id} onClick={() => setEngine(id)}
                     style={{ padding: "5px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 700, cursor: "pointer", border: "none",
+                      display: "flex", alignItems: "center", gap: "4px",
                       background: engine === id ? "var(--color-card)" : "transparent",
-                      color: engine === id ? (id === "bing" ? "#00809D" : id === "yandex" ? "#FC3F1D" : "var(--color-text-primary)") : "var(--color-text-secondary)" }}>
-                    {id === "google" ? "G" : id === "bing" ? "Bing" : t("seEngineYandexShort")}
+                      color: engine === id ? "var(--color-text-primary)" : "var(--color-text-secondary)" }}>
+                    {id === "google" ? <GoogleIcon size={14} /> : id === "bing" ? <BingIconSite size={14} /> : <YandexIconSite size={14} />}
                   </button>
                 ))}
               </div>
