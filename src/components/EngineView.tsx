@@ -8,17 +8,19 @@
 // button bumps refreshKey. Setup guide: docs/SEARCH-ENGINES-SETUP.md.
 
 import { useEffect, useMemo, useState } from "react";
-import { ComposedChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { ComposedChart, Line, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { Loader2, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { severityMeta, problemLabel } from "@/lib/yandexDiagnostics";
 import { resolveEngineKey } from "@/lib/engineKeys";
 
 export type AltEngine = "bing" | "yandex";
+export type EngineMetric = "clicks" | "impressions" | "ctr" | "position";
 
 const card: React.CSSProperties = { background: "var(--color-card)", borderRadius: "12px", padding: "16px", border: "1px solid var(--color-border)" };
 
 interface Row { key: string; clicks: number; impressions: number; position?: number }
+interface Point { date: string; clicks: number; impressions: number; ctr: number; position: number | null }
 
 // Bing's OData JSON dates arrive as "/Date(1610000000000)/" OR with a timezone offset
 // "/Date(1760166000000-0700)/" — parse the millisecond epoch, ignore the offset suffix.
@@ -30,10 +32,13 @@ function parseBingDate(v: any): string {
 
 const pct = (clicks: number, impr: number) => (impr ? `${(Math.round((clicks / impr) * 1000) / 10).toFixed(1)}%` : "—");
 
-// GSC-style chart colors so Bing/Yandex charts feel familiar.
-const C_CLICKS = "#3A57FC";     // blue — clicks
-const C_IMPR = "#8B5CF6";       // purple — impressions
-type MetricKey = "clicks" | "impressions";
+// Same metric colors as the Google (GSC) chart so the Bing/Yandex view feels identical.
+const EC: Record<EngineMetric, string> = {
+  clicks: "#3B82F6",       // blue
+  impressions: "#8B5CF6",  // purple
+  ctr: "#10B981",          // green
+  position: "#F59E0B",     // amber
+};
 
 type SortKey = "key" | "clicks" | "impressions" | "ctr" | "position";
 
@@ -115,18 +120,19 @@ function RowsTable({ title, rows, keyLabel, t }: { title: string; rows: Row[]; k
   );
 }
 
-export default function EngineView({ engine, domain, siteDbId, refreshKey }: { engine: AltEngine; domain: string; siteDbId: string; refreshKey: number }) {
+export default function EngineView({ engine, domain, siteDbId, refreshKey, metrics, days }: { engine: AltEngine; domain: string; siteDbId: string; refreshKey: number; metrics?: Set<string>; days?: number }) {
   const { t, language } = useLanguage() as any;
   const lang = (language === "ru" || language === "uk" ? language : "en") as "en" | "ru" | "uk";
+  // Which metric lines to draw — driven by the shared toolbar toggles; default: all on.
+  const active = metrics ?? new Set<string>(["clicks", "impressions", "ctr", "position"]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  const [series, setSeries] = useState<{ date: string; clicks: number; impressions: number }[]>([]);
+  const [series, setSeries] = useState<Point[]>([]);
   const [queries, setQueries] = useState<Row[]>([]);
   const [pages, setPages] = useState<Row[]>([]);
   const [meta, setMeta] = useState<Record<string, any>>({});
   const [problems, setProblems] = useState<{ code: string; severity: string }[]>([]);
   const [tab, setTab] = useState<"queries" | "pages">("queries");
-  const [shown, setShown] = useState<Record<MetricKey, boolean>>({ clicks: true, impressions: true });
 
   const cleanDomain = domain.replace(/^https?:\/\//, "").replace(/^sc-domain:/, "").replace(/\/.*$/, "");
 
@@ -146,7 +152,11 @@ export default function EngineView({ engine, domain, siteDbId, refreshKey }: { e
             // versions — read defensively (any-case) so a renamed field never blanks the view.
             const g = (o: any, ...keys: string[]) => { for (const k of keys) { if (o?.[k] != null) return o[k]; const lk = Object.keys(o ?? {}).find(x => x.toLowerCase() === k.toLowerCase()); if (lk != null && o[lk] != null) return o[lk]; } return undefined; };
             const num = (v: any) => { const n = Number(v); return isFinite(n) ? n : 0; };
-            setSeries((d.traffic ?? []).map((r: any) => ({ date: parseBingDate(g(r, "Date")), clicks: num(g(r, "Clicks")), impressions: num(g(r, "Impressions")) })));
+            setSeries((d.traffic ?? []).map((r: any) => {
+              const clicks = num(g(r, "Clicks")), impressions = num(g(r, "Impressions"));
+              const posv = Number(g(r, "AvgImpressionPosition", "AvgClickPosition", "Position"));
+              return { date: parseBingDate(g(r, "Date")), clicks, impressions, ctr: impressions ? Math.round((clicks / impressions) * 1000) / 10 : 0, position: isFinite(posv) && posv > 0 ? Math.round(posv * 10) / 10 : null };
+            }));
             setQueries((d.queries ?? []).slice(0, 25).map((q: any) => ({ key: String(g(q, "Query") ?? ""), clicks: num(g(q, "Clicks")), impressions: num(g(q, "Impressions")), position: g(q, "AvgImpressionPosition", "AvgClickPosition", "Position") })));
             setPages((d.pages ?? []).slice(0, 25).map((p: any) => ({ key: String(g(p, "Query", "Page", "Url") ?? "").replace(/^https?:\/\/[^/]+/, "") || "/", clicks: num(g(p, "Clicks")), impressions: num(g(p, "Impressions")), position: g(p, "AvgImpressionPosition", "Position") })));
             const cr = d.crawl;
@@ -161,7 +171,10 @@ export default function EngineView({ engine, domain, siteDbId, refreshKey }: { e
           if (cancelled) return;
           if (d.error) { setErr(d.error === "host_not_found" ? t("seYandexHostNotFound") : d.error === "host_not_verified" ? t("seYandexHostNotVerified") : String(d.error)); }
           else {
-            setSeries(d.series ?? []);
+            setSeries((d.series ?? []).map((r: any) => {
+              const clicks = Number(r.clicks) || 0, impressions = Number(r.impressions) || 0;
+              return { date: String(r.date).slice(0, 10), clicks, impressions, ctr: impressions ? Math.round((clicks / impressions) * 1000) / 10 : 0, position: r.position != null ? Number(r.position) : null };
+            }));
             setQueries((d.queries ?? []).map((q: any) => ({ key: q.query_text, clicks: q.indicators?.TOTAL_CLICKS ?? 0, impressions: q.indicators?.TOTAL_SHOWS ?? 0, position: q.indicators?.AVG_SHOW_POSITION ?? undefined })));
             setPages([]);
             setMeta({ sqi: d.summary?.sqi, inSearch: d.summary?.searchable_pages_count, excluded: d.summary?.excluded_pages_count });
@@ -174,8 +187,11 @@ export default function EngineView({ engine, domain, siteDbId, refreshKey }: { e
     return () => { cancelled = true; };
   }, [engine, cleanDomain, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const totClicks = series.reduce((s, r) => s + r.clicks, 0);
-  const totImpr = series.reduce((s, r) => s + r.impressions, 0);
+  // The shared period dropdown controls how many trailing days are shown.
+  const view = useMemo(() => (days && days > 0 ? series.slice(-days) : series), [series, days]);
+  const totClicks = view.reduce((s, r) => s + r.clicks, 0);
+  const totImpr = view.reduce((s, r) => s + r.impressions, 0);
+  const anyPos = view.some(p => p.position != null);
   // Weighted average position over the top queries (impression-weighted) — best available
   // approximation, since neither API exposes a sitewide daily position series.
   const posRows = queries.filter(q => q.position != null && q.impressions > 0);
@@ -227,37 +243,38 @@ export default function EngineView({ engine, domain, siteDbId, refreshKey }: { e
         </div>
       )}
 
-      {/* Chart — GSC-style: clicks (blue, left axis) + impressions (purple, right axis),
-          each toggleable via the legend chips. */}
-      {series.length > 0 && (
+      {/* Chart — identical to the GSC view: clicks + impressions as filled areas, CTR &
+          average position as lines. Which metrics show is driven by the shared toolbar
+          toggles (same 4 icon buttons as Google), so the two views behave the same. */}
+      {view.length > 0 && (
         <div style={card}>
-          <div style={{ display: "flex", gap: "8px", marginBottom: "10px" }}>
-            {([["clicks", C_CLICKS, t("clicks")], ["impressions", C_IMPR, t("impressions")]] as [MetricKey, string, string][]).map(([m, col, label]) => {
-              const on = shown[m];
-              return (
-                <button key={m} onClick={() => setShown(s => ({ ...s, [m]: !s[m] }))}
-                  style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "5px 12px", borderRadius: "8px", border: `1px solid ${on ? col : "var(--color-border)"}`, background: on ? `${col}14` : "transparent", cursor: "pointer", fontSize: "12px", fontWeight: 600, color: on ? col : "var(--color-text-secondary)", opacity: on ? 1 : 0.6 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: "3px", background: on ? col : "var(--color-border)" }} />
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-          <ResponsiveContainer width="100%" height={250}>
-            <ComposedChart data={series} margin={{ top: 8, right: 6, bottom: 0, left: -6 }}>
+          <ResponsiveContainer width="100%" height={260}>
+            <ComposedChart data={view} margin={{ top: 8, right: 4, bottom: 0, left: -8 }}>
               <defs>
-                <linearGradient id="eng-clicks" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={C_CLICKS} stopOpacity={0.25} />
-                  <stop offset="100%" stopColor={C_CLICKS} stopOpacity={0} />
-                </linearGradient>
+                {(["clicks", "impressions"] as EngineMetric[]).map(m => (
+                  <linearGradient key={m} id={`eng-${m}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={EC[m]} stopOpacity={0.18} />
+                    <stop offset="100%" stopColor={EC[m]} stopOpacity={0} />
+                  </linearGradient>
+                ))}
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
               <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--color-text-secondary)" }} axisLine={false} tickLine={false} minTickGap={24} />
-              <YAxis yAxisId="clicks" tick={{ fontSize: 10, fill: C_CLICKS }} axisLine={false} tickLine={false} width={36} />
-              <YAxis yAxisId="impr" orientation="right" tick={{ fontSize: 10, fill: C_IMPR }} axisLine={false} tickLine={false} width={44} />
-              <Tooltip contentStyle={{ background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "8px", fontSize: "12px" }} />
-              {shown.impressions && <Line yAxisId="impr" type="monotone" dataKey="impressions" name={t("impressions")} stroke={C_IMPR} strokeWidth={2} dot={false} />}
-              {shown.clicks && <Line yAxisId="clicks" type="monotone" dataKey="clicks" name={t("clicks")} stroke={C_CLICKS} strokeWidth={2.5} dot={false} />}
+              <YAxis yAxisId="left" tick={{ fontSize: 10, fill: "var(--color-text-secondary)" }} axisLine={false} tickLine={false} width={40} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: "var(--color-text-secondary)" }} axisLine={false} tickLine={false} width={44} />
+              <Tooltip
+                contentStyle={{ background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "8px", fontSize: "12px" }}
+                formatter={(val: any, _n: any, item: any) => {
+                  const k = item?.dataKey;
+                  if (k === "ctr") return [`${val}%`, "CTR"];
+                  if (k === "position") return [val == null ? "—" : Number(val).toFixed(1), t("avgPosition")];
+                  return [Number(val).toLocaleString(), k === "clicks" ? t("clicks") : t("impressions")];
+                }}
+              />
+              {active.has("clicks") && <Area yAxisId="left" type="monotone" dataKey="clicks" name={t("clicks")} stroke={EC.clicks} strokeWidth={2} fill="url(#eng-clicks)" dot={false} />}
+              {active.has("impressions") && <Area yAxisId="right" type="monotone" dataKey="impressions" name={t("impressions")} stroke={EC.impressions} strokeWidth={2} fill="url(#eng-impressions)" dot={false} />}
+              {active.has("ctr") && <Line yAxisId="left" type="monotone" dataKey="ctr" name="CTR" stroke={EC.ctr} strokeWidth={1.5} dot={false} />}
+              {active.has("position") && anyPos && <Line yAxisId="left" type="monotone" dataKey="position" name={t("avgPosition")} stroke={EC.position} strokeWidth={1.5} dot={false} connectNulls />}
             </ComposedChart>
           </ResponsiveContainer>
         </div>

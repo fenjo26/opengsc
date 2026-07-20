@@ -68,6 +68,27 @@ const PERIOD_GROUPS = [
   ["2y", "3y"],
 ];
 
+// Approximate trailing-day count for a period key — used to slice the Bing/Yandex series
+// so the shared period dropdown affects those charts too.
+function periodToDays(period: string): number {
+  switch (period) {
+    case "yesterday": return 1;
+    case "7d": case "last_week": return 7;
+    case "14d": return 14;
+    case "28d": return 28;
+    case "this_month": case "last_month": return 30;
+    case "this_quarter": case "last_quarter": case "3m": return 90;
+    case "6m": return 180;
+    case "8m": return 240;
+    case "ytd": return Math.max(7, Math.ceil((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000));
+    case "12m": return 365;
+    case "16m": return 480;
+    case "2y": return 730;
+    case "3y": return 1095;
+    default: return 28;
+  }
+}
+
 // Known Google algorithm updates now live in src/lib/algoUpdates.ts
 // (typed core/spam/discover list with per-type colors, sundios-style).
 
@@ -4236,6 +4257,8 @@ export default function SitePage({
               onPreset={v => { setFilterPreset(v); if (v !== null) scrollToResults(); }}
               onApply={scrollToResults}
             />
+            </>}
+            {/* Metric toggles — shared across Google, Bing and Yandex charts */}
             {([
               { m: "clicks"      as Metric, icon: <Sparkles size={13}/>, color: C.clicks,      bg: "rgba(59,130,246,0.12)"  },
               { m: "impressions" as Metric, icon: <Eye      size={13}/>, color: C.impressions, bg: "rgba(139,92,246,0.12)"  },
@@ -4251,7 +4274,6 @@ export default function SitePage({
                 </button>
               );
             })}
-            </>}
             <PeriodDropdown period={period} onChange={setPeriod} />
             <button
               onClick={handleSync}
@@ -4269,7 +4291,7 @@ export default function SitePage({
 
         {/* Main chart — GSC (local) or a live Bing/Yandex view */}
         {engine !== "google" ? (
-          <EngineView engine={engine} domain={domain} siteDbId={siteDbId} refreshKey={engineRefresh} />
+          <EngineView engine={engine} domain={domain} siteDbId={siteDbId} refreshKey={engineRefresh} metrics={activeMetrics} days={periodToDays(period)} />
         ) : (
         <div style={{ background: "var(--color-card)", borderRadius: "12px", padding: "16px", border: "1px solid var(--color-border)" }}>
           <ResponsiveContainer width="100%" height={300}>

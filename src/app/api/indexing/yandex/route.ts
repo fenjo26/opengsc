@@ -73,24 +73,29 @@ export async function GET(req: Request) {
       yFetch(`${p}/summary/`, token),
       yFetch(`${p}/search-queries/popular/?order_by=TOTAL_SHOWS&query_indicator=TOTAL_SHOWS&query_indicator=TOTAL_CLICKS&query_indicator=AVG_SHOW_POSITION&date_from=${from}&date_to=${today}&limit=25`, token),
       yFetch(`${p}/recrawl/quota/`, token),
-      yFetch(`${p}/search-queries/all/history/?query_indicator=TOTAL_SHOWS&query_indicator=TOTAL_CLICKS&date_from=${from}&date_to=${today}`, token),
+      yFetch(`${p}/search-queries/all/history/?query_indicator=TOTAL_SHOWS&query_indicator=TOTAL_CLICKS&query_indicator=AVG_SHOW_POSITION&date_from=${from}&date_to=${today}`, token),
       yFetch(`${p}/diagnostics/`, token),
     ]);
 
-    // Merge the per-indicator date arrays into one chart-friendly series.
-    let series: { date: string; clicks: number; impressions: number }[] = [];
+    // Merge the per-indicator date arrays into one chart-friendly series
+    // (clicks, impressions and — when available — the daily average position).
+    let series: { date: string; clicks: number; impressions: number; position?: number }[] = [];
     if (history.ok) {
       const ind = history.body.indicators ?? {};
-      const byDate = new Map<string, { date: string; clicks: number; impressions: number }>();
+      const byDate = new Map<string, { date: string; clicks: number; impressions: number; position?: number }>();
+      const get = (d: string) => byDate.get(d) ?? { date: d, clicks: 0, impressions: 0 };
       for (const pnt of ind.TOTAL_SHOWS ?? []) {
         const d = String(pnt.date).slice(0, 10);
-        byDate.set(d, { date: d, clicks: 0, impressions: Math.round(pnt.value ?? 0) });
+        byDate.set(d, { ...get(d), impressions: Math.round(pnt.value ?? 0) });
       }
       for (const pnt of ind.TOTAL_CLICKS ?? []) {
         const d = String(pnt.date).slice(0, 10);
-        const row = byDate.get(d) ?? { date: d, clicks: 0, impressions: 0 };
-        row.clicks = Math.round(pnt.value ?? 0);
-        byDate.set(d, row);
+        byDate.set(d, { ...get(d), clicks: Math.round(pnt.value ?? 0) });
+      }
+      for (const pnt of ind.AVG_SHOW_POSITION ?? []) {
+        const d = String(pnt.date).slice(0, 10);
+        const v = Number(pnt.value);
+        byDate.set(d, { ...get(d), position: isFinite(v) && v > 0 ? Math.round(v * 10) / 10 : undefined });
       }
       series = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
     }
