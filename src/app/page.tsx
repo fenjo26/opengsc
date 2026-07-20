@@ -807,8 +807,8 @@ function PortfolioPageContent() {
       if (!domain.includes(searchLower) && !tagsStr.includes(searchLower)) return false;
       if (branded === "branded"    && brandedRatio(s.url) <  0.45) return false;
       if (branded === "nonbranded" && brandedRatio(s.url) >= 0.45) return false;
-      // Google-only dimension filters (query/page/country/device don't apply to engine APIs).
-      if (engine === "google" && filterText.trim() && filterText !== "__longtail__") {
+      // Portfolio dimension filters work on domain/position, so they apply to every engine.
+      if (filterText.trim() && filterText !== "__longtail__") {
         const txt = filterText.trim().toLowerCase();
         if (filterDimension === "country") {
           const tld = domain.split(".").pop() ?? "";
@@ -818,7 +818,7 @@ function PortfolioPageContent() {
         }
       }
       // Long Tail preset on portfolio: filter sites where avg position > 10 (tail traffic proxy)
-      if (engine === "google" && filterDimension === "query" && filterText === "__longtail__") {
+      if (filterDimension === "query" && filterText === "__longtail__") {
         const pos = s.summary?.position?.value ?? 0;
         if (pos > 0 && pos <= 10) return false;
       }
@@ -1421,13 +1421,7 @@ function PortfolioPageContent() {
           <a href="/settings" style={{display:"flex",alignItems:"center",gap:"4px",padding:"4px 10px",borderRadius:"20px",fontSize:"12px",fontWeight:500,color:engine==="bing"?"#00809D":"#FC3F1D",border:`1px solid ${engine==="bing"?"rgba(0,128,115,0.25)":"rgba(252,63,29,0.25)"}`,background:"transparent",textDecoration:"none",whiteSpace:"nowrap",cursor:"pointer"}}>
             + {engine==="bing"?"Bing":"Яндекс"} {t("account")}
           </a>
-          <span style={{flex:1}}/>
-          {engineLoading
-            ? <span style={{display:"inline-flex",alignItems:"center",gap:"6px",fontSize:"12px",color:"var(--color-text-secondary)"}}><Loader2 size={13} className="spin"/> {t("dashEngineLoading")}</span>
-            : <>
-                {engineSyncedAt[engineKey] && <span style={{fontSize:"11px",color:"var(--color-text-secondary)"}}>{t("dashLastSync")} {new Date(engineSyncedAt[engineKey]).toLocaleTimeString("ru",{hour:"2-digit",minute:"2-digit"})}</span>}
-                <button onClick={()=>loadEngine(engine as "bing"|"yandex", period, true, true)} title={t("refresh")} style={{display:"inline-flex",alignItems:"center",gap:"5px",padding:"5px 11px",borderRadius:"8px",border:"1px solid var(--color-border)",background:"var(--color-card)",color:"var(--color-text-secondary)",fontSize:"12px",fontWeight:500,cursor:"pointer"}}><RefreshCw size={12}/> {t("refresh")}</button>
-              </>}
+          {engineLoading && <><span style={{flex:1}}/><span style={{display:"inline-flex",alignItems:"center",gap:"6px",fontSize:"12px",color:"var(--color-text-secondary)"}}><Loader2 size={13} className="spin"/> {t("dashEngineLoading")}</span></>}
         </div>
       )}
 
@@ -1476,10 +1470,10 @@ function PortfolioPageContent() {
             style={{width:"100%",padding:"7px 12px 7px 32px",borderRadius:"8px",border:"1px solid var(--color-border)",background:"var(--color-card)",color:"var(--color-text-primary)",fontSize:"13px",outline:"none"}}/>
         </div>
         {SortDd}
-        {engine === "google" && FilterDd}
+        {FilterDd}
 
-        {/* ── Manual sync button (Google only; engines refresh from their own bar) ── */}
-        {engine === "google" && <button
+        {/* ── Sync — the shared "refresh everything" button (GSC + Bing + Yandex) ── */}
+        {<button
           onClick={handleSync}
           disabled={syncStatus === "syncing"}
           title={syncedAt ? `${t("dashLastSync")} ${syncedAt.toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" })} ${syncedAt.toLocaleDateString("ru", { day: "numeric", month: "short" })}` : t("dashSyncGscTitle")}
@@ -1555,7 +1549,7 @@ function PortfolioPageContent() {
               onRemove={() => setBranded("all")}
             />
           )}
-          {engine === "google" && filterDimension && filterText.trim() && (
+          {filterDimension && filterText.trim() && (
             <FilterChip
               label={`${filterDimension}: ${filterText.trim()}`}
               onRemove={() => { setFilterDimension(null); setFilterText(""); }}

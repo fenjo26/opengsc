@@ -32,6 +32,20 @@ const parseBingDate = (v: any): string => { const m = String(v ?? "").match(/\/D
 
 type Daily = { date: string; clicks: number; impressions: number; ctr: number; position: number }; // ctr as fraction
 
+// fetch with retries + a generous timeout — portfolio pulls hit each engine 100+ times, so a
+// single transient timeout/429 must not silently drop a site's data.
+async function fetchRetry(url: string, init: RequestInit = {}, tries = 3, timeoutMs = 20_000): Promise<Response | null> {
+  for (let i = 0; i < tries; i++) {
+    try {
+      const r = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+      if (r.ok) return r;
+      if (r.status !== 429 && r.status < 500) return r; // 4xx (bad key/site) — no point retrying
+    } catch { /* network / timeout → retry */ }
+    if (i < tries - 1) await new Promise(res => setTimeout(res, 500 * (i + 1)));
+  }
+  return null;
+}
+
 async function pool<T, R>(items: T[], n: number, fn: (t: T) => Promise<R>): Promise<(R | undefined)[]> {
   const out: (R | undefined)[] = new Array(items.length);
   let i = 0;
@@ -85,6 +99,16 @@ async function readCache(userId: string, engine: string, period: string): Promis
     return { sites: JSON.parse(rows[0].data), cachedAt: new Date(rows[0].updatedAt).toISOString() };
   } catch { return null; }
 }
+// Keep a site's last-known-good data if this rebuild came back empty for it (transient
+// timeout/429). A site that previously had data never regresses to a blank card.
+async function mergeSticky(userId: string, engine: string, period: string, fresh: any[]): Promise<any[]> {
+  const prev = await readCache(userId, engine, period);
+  if (!prev?.sites?.length) return fresh;
+  const prevByKey = new Map<string, any>();
+  for (const s of prev.sites) if (s?.hasData) { prevByKey.set(s.id, s); if (s.url) prevByKey.set(s.url, s); }
+  return fresh.map(s => (s?.hasData ? s : (prevByKey.get(s?.id) ?? prevByKey.get(s?.url) ?? s)));
+}
+
 async function writeCache(userId: string, engine: string, period: string, sites: any[]): Promise<void> {
   try {
     const id = (globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)) as string;
@@ -138,8 +162,8 @@ export async function GET(req: Request) {
     const seen = new Set<string>();
     await Promise.all(keys.map(async (key) => {
       try {
-        const r = await fetch(`https://ssl.bing.com/webmaster/api.svc/json/GetUserSites?apikey=${encodeURIComponent(key)}`, { signal: AbortSignal.timeout(12_000) });
-        if (!r.ok) return;
+        const r = await fetchRetry(`https://ssl.bing.com/webmaster/api.svc/json/GetUserSites?apikey=${encodeURIComponent(key)}`);
+        if (!r || !r.ok) return;
         const d: any[] = (await r.json())?.d ?? [];
         for (const s of d) {
           const url = String(s.Url ?? s.url ?? "");
@@ -155,10 +179,10 @@ export async function GET(req: Request) {
       // Traffic gives the daily series; query stats give a reliable avg position (the daily
       // stats often omit it), impression-weighted like the per-site engine view.
       const [tr, qs] = await Promise.all([
-        fetch(api("GetRankAndTrafficStats"), { signal: AbortSignal.timeout(12_000) }),
-        fetch(api("GetQueryStats"), { signal: AbortSignal.timeout(12_000) }).catch(() => null),
+        fetchRetry(api("GetRankAndTrafficStats")),
+        fetchRetry(api("GetQueryStats")),
       ]);
-      if (!tr.ok) return { ...makeSite(url), data: [], summary: null, hasData: false };
+      if (!tr || !tr.ok) return { ...makeSite(url), data: [], summary: null, hasData: false };
       const rows: any[] = (await tr.json())?.d ?? [];
       const daily: Daily[] = rows.map(x => {
         const clicks = Number(x.Clicks) || 0, impressions = Number(x.Impressions) || 0;
@@ -178,7 +202,7 @@ export async function GET(req: Request) {
       }
       return payload;
     });
-    const sites = res.filter(Boolean);
+    const sites = await mergeSticky(userId, engine, period, res.filter(Boolean));
     await writeCache(userId, engine, period, sites);
     return NextResponse.json({ sites, engine, cachedAt: new Date().toISOString() });
   }
@@ -189,7 +213,7 @@ export async function GET(req: Request) {
   const seen = new Set<string>();
   await Promise.all(keys.map(async (token) => {
     const headers = { Authorization: `OAuth ${token}`, "Content-Type": "application/json" };
-    const yGet = async (path: string) => { const r = await fetch(`${BASE}${path}`, { headers, signal: AbortSignal.timeout(12_000) }); return r.ok ? r.json() : null; };
+    const yGet = async (path: string) => { const r = await fetchRetry(`${BASE}${path}`, { headers }); return r && r.ok ? r.json() : null; };
     try {
       const user = await yGet("/user/");
       if (!user?.user_id) return;
@@ -206,8 +230,8 @@ export async function GET(req: Request) {
   const res = await pool(targets, 5, async ({ url, token, uid, hostId }) => {
     const headers = { Authorization: `OAuth ${token}`, "Content-Type": "application/json" };
     const path = `${BASE}/user/${uid}/hosts/${encodeURIComponent(hostId)}/search-queries/all/history/?query_indicator=TOTAL_SHOWS&query_indicator=TOTAL_CLICKS&query_indicator=AVG_SHOW_POSITION&date_from=${prevStart}&date_to=${curEnd}`;
-    const r = await fetch(path, { headers, signal: AbortSignal.timeout(12_000) });
-    if (!r.ok) return { ...makeSite(url), data: [], summary: null, hasData: false };
+    const r = await fetchRetry(path, { headers });
+    if (!r || !r.ok) return { ...makeSite(url), data: [], summary: null, hasData: false };
     const ind = (await r.json())?.indicators ?? {};
     const byDate = new Map<string, Daily>();
     const get = (d: string) => byDate.get(d) ?? { date: d, clicks: 0, impressions: 0, ctr: 0, position: 0 };
@@ -218,7 +242,7 @@ export async function GET(req: Request) {
     const { curr, prev } = splitWindows(daily, start, curEnd, prevStart, prevEnd);
     return buildPayload(makeSite(url), curr, prev, days);
   });
-  const sites = res.filter(Boolean);
+  const sites = await mergeSticky(userId, engine, period, res.filter(Boolean));
   await writeCache(userId, engine, period, sites);
   return NextResponse.json({ sites, engine, cachedAt: new Date().toISOString() });
 }
