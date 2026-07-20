@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { Settings, LogOut, Sparkles, Globe, Newspaper, LayoutDashboard, TrendingUp, Anchor, BarChart2 } from "lucide-react";
 import { usePrivacy } from "@/lib/PrivacyContext";
 import { useTheme } from "@/lib/ThemeContext";
@@ -21,6 +21,40 @@ function MenuItem({ icon, label, onClick }: { icon: string; label: string; onCli
       <span style={{ fontSize: "14px", width: "18px", textAlign: "center" }}>{icon}</span>
       {label}
     </button>
+  );
+}
+
+// Small version/status footer for the user menu. Fetches /api/system/version once and shows
+// the current git commit + whether the server is up to date or a newer version exists on the
+// repo. Confirms at a glance that update-detection is wired up (independent of pm2's version col).
+function VersionInfo() {
+  const { t } = useLanguage();
+  const [info, setInfo] = useState<null | { isGit?: boolean; updateAvailable?: boolean; local?: string; behind?: number }>(null);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/system/version")
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancelled) { setInfo(d); setLoaded(true); } })
+      .catch(() => { if (!cancelled) setLoaded(true); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const commit = info?.local ? String(info.local).slice(0, 7) : "";
+  let status = t("versionChecking");
+  let color = "var(--color-text-secondary)";
+  if (loaded) {
+    if (info?.isGit === false) { status = t("versionDocker"); }
+    else if (info?.updateAvailable) { status = `${t("versionUpdate")}${info.behind ? ` (${info.behind})` : ""}`; color = "var(--color-accent-blue)"; }
+    else { status = t("versionLatest"); color = "var(--color-accent-green)"; }
+  }
+  return (
+    <div style={{ padding: "8px 16px", fontSize: "11px", color: "var(--color-text-secondary)", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+      <span style={{ fontWeight: 600 }}>{t("versionCurrent")}</span>
+      {commit && <code style={{ color: "var(--color-text-primary)" }}>{commit}</code>}
+      <span style={{ flex: 1 }} />
+      <span style={{ color, fontWeight: 600 }}>{status}</span>
+    </div>
   );
 }
 
@@ -700,6 +734,9 @@ function TopBar() {
                     {t("signOut")}
                   </button>
                 </div>
+
+                <div style={{ height: "1px", background: "var(--color-border)" }} />
+                <VersionInfo />
               </div>
             </>
           )}

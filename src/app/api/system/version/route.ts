@@ -42,7 +42,7 @@ export async function GET() {
     const remote = String(latest.sha ?? "");
 
     if (!remote || remote === local) {
-      return NextResponse.json({ isGit: true, local, remote, behind: 0, updateAvailable: false });
+      return NextResponse.json({ isGit: true, local: local.slice(0, 7), remote: remote.slice(0, 7), behind: 0, updateAvailable: false });
     }
 
     // How far behind + changelog (commit subjects between local and remote)
