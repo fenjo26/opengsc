@@ -77,6 +77,25 @@ const splitWindows = (daily: Daily[], start: string, curEnd: string, prevStart: 
   prev: daily.filter(d => d.date >= prevStart && d.date <= prevEnd),
 });
 
+// ── Persistent cache (raw SQL so it works right after `prisma db push`, before generate) ──
+async function readCache(userId: string, engine: string, period: string): Promise<{ sites: any[]; cachedAt: string } | null> {
+  try {
+    const rows: any[] = await prisma.$queryRawUnsafe(`SELECT data, updatedAt FROM "EnginePortfolioCache" WHERE userId = ? AND engine = ? AND period = ?`, userId, engine, period);
+    if (!rows?.[0]?.data) return null;
+    return { sites: JSON.parse(rows[0].data), cachedAt: new Date(rows[0].updatedAt).toISOString() };
+  } catch { return null; }
+}
+async function writeCache(userId: string, engine: string, period: string, sites: any[]): Promise<void> {
+  try {
+    const id = (globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)) as string;
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "EnginePortfolioCache" (id, userId, engine, period, data, updatedAt) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(userId, engine, period) DO UPDATE SET data = excluded.data, updatedAt = excluded.updatedAt`,
+      id, userId, engine, period, JSON.stringify(sites), new Date().toISOString(),
+    );
+  } catch { /* cache write is best-effort */ }
+}
+
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
   const userId = (session?.user as any)?.id as string | undefined;
@@ -85,7 +104,14 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const engine = searchParams.get("engine") === "yandex" ? "yandex" : "bing";
   const period = searchParams.get("period") || "7d";
+  const refresh = searchParams.get("refresh") === "1";
   const days = periodToDays(period);
+
+  // Serve the stored snapshot instantly unless a rebuild was explicitly requested.
+  if (!refresh) {
+    const cached = await readCache(userId, engine, period);
+    if (cached) return NextResponse.json({ sites: cached.sites, engine, cachedAt: cached.cachedAt, cached: true });
+  }
 
   const now = new Date();
   const curEnd = dstr(now);
@@ -152,7 +178,9 @@ export async function GET(req: Request) {
       }
       return payload;
     });
-    return NextResponse.json({ sites: res.filter(Boolean), engine });
+    const sites = res.filter(Boolean);
+    await writeCache(userId, engine, period, sites);
+    return NextResponse.json({ sites, engine, cachedAt: new Date().toISOString() });
   }
 
   // Yandex: for each token, resolve user + hosts, then one history call per verified host.
@@ -190,5 +218,7 @@ export async function GET(req: Request) {
     const { curr, prev } = splitWindows(daily, start, curEnd, prevStart, prevEnd);
     return buildPayload(makeSite(url), curr, prev, days);
   });
-  return NextResponse.json({ sites: res.filter(Boolean), engine });
+  const sites = res.filter(Boolean);
+  await writeCache(userId, engine, period, sites);
+  return NextResponse.json({ sites, engine, cachedAt: new Date().toISOString() });
 }

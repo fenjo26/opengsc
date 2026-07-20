@@ -713,18 +713,19 @@ function PortfolioPageContent() {
 
   const engineKey = `${engine}_${period}`;
 
-  // Fetch one engine's live portfolio and cache it (by engine+period).
-  const loadEngine = (eng: "bing" | "yandex", p = period, setLoading = false) => {
+  // Fetch one engine's portfolio. Normally serves the stored server-side snapshot instantly;
+  // pass force=true (Sync / Refresh) to rebuild from the live APIs.
+  const loadEngine = (eng: "bing" | "yandex", p = period, setLoading = false, force = false) => {
     const key = `${eng}_${p}`;
     if (setLoading) setEngineLoading(true);
-    return fetch(`/api/gsc/portfolio-engine?engine=${eng}&period=${p}`)
+    return fetch(`/api/gsc/portfolio-engine?engine=${eng}&period=${p}${force ? "&refresh=1" : ""}`)
       .then(r => r.json())
-      .then(d => { if (d.sites) { setEngineCache(c => ({ ...c, [key]: d.sites })); setEngineSyncedAt(t => ({ ...t, [key]: Date.now() })); } })
+      .then(d => { if (d.sites) { setEngineCache(c => ({ ...c, [key]: d.sites })); setEngineSyncedAt(t => ({ ...t, [key]: d.cachedAt ? new Date(d.cachedAt).getTime() : Date.now() })); } })
       .catch(() => {})
       .finally(() => { if (setLoading) setEngineLoading(false); });
   };
-  // Refresh every configured engine for the current period (used by the global Sync button).
-  const refreshEngines = (p = period) => { altEngines.forEach(eng => loadEngine(eng, p, engine === eng)); };
+  // Rebuild every configured engine for the current period (used by the global Sync button).
+  const refreshEngines = (p = period) => { altEngines.forEach(eng => loadEngine(eng, p, engine === eng, true)); };
 
   // Lazy-load a live Bing/Yandex portfolio when its tab is first opened.
   useEffect(() => {
@@ -1425,7 +1426,7 @@ function PortfolioPageContent() {
             ? <span style={{display:"inline-flex",alignItems:"center",gap:"6px",fontSize:"12px",color:"var(--color-text-secondary)"}}><Loader2 size={13} className="spin"/> {t("dashEngineLoading")}</span>
             : <>
                 {engineSyncedAt[engineKey] && <span style={{fontSize:"11px",color:"var(--color-text-secondary)"}}>{t("dashLastSync")} {new Date(engineSyncedAt[engineKey]).toLocaleTimeString("ru",{hour:"2-digit",minute:"2-digit"})}</span>}
-                <button onClick={()=>loadEngine(engine as "bing"|"yandex", period, true)} title={t("refresh")} style={{display:"inline-flex",alignItems:"center",gap:"5px",padding:"5px 11px",borderRadius:"8px",border:"1px solid var(--color-border)",background:"var(--color-card)",color:"var(--color-text-secondary)",fontSize:"12px",fontWeight:500,cursor:"pointer"}}><RefreshCw size={12}/> {t("refresh")}</button>
+                <button onClick={()=>loadEngine(engine as "bing"|"yandex", period, true, true)} title={t("refresh")} style={{display:"inline-flex",alignItems:"center",gap:"5px",padding:"5px 11px",borderRadius:"8px",border:"1px solid var(--color-border)",background:"var(--color-card)",color:"var(--color-text-secondary)",fontSize:"12px",fontWeight:500,cursor:"pointer"}}><RefreshCw size={12}/> {t("refresh")}</button>
               </>}
         </div>
       )}

@@ -7,6 +7,21 @@ datasource db {
   provider = "sqlite"
 }
 
+// Cached Bing/Yandex portfolio snapshots. Live engine APIs are slow for large site lists,
+// so the dashboard stores the last computed result per user+engine+period and only rebuilds
+// it on demand (Sync / Refresh). This makes engine tabs open instantly after the first build.
+model EnginePortfolioCache {
+  id        String   @id @default(cuid())
+  userId    String
+  engine    String   // "bing" | "yandex"
+  period    String
+  data      String   // JSON: array of per-site portfolio payloads
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, engine, period])
+  @@index([userId])
+}
+
 model Account {
   id                 String  @id @default(cuid())
   userId             String

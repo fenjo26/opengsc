@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { google } from 'googleapis';
+import { verifyAuthOrShare } from '@/lib/authShare';
 
 function periodToDays(period: string): number {
   const today = new Date();
@@ -103,6 +104,7 @@ function aggregate(
 
 // ─── GET /api/gsc/cluster-metrics?siteId=&period= ────────────────────────────
 export async function GET(req: Request) {
+ try {
   const { searchParams } = new URL(req.url);
   const siteId = searchParams.get('siteId') || '';
 
@@ -167,4 +169,9 @@ export async function GET(req: Request) {
   );
 
   return NextResponse.json({ clusters, groups });
+ } catch (e) {
+  // Never 500 the dashboard over clusters (e.g. topicCluster table not migrated yet).
+  console.error('[cluster-metrics]', e);
+  return NextResponse.json({ clusters: [], groups: [] });
+ }
 }
