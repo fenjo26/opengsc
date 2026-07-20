@@ -22,6 +22,9 @@ type Tpl = {
   digestTitleAll: string;
   digestTitleTag: (tag: string) => string;
   digestWindow: (days: number, date: string) => string;
+  digestRange: (from: string, to: string) => string;
+  digestPrevRange: (from: string, to: string) => string;
+  digestMore: (n: number) => string;
   digestNoSitesTag: (tag: string) => string;
   digestNoSites: string;
   totalClicks: (cur: number, delta: string) => string;
@@ -41,6 +44,9 @@ type Tpl = {
   strikingRow: (kw: string, site: string, pos: string, impr: string) => string;
   attentionHdr: string;
   attentionDrop: (site: string, pct: number) => string;
+  engineHdr: (name: string) => string;
+  engineTotals: (clicks: string, impr: string) => string;
+  engineTopSite: (name: string, clicks: string, impr: string) => string;
 };
 
 export const NOTIFY_L: Record<NotifyLang, Tpl> = {
@@ -56,6 +62,9 @@ export const NOTIFY_L: Record<NotifyLang, Tpl> = {
     digestTitleAll: "📊 OpenGSC digest — all sites",
     digestTitleTag: tag => `📊 OpenGSC digest — tag "${tag}"`,
     digestWindow: (days, date) => `_Last ${days} days vs previous ${days} days · ${date}_`,
+    digestRange: (from, to) => `_Period: ${from} — ${to}_`,
+    digestPrevRange: (from, to) => `_vs ${from} — ${to}_`,
+    digestMore: n => `…and ${n} more`,
     digestNoSitesTag: tag => `No sites carry the tag "${tag}".`,
     digestNoSites: "No sites connected yet.",
     totalClicks: (cur, delta) => `*Total clicks:* ${cur} (${delta} vs prev)`,
@@ -75,6 +84,9 @@ export const NOTIFY_L: Record<NotifyLang, Tpl> = {
     strikingRow: (kw, site, pos, impr) => `  ${kw} — ${site} · pos ${pos} · ${impr} impr`,
     attentionHdr: "*🚨 Needs attention:*",
     attentionDrop: (site, pct) => `  ${site} — traffic down ${pct}%`,
+    engineHdr: name => `*🔎 ${name} (live):*`,
+    engineTotals: (clicks, impr) => `  ${clicks} clicks · ${impr} impressions`,
+    engineTopSite: (name, clicks, impr) => `  ${name} — ${clicks} clicks · ${impr} impr`,
   },
   ru: {
     rankDropTitle: kw => `📉 Падение позиции: ${kw}`,
@@ -88,6 +100,9 @@ export const NOTIFY_L: Record<NotifyLang, Tpl> = {
     digestTitleAll: "📊 Дайджест OpenGSC — все сайты",
     digestTitleTag: tag => `📊 Дайджест OpenGSC — тег «${tag}»`,
     digestWindow: (days, date) => `_Последние ${days} дн. vs предыдущие ${days} дн. · ${date}_`,
+    digestRange: (from, to) => `_Период: ${from} — ${to}_`,
+    digestPrevRange: (from, to) => `_в сравнении с ${from} — ${to}_`,
+    digestMore: n => `…ещё ${n}`,
     digestNoSitesTag: tag => `Нет сайтов с тегом «${tag}».`,
     digestNoSites: "Сайты ещё не подключены.",
     totalClicks: (cur, delta) => `*Всего кликов:* ${cur} (${delta} к пред. периоду)`,
@@ -107,6 +122,9 @@ export const NOTIFY_L: Record<NotifyLang, Tpl> = {
     strikingRow: (kw, site, pos, impr) => `  ${kw} — ${site} · поз ${pos} · ${impr} показов`,
     attentionHdr: "*🚨 Требуют внимания:*",
     attentionDrop: (site, pct) => `  ${site} — трафик упал на ${pct}%`,
+    engineHdr: name => `*🔎 ${name} (живые данные):*`,
+    engineTotals: (clicks, impr) => `  ${clicks} кликов · ${impr} показов`,
+    engineTopSite: (name, clicks, impr) => `  ${name} — ${clicks} кликов · ${impr} показов`,
   },
   uk: {
     rankDropTitle: kw => `📉 Падіння позиції: ${kw}`,
@@ -120,6 +138,9 @@ export const NOTIFY_L: Record<NotifyLang, Tpl> = {
     digestTitleAll: "📊 Дайджест OpenGSC — всі сайти",
     digestTitleTag: tag => `📊 Дайджест OpenGSC — тег «${tag}»`,
     digestWindow: (days, date) => `_Останні ${days} дн. vs попередні ${days} дн. · ${date}_`,
+    digestRange: (from, to) => `_Період: ${from} — ${to}_`,
+    digestPrevRange: (from, to) => `_у порівнянні з ${from} — ${to}_`,
+    digestMore: n => `…ще ${n}`,
     digestNoSitesTag: tag => `Немає сайтів із тегом «${tag}».`,
     digestNoSites: "Сайти ще не підключені.",
     totalClicks: (cur, delta) => `*Всього кліків:* ${cur} (${delta} до попер. періоду)`,
@@ -139,5 +160,8 @@ export const NOTIFY_L: Record<NotifyLang, Tpl> = {
     strikingRow: (kw, site, pos, impr) => `  ${kw} — ${site} · поз ${pos} · ${impr} показів`,
     attentionHdr: "*🚨 Потребують уваги:*",
     attentionDrop: (site, pct) => `  ${site} — трафік впав на ${pct}%`,
+    engineHdr: name => `*🔎 ${name} (живі дані):*`,
+    engineTotals: (clicks, impr) => `  ${clicks} кліків · ${impr} показів`,
+    engineTopSite: (name, clicks, impr) => `  ${name} — ${clicks} кліків · ${impr} показів`,
   },
 };

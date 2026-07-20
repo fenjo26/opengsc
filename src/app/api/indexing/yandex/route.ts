@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { verifyAuthOrShare } from "@/lib/authShare";
+import { getOwnerEngineKey } from "@/lib/engineKeysServer";
 
 // Yandex.Webmaster API v4 integration (mirrors the Bing route pattern: the user's
 // OAuth token lives browser-side and is passed per-request, nothing stored here).
@@ -53,12 +55,23 @@ async function resolveHost(token: string, siteUrl: string): Promise<{ userId?: n
 
 export async function GET(req: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!(session?.user as any)?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
     const { searchParams } = new URL(req.url);
     const siteUrl = searchParams.get("siteUrl") || "";
-    const token = searchParams.get("token") || "";
+    let token = searchParams.get("token") || "";
+    const siteId = searchParams.get("siteId") || "";
+    const shareToken = searchParams.get("shareToken") || "";
+
+    // Authenticate as the logged-in owner OR via a valid share link for this site.
+    const session = await getServerSession(authOptions);
+    let ownerId = (session?.user as any)?.id as string | undefined;
+    if (!ownerId && shareToken && siteId) {
+      const auth = await verifyAuthOrShare(req, siteId);
+      if (auth) ownerId = auth.userId;
+    }
+    if (!ownerId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    // Guests (and owners who didn't pass a token) get it resolved from the owner's saved settings.
+    if (!token && siteId) token = await getOwnerEngineKey(ownerId, "yandex", siteId);
     if (!siteUrl || !token) return NextResponse.json({ error: "Missing siteUrl or token" }, { status: 400 });
 
     const host = await resolveHost(token, siteUrl);

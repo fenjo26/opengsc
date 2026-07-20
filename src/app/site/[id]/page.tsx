@@ -10,7 +10,7 @@ import { SiteHealthPanel } from "@/components/SiteHealthPanel";
 import { ClarityPanel } from "@/components/ClarityPanel";
 import RankTracker from "@/components/RankTracker";
 import SiteAuditPanel from "@/components/SiteAuditPanel";
-import EngineView, { type AltEngine } from "@/components/EngineView";
+import EngineView, { type AltEngine, type EngineSummary } from "@/components/EngineView";
 import SearchEnginesPanel from "@/components/SearchEnginesPanel";
 import { withShare } from "@/lib/shareParam";
 import AeoTracker from "@/components/AeoTracker";
@@ -3785,6 +3785,7 @@ interface SitePageProps {
   domain?: string;
   readOnly?: boolean;
   shareToken?: string;
+  guestEngines?: { bing: boolean; yandex: boolean }; // which engines the owner configured (guest view)
 }
 
 export default function SitePage({
@@ -3792,6 +3793,7 @@ export default function SitePage({
   domain: propDomain,
   readOnly = false,
   shareToken,
+  guestEngines,
 }: SitePageProps = {}) {
   const { t } = useLanguage();
   const params = useParams();
@@ -3980,10 +3982,20 @@ export default function SitePage({
   // ── Search-engine switcher: Google (local GSC data) vs live Bing / Yandex views.
   // Alt engines appear only when their key/token is configured in Settings.
   const [engine, setEngine] = useState<"google" | AltEngine>("google");
+  const [engineSummary, setEngineSummary] = useState<EngineSummary | null>(null); // KPI row for Bing/Yandex
   const [engineRefresh, setEngineRefresh] = useState(0); // bumped by Sync to refetch live views
   const [altEngines, setAltEngines] = useState<AltEngine[]>([]);
   useEffect(() => {
-    // An engine is available if a global key OR at least one connected account exists.
+    // Guest (share link): the owner's keys aren't in this browser — use the server-provided
+    // list of engines configured for this site instead.
+    if (shareToken) {
+      const list: AltEngine[] = [];
+      if (guestEngines?.bing) list.push("bing");
+      if (guestEngines?.yandex) list.push("yandex");
+      setAltEngines(list);
+      return;
+    }
+    // Owner: an engine is available if a global key OR at least one connected account exists.
     const has = (eng: string) => {
       if (localStorage.getItem(`seoKey_${eng}`)) return true;
       try { return (JSON.parse(localStorage.getItem(`seoKey_${eng}_accounts_list`) || "[]") as any[]).length > 0; }
@@ -3993,7 +4005,7 @@ export default function SitePage({
     if (has("bing")) list.push("bing");
     if (has("yandex")) list.push("yandex");
     setAltEngines(list);
-  }, []);
+  }, [shareToken, guestEngines]);
   const aioChartData = useMemo(() => {
     const rows: any[] = chartData ?? [];
     const baseClicks = rows.find(r => (r.clicks ?? 0) > 0)?.clicks ?? 0;
@@ -4224,7 +4236,23 @@ export default function SitePage({
                 {!dataLoading && chg !== 0 && <Change pct={chg} invert={invert} />}
               </div>
             ))}
-          </div> : <div style={{ fontSize: "14px", fontWeight: 700, color: engine === "bing" ? "#00809D" : "#FC3F1D" }}>{engine === "bing" ? "Bing Webmaster" : t("seEngineYandexFull")} <span style={{ fontWeight: 400, fontSize: "12px", color: "var(--color-text-secondary)" }}>· {t("seLiveData")}</span></div>}
+          </div> : engineSummary ? (
+            <div style={{ display: "flex", alignItems: "center", gap: "28px", flexWrap: "wrap" }}>
+              {[
+                { icon: <Sparkles size={14} style={{ color: C.clicks }} />, val: fmtK(engineSummary.clicks), chg: engineSummary.dClicks, invert: false },
+                { icon: <Eye size={14} style={{ color: C.impressions }} />, val: fmtK(engineSummary.impressions), chg: engineSummary.dImpr, invert: false },
+                { icon: <Percent size={14} style={{ color: C.ctr }} />, val: `${engineSummary.ctr}%`, chg: engineSummary.dCtr, invert: false },
+                { icon: <MoveUp size={14} style={{ color: C.position }} />, val: engineSummary.position != null ? String(engineSummary.position) : "—", chg: engineSummary.dPos, invert: true },
+              ].map(({ icon, val, chg, invert }, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                  {icon}
+                  <span style={{ fontSize: "22px", fontWeight: 700, color: "var(--color-text-primary)" }}>{val}</span>
+                  {engineSummary.hasCmp && chg !== 0 && <Change pct={chg} invert={invert} />}
+                </div>
+              ))}
+              <span style={{ fontSize: "12px", fontWeight: 600, color: engine === "bing" ? "#00809D" : "#FC3F1D" }}>{engine === "bing" ? "Bing" : t("seEngineYandex")} <span style={{ fontWeight: 400, color: "var(--color-text-secondary)" }}>· {t("seLiveData")}</span></span>
+            </div>
+          ) : <div style={{ fontSize: "14px", fontWeight: 700, color: engine === "bing" ? "#00809D" : "#FC3F1D" }}>{engine === "bing" ? "Bing Webmaster" : t("seEngineYandexFull")} <span style={{ fontWeight: 400, fontSize: "12px", color: "var(--color-text-secondary)" }}>· {t("seLiveData")}</span></div>}
 
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             {/* Engine switcher — shown only when Bing/Yandex keys are configured */}
@@ -4268,7 +4296,7 @@ export default function SitePage({
               const on = activeMetrics.has(m);
               return (
                 <button key={m} onClick={() => toggleMetric(m)}
-                  title={m}
+                  title={m === "clicks" ? t("clicks") : m === "impressions" ? t("impressions") : m === "ctr" ? "CTR" : t("avgPosition")}
                   style={{ width: "30px", height: "30px", borderRadius: "6px", border: `1px solid ${on ? color : "var(--color-border)"}`, background: on ? bg : "var(--color-card)", color: on ? color : "var(--color-text-secondary)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "all 0.15s", opacity: on ? 1 : 0.5 }}>
                   {icon}
                 </button>
@@ -4291,7 +4319,7 @@ export default function SitePage({
 
         {/* Main chart — GSC (local) or a live Bing/Yandex view */}
         {engine !== "google" ? (
-          <EngineView engine={engine} domain={domain} siteDbId={siteDbId} refreshKey={engineRefresh} metrics={activeMetrics} days={periodToDays(period)} />
+          <EngineView engine={engine} domain={domain} siteDbId={siteDbId} refreshKey={engineRefresh} metrics={activeMetrics} days={periodToDays(period)} onSummary={setEngineSummary} />
         ) : (
         <div style={{ background: "var(--color-card)", borderRadius: "12px", padding: "16px", border: "1px solid var(--color-border)" }}>
           <ResponsiveContainer width="100%" height={300}>

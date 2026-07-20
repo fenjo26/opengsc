@@ -10,6 +10,8 @@ import Link from "next/link";
 import { Loader2, Send, Eye, Trash2, AlertTriangle, Newspaper, Save, Calendar, Clock, Tag, ChevronRight, Sparkles } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { markdownToHtml } from "@/lib/seo/outlineFormat";
+import DigestView from "@/components/DigestView";
+import type { DigestData } from "@/lib/digest";
 
 // Period options — labels resolved via i18n at render (see PERIOD_LABEL keys).
 const PERIODS: { value: number; key: string }[] = [
@@ -32,7 +34,9 @@ export default function DigestPage() {
   const [tag, setTag] = useState("");
   const [days, setDays] = useState(7);
   const [ai, setAi] = useState(false);
-  const [preview, setPreview] = useState("");
+  const [preview, setPreview] = useState("");      // markdown (for history items)
+  const [data, setData] = useState<DigestData | null>(null); // structured (rich view)
+  const [engines, setEngines] = useState<{ bing: boolean; yandex: boolean }>({ bing: false, yandex: false });
   const [busy, setBusy] = useState<"" | "preview" | "send" | "save">("");
   const [msg, setMsg] = useState("");
 
@@ -43,6 +47,7 @@ export default function DigestPage() {
       setTelegram(!!d.telegram);
       setHistory(d.digests || []);
       setSettings(d.settings || null);
+      setEngines(d.engines || { bing: false, yandex: false });
       if (d.settings) { setTag(d.settings.tag ?? ""); setDays(d.settings.days ?? 7); setAi(!!d.settings.ai); }
     } catch {}
   };
@@ -55,13 +60,23 @@ export default function DigestPage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, tag, days, ai, lang: language }),
       }).then(r => r.json());
-      if (d.content) setPreview(d.content);
+      if (d.data) { setData(d.data); setPreview(""); }
+      else if (d.content) { setPreview(d.content); setData(null); }
       if (action === "send") {
         setMsg(d.sent ? t("digestSentOk") : t("digestSentFail"));
         reload();
       }
     } catch (e: any) { setMsg(String(e?.message ?? e)); }
     setBusy("");
+  };
+
+  // Lazy-load one engine's live rows for the DigestView tab (current tag/period).
+  const fetchEngine = async (engine: "bing" | "yandex") => {
+    const d = await fetch("/api/digest", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "engine", engine, tag, days }),
+    }).then(r => r.json());
+    return { rows: d.rows || [], totals: d.totals || { clicks: 0, impr: 0, sites: 0 } };
   };
 
   const saveSchedule = async (patch: any) => {
@@ -186,8 +201,11 @@ export default function DigestPage() {
       {/* Status message */}
       {msg && <div style={{ fontSize: "12px", fontWeight: 600, color: msg === t("digestSentOk") ? "#34c759" : "#f87171", textAlign: "center" }}>{msg}</div>}
 
-      {/* Preview */}
-      {preview && (
+      {/* Rich preview (freshly built) */}
+      {data && <DigestView data={data} engines={engines} fetchEngine={fetchEngine} />}
+
+      {/* Markdown preview (history item — stored as text) */}
+      {!data && preview && (
         <div style={card}>
           <div style={{ fontSize: "12px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-text-secondary)", marginBottom: "12px" }}>
             {t("digestPreviewTitle")}
@@ -258,7 +276,7 @@ export default function DigestPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
             {history.map(d => (
               <div key={d.id}
-                onClick={() => setPreview(d.content)}
+                onClick={() => { setData(null); setPreview(d.content); }}
                 style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 12px", borderRadius: "8px", cursor: "pointer", transition: "background 0.12s" }}
                 onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
                 onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>

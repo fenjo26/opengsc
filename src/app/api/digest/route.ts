@@ -2,8 +2,15 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { buildDigest, aiSummary, getDigestSettings, saveDigestSettings, DEFAULT_DIGEST_SETTINGS } from "@/lib/digest";
+import { buildDigestData, renderDigestMarkdown, aiSummary, getDigestSettings, saveDigestSettings, DEFAULT_DIGEST_SETTINGS } from "@/lib/digest";
+import { buildEngineRows, configuredEngines } from "@/lib/digestEngines";
 import { notifyUser } from "@/lib/notify";
+
+const hasTag = (tagsField: string | null, tag: string): boolean => {
+  if (!tagsField) return false;
+  try { const arr = JSON.parse(tagsField); if (Array.isArray(arr)) return arr.map(String).map(s => s.toLowerCase()).includes(tag.toLowerCase()); } catch { /* csv */ }
+  return tagsField.toLowerCase().split(",").map(s => s.trim()).includes(tag.toLowerCase());
+};
 
 // Digest tab API.
 // GET                 → { digests (history), settings, tags (all site tags for the picker) }
@@ -48,7 +55,9 @@ export async function GET() {
     telegram = !!((rows?.[0]?.telegramBotToken && rows?.[0]?.telegramChatId) || rows?.[0]?.slackWebhook);
   } catch { /* not migrated */ }
 
-  return NextResponse.json({ digests, settings, tags: [...tags].sort(), telegram });
+  const engines = await configuredEngines(userId).catch(() => ({ bing: false, yandex: false }));
+
+  return NextResponse.json({ digests, settings, tags: [...tags].sort(), telegram, engines });
 }
 
 export async function POST(req: Request) {
@@ -62,8 +71,21 @@ export async function POST(req: Request) {
   const ai = !!b.ai;
   const lang = (b.lang === "ru" || b.lang === "uk" ? b.lang : "en") as "en" | "ru" | "uk";
 
+  // Live per-engine rows for the page's Bing/Yandex tabs (lazy-loaded on tab click).
+  if (action === "engine") {
+    const engine = b.engine === "yandex" ? "yandex" : "bing";
+    const allSites = await prisma.site.findMany({ where: { userId }, select: { id: true, url: true, tags: true } });
+    const sites = tag ? allSites.filter(s => hasTag(s.tags, tag)) : allSites;
+    const rows = await buildEngineRows(userId, engine, sites, days || 28, 120).catch(() => []);
+    const clicks = rows.reduce((s, r) => s + r.clicks, 0), impr = rows.reduce((s, r) => s + r.impr, 0);
+    return NextResponse.json({ engine, rows, totals: { clicks, impr, sites: rows.length } });
+  }
+
   if (action === "preview" || action === "send") {
-    const { content } = await buildDigest(userId, tag, days, lang);
+    // Preview: Google-only for speed (engine tabs load lazily). Send: include engines in the
+    // Telegram text (bounded cap) so the delivered summary still mentions Bing/Yandex.
+    const data = await buildDigestData(userId, tag, days, lang, { engineCap: action === "send" ? 25 : 0 });
+    const content = renderDigestMarkdown(data);
     let full = content;
     if (ai) {
       const summary = await aiSummary(userId, content, lang);
@@ -75,9 +97,9 @@ export async function POST(req: Request) {
       try {
         await prisma.digest.create({ data: { userId, tag, days, content: full, sentTo: sent ? "telegram" : null } });
       } catch { /* not migrated */ }
-      if (!sent) return NextResponse.json({ content: full, sent, error: "telegram_not_connected" });
+      if (!sent) return NextResponse.json({ content: full, data, sent, error: "telegram_not_connected" });
     }
-    return NextResponse.json({ content: full, sent });
+    return NextResponse.json({ content: full, data, sent });
   }
 
   if (action === "settings") {

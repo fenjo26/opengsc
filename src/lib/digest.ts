@@ -1,9 +1,14 @@
-// Digest builder — a Markdown summary over the user's sites for a period, optionally
-// filtered by tag (so a site network can get its own digest). Data comes entirely from
-// the local store (DailyMetric, TrackedKeyword); the optional AI paragraph reuses the
-// server-side key backup (User.seoSettings) via fetchLLM.
+// Digest builder. Produces a single structured DigestData object (the source of truth) and
+// renders a compact Markdown summary from it. The Markdown is what goes to Telegram/Slack
+// (kept under ~4000 chars); the structured data powers the rich in-app digest page, which can
+// show the FULL lists (all striking-distance queries, every attention site, etc.) and split
+// the view per search engine (Google / Bing / Yandex).
+//
+// Google numbers come from the local store (DailyMetric, TrackedKeyword). Bing/Yandex numbers
+// are fetched live (digestEngines.ts) only when requested — the page loads them lazily per tab.
 
 import { prisma } from "@/lib/prisma";
+import { buildEngineData, type EngineRow } from "@/lib/digestEngines";
 import { fetchLLM } from "@/lib/llm";
 import { NOTIFY_L, normalizeLang, type NotifyLang } from "@/lib/notifyI18n";
 
@@ -21,6 +26,32 @@ export interface DigestSettings {
 export const DEFAULT_DIGEST_SETTINGS: DigestSettings = {
   enabled: false, frequency: "weekly", hourUtc: 8, tag: "", days: 7, ai: false, lang: "en",
 };
+
+// ─── Structured digest data (source of truth for both Markdown + the rich page) ───
+export interface DigestSiteRow { id: string; name: string; cur: number; prev: number; impr: number; d: number; pctNum: number }
+export interface DigestQueryRow { q: string; cur: number; prev: number; d: number }
+export interface DigestStriking { query: string; site: string; pos: number; impr: number }
+export interface DigestAttention { name: string; pct: number }
+export interface DigestRankMove { keyword: string; from: number; to: number; d: number }
+
+export interface DigestData {
+  tag: string;
+  lang: NotifyLang;
+  sites: number;
+  showDelta: boolean;
+  period: { days: number; from: string; to: string; prevFrom: string; prevTo: string; allTime: boolean };
+  portfolio: { counted: number; up: number; down: number; clicks: number; prevClicks: number; impr: number; prevImpr: number };
+  gainers: DigestSiteRow[];
+  losers: DigestSiteRow[];
+  topSites: DigestSiteRow[];        // all-time mode (no deltas)
+  winnersQ: DigestQueryRow[];
+  losersQ: DigestQueryRow[];
+  striking: DigestStriking[];
+  strikingCount: number;
+  attention: DigestAttention[];
+  rankMoves: DigestRankMove[];
+  engines: { bing: EngineRow[]; yandex: EngineRow[] };
+}
 
 export async function getDigestSettings(userId: string): Promise<DigestSettings> {
   try {
@@ -47,15 +78,24 @@ const hasTag = (tagsField: string | null, tag: string): boolean => {
 
 const clean = (u: string) => u.replace(/^https?:\/\//, "").replace(/^sc-domain:/, "").replace(/\/$/, "");
 const sign = (n: number) => (n > 0 ? `+${n}` : `${n}`);
-const arrow = (cur: number, prev: number) => (cur > prev ? "🟢" : cur < prev ? "🔴" : "⚪️");
+const day = (d: Date) => d.toISOString().slice(0, 10);
 const fmtNum = (n: number) => {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
   return String(n);
 };
+const pctNum = (cur: number, prev: number) => (prev > 0 ? Math.round(((cur - prev) / prev) * 100) : cur > 0 ? 100 : 0);
+const pctStr = (cur: number, prev: number) => (prev > 0 ? `${sign(pctNum(cur, prev))}%` : cur > 0 ? "new" : "0%");
 
-export async function buildDigest(userId: string, tag: string, days: number, lang: NotifyLang = "en"): Promise<{ content: string; sites: number }> {
-  const L = NOTIFY_L[normalizeLang(lang)];
+// How many items each section keeps in the FULL structured data (the page shows these,
+// with "show more"). Markdown uses much smaller sub-slices to stay Telegram-sized.
+const FULL = { movers: 50, queries: 50, striking: 200, attention: 50, rankMoves: 60 };
+
+// ─── Build the structured data ────────────────────────────────────────────────
+export async function buildDigestData(
+  userId: string, tag: string, days: number, lang: NotifyLang = "en",
+  opts: { engineCap?: number } = {},
+): Promise<DigestData> {
   const allSites = await prisma.site.findMany({ where: { userId }, select: { id: true, url: true, tags: true } });
   const sites = tag ? allSites.filter(s => hasTag(s.tags, tag)) : allSites;
 
@@ -63,30 +103,24 @@ export async function buildDigest(userId: string, tag: string, days: number, lan
   const curStart = new Date(now); curStart.setDate(curStart.getDate() - days);
   const prevStart = new Date(now); prevStart.setDate(prevStart.getDate() - days * 2);
   const siteIds = sites.map(s => s.id);
-
-  // days=0 means "all time" — use a very old start date
+  const showDelta = days > 0;
   const effectiveCurStart = days === 0 ? new Date("2000-01-01") : curStart;
   const effectivePrevStart = days === 0 ? new Date("2000-01-01") : prevStart;
-  const showDelta = days > 0; // no delta comparison for "all time"
 
-  const lines: string[] = [];
-  lines.push(`*${tag ? L.digestTitleTag(tag) : L.digestTitleAll}*`);
-  lines.push(days === 0 ? `_${L.allTime} · ${now.toISOString().slice(0, 10)}_` : L.digestWindow(days, now.toISOString().slice(0, 10)));
+  const base: DigestData = {
+    tag, lang: normalizeLang(lang), sites: sites.length, showDelta,
+    period: { days, from: day(curStart), to: day(now), prevFrom: day(prevStart), prevTo: day(curStart), allTime: days === 0 },
+    portfolio: { counted: 0, up: 0, down: 0, clicks: 0, prevClicks: 0, impr: 0, prevImpr: 0 },
+    gainers: [], losers: [], topSites: [], winnersQ: [], losersQ: [], striking: [], strikingCount: 0, attention: [], rankMoves: [],
+    engines: { bing: [], yandex: [] },
+  };
+  if (!siteIds.length) return base;
 
-  if (!siteIds.length) {
-    lines.push("", tag ? L.digestNoSitesTag(tag) : L.digestNoSites);
-    return { content: lines.join("\n"), sites: 0 };
-  }
-
-  // ── per-site traffic (portfolio-aware)
-  // CRITICAL: GSC sync writes THREE row kinds per site into DailyMetric — date-only totals
-  // (url:'' query:''), page rows (url:X query:''), and query rows (url:X query:X). Summing
-  // without a filter triple-counts. The date-only rows are the accurate daily totals, so we
-  // scope every site/total aggregate to `url:'' , query:''`.
   const dateOnly = { url: "", query: "" };
   const nameOf = new Map(sites.map(s => [s.id, clean(s.url)]));
 
-  // One grouped query per period instead of 200 per-site aggregates — scales to big portfolios.
+  // ── per-site traffic (one grouped query per period; scoped to date-only totals so the
+  // three DailyMetric row kinds don't triple-count)
   const siteAgg = (gte: Date, lt?: Date) => prisma.dailyMetric.groupBy({
     by: ["siteId"],
     where: { siteId: { in: siteIds }, ...dateOnly, date: lt ? { gte, lt } : { gte, lte: now } },
@@ -97,55 +131,33 @@ export async function buildDigest(userId: string, tag: string, days: number, lan
     showDelta ? siteAgg(effectivePrevStart, effectiveCurStart) : Promise.resolve([] as any[]),
   ]);
   const prevBySite = new Map<string, number>(prevSites.map((r: any) => [r.siteId, r._sum.clicks ?? 0]));
-  const totPrevImpr = (prevSites as any[]).reduce((s, r) => s + (r._sum.impressions ?? 0), 0);
-  const perSite = curSites.map((r: any) => ({
-    id: r.siteId, name: nameOf.get(r.siteId) ?? r.siteId,
-    cur: r._sum.clicks ?? 0, impr: r._sum.impressions ?? 0, prev: prevBySite.get(r.siteId) ?? 0,
-  }));
-  // include sites that had traffic before but zero now (full drops)
+  base.portfolio.prevImpr = (prevSites as any[]).reduce((s, r) => s + (r._sum.impressions ?? 0), 0);
+  const perSite: DigestSiteRow[] = curSites.map((r: any) => {
+    const cur = r._sum.clicks ?? 0, prev = prevBySite.get(r.siteId) ?? 0;
+    return { id: r.siteId, name: nameOf.get(r.siteId) ?? r.siteId, cur, impr: r._sum.impressions ?? 0, prev, d: cur - prev, pctNum: pctNum(cur, prev) };
+  });
   for (const [id, prev] of prevBySite) if (!perSite.some(p => p.id === id) && prev > 0) {
-    perSite.push({ id, name: nameOf.get(id) ?? id, cur: 0, impr: 0, prev });
+    perSite.push({ id, name: nameOf.get(id) ?? id, cur: 0, impr: 0, prev, d: -prev, pctNum: -100 });
   }
 
-  const totCur = perSite.reduce((s, x) => s + x.cur, 0);
-  const totPrev = perSite.reduce((s, x) => s + x.prev, 0);
-  const totImpr = perSite.reduce((s, x) => s + x.impr, 0);
+  base.portfolio.clicks = perSite.reduce((s, x) => s + x.cur, 0);
+  base.portfolio.prevClicks = perSite.reduce((s, x) => s + x.prev, 0);
+  base.portfolio.impr = perSite.reduce((s, x) => s + x.impr, 0);
+  base.portfolio.counted = perSite.length;
 
-  // A move is "significant" if it's ≥5 clicks AND ≥10% of the previous value — filters
-  // out the noise that dominates a 200-site portfolio.
   const significant = (p: { cur: number; prev: number }) => {
     const d = p.cur - p.prev;
     return Math.abs(d) >= 5 && (p.prev === 0 ? p.cur >= 5 : Math.abs(d) / p.prev >= 0.1);
   };
-  const up = showDelta ? perSite.filter(p => p.cur > p.prev && significant(p)).length : 0;
-  const down = showDelta ? perSite.filter(p => p.cur < p.prev && significant(p)).length : 0;
+  base.portfolio.up = showDelta ? perSite.filter(p => p.cur > p.prev && significant(p)).length : 0;
+  base.portfolio.down = showDelta ? perSite.filter(p => p.cur < p.prev && significant(p)).length : 0;
 
-  const pctDelta = (cur: number, prev: number) => (prev > 0 ? `${sign(Math.round(((cur - prev) / prev) * 100))}%` : cur > 0 ? "new" : "0%");
-
-  // ── Portfolio KPI header
-  lines.push("");
-  if (showDelta) lines.push(L.portfolio(perSite.length, up, down));
-  lines.push(L.clicksLine(fmtNum(totCur), showDelta ? pctDelta(totCur, totPrev) : "—", fmtNum(totImpr), showDelta ? pctDelta(totImpr, totPrevImpr) : "—"));
-
-  // ── Biggest movers by site (the actionable part for a large portfolio)
   if (showDelta) {
-    const byDelta = perSite.map(p => ({ ...p, d: p.cur - p.prev })).filter(p => significant(p));
-    const gainers = [...byDelta].filter(p => p.d > 0).sort((a, b) => b.d - a.d).slice(0, 8);
-    const losers = [...byDelta].filter(p => p.d < 0).sort((a, b) => a.d - b.d).slice(0, 8);
-    if (gainers.length) {
-      lines.push("", L.topGainers);
-      for (const s of gainers) lines.push(`🟢 ${s.name} — ${fmtNum(s.cur)} (${sign(s.d)}, ${pctDelta(s.cur, s.prev)})`);
-    }
-    if (losers.length) {
-      lines.push("", L.topLosers);
-      for (const s of losers) lines.push(`🔴 ${s.name} — ${fmtNum(s.cur)} (${sign(s.d)}, ${pctDelta(s.cur, s.prev)})`);
-    }
+    const sig = perSite.filter(significant);
+    base.gainers = sig.filter(p => p.d > 0).sort((a, b) => b.d - a.d).slice(0, FULL.movers);
+    base.losers = sig.filter(p => p.d < 0).sort((a, b) => a.d - b.d).slice(0, FULL.movers);
   } else {
-    // "all time" — no deltas, just the biggest sites
-    lines.push("", L.topGainers);
-    for (const s of [...perSite].sort((a, b) => b.cur - a.cur).slice(0, 15)) {
-      lines.push(`${s.name} — ${fmtNum(s.cur)} ${L.unitClicks} · ${fmtNum(s.impr)} ${L.unitImpr}`);
-    }
+    base.topSites = [...perSite].sort((a, b) => b.cur - a.cur).slice(0, FULL.movers);
   }
 
   // ── winners / losers queries across the portfolio/tag
@@ -157,16 +169,13 @@ export async function buildDigest(userId: string, tag: string, days: number, lan
   const [curQ, prevQ] = await Promise.all([agg(effectiveCurStart, undefined), showDelta ? agg(effectivePrevStart, effectiveCurStart) : Promise.resolve([])]);
   const prevMap = new Map<string, number>(prevQ.map(r => [r.query, r._sum.clicks ?? 0] as [string, number]));
   const curMap = new Map<string, number>(curQ.map(r => [r.query, r._sum.clicks ?? 0] as [string, number]));
-  const deltas: { q: string; d: number; cur: number; prev: number }[] = [];
-  for (const [q, c] of curMap) deltas.push({ q, cur: c, prev: prevMap.get(q) ?? 0, d: c - (prevMap.get(q) ?? 0) });
-  for (const [q, p] of prevMap) if (!curMap.has(q)) deltas.push({ q, cur: 0, prev: p, d: -p });
-  const wq = deltas.filter(x => x.d > 0).sort((a, b) => b.d - a.d).slice(0, 8);
-  const lq = deltas.filter(x => x.d < 0).sort((a, b) => a.d - b.d).slice(0, 8);
-  if (wq.length) { lines.push("", L.winners); for (const w of wq) lines.push(`  ${w.q} — ${w.cur} (${sign(w.d)})`); }
-  if (lq.length) { lines.push("", L.losers); for (const l of lq) lines.push(`  ${l.q} — ${l.cur} (${sign(l.d)})`); }
+  const qDeltas: DigestQueryRow[] = [];
+  for (const [q, c] of curMap) qDeltas.push({ q, cur: c, prev: prevMap.get(q) ?? 0, d: c - (prevMap.get(q) ?? 0) });
+  for (const [q, p] of prevMap) if (!curMap.has(q)) qDeltas.push({ q, cur: 0, prev: p, d: -p });
+  base.winnersQ = qDeltas.filter(x => x.d > 0).sort((a, b) => b.d - a.d).slice(0, FULL.queries);
+  base.losersQ = qDeltas.filter(x => x.d < 0).sort((a, b) => a.d - b.d).slice(0, FULL.queries);
 
-  // ── Striking distance across the portfolio (near-page-1 opportunities)
-  let strikingCount = 0;
+  // ── Striking distance (near-page-1 opportunities)
   try {
     const strk = await prisma.dailyMetric.groupBy({
       by: ["siteId", "query"],
@@ -174,45 +183,103 @@ export async function buildDigest(userId: string, tag: string, days: number, lan
       _sum: { impressions: true }, _avg: { position: true },
       having: { impressions: { _sum: { gte: 20 } } },
       orderBy: { _sum: { impressions: "desc" } },
-      take: 200,
+      take: FULL.striking,
     });
-    strikingCount = strk.length;
-    if (strk.length) {
-      lines.push("", L.strikingHdr(strk.length));
-      for (const r of strk.slice(0, 8)) {
-        lines.push(L.strikingRow(r.query, nameOf.get(r.siteId) ?? "", (Math.round((r._avg.position ?? 0) * 10) / 10).toString(), fmtNum(r._sum.impressions ?? 0)));
-      }
-    }
-  } catch { /* striking distance is best-effort on huge portfolios */ }
+    base.strikingCount = strk.length;
+    base.striking = strk.map(r => ({
+      query: r.query, site: nameOf.get(r.siteId) ?? "",
+      pos: Math.round((r._avg.position ?? 0) * 10) / 10, impr: r._sum.impressions ?? 0,
+    }));
+  } catch { /* best-effort on huge portfolios */ }
 
   // ── Sites needing attention: biggest % traffic drops
   if (showDelta) {
-    const drops = perSite
+    base.attention = perSite
       .filter(p => p.prev >= 30 && p.cur < p.prev * 0.7)
       .map(p => ({ name: p.name, pct: Math.round((1 - p.cur / p.prev) * 100) }))
       .sort((a, b) => b.pct - a.pct)
-      .slice(0, 6);
-    if (drops.length) {
-      lines.push("", L.attentionHdr);
-      for (const d of drops) lines.push(L.attentionDrop(d.name, d.pct));
-    }
+      .slice(0, FULL.attention);
   }
 
   // ── rank tracker movements
   const kws = await prisma.trackedKeyword.findMany({
     where: { siteId: { in: siteIds }, lastPosition: { not: null }, prevPosition: { not: null } },
   });
-  const moved = kws
-    .map(k => ({ k, d: (k.prevPosition ?? 0) - (k.lastPosition ?? 0) }))
+  base.rankMoves = kws
+    .map(k => ({ keyword: k.keyword, from: k.prevPosition ?? 0, to: k.lastPosition ?? 0, d: (k.prevPosition ?? 0) - (k.lastPosition ?? 0) }))
     .filter(x => x.d !== 0)
     .sort((a, b) => Math.abs(b.d) - Math.abs(a.d))
-    .slice(0, 10);
-  if (moved.length) {
-    lines.push("", L.rankMoves);
-    for (const { k, d } of moved) lines.push(`  ${d > 0 ? "▲" : "▼"} ${k.keyword}: ${k.prevPosition} → ${k.lastPosition}`);
+    .slice(0, FULL.rankMoves);
+
+  // ── live Bing/Yandex (only when requested; bounded by cap)
+  if (opts.engineCap && opts.engineCap > 0) {
+    try { base.engines = await buildEngineData(userId, sites, days || 28, opts.engineCap); }
+    catch { /* engines are best-effort */ }
   }
 
-  return { content: lines.join("\n"), sites: sites.length };
+  return base;
+}
+
+// ─── Render the compact Markdown (Telegram/Slack) from the structured data ──────
+export function renderDigestMarkdown(data: DigestData): string {
+  const L = NOTIFY_L[normalizeLang(data.lang)];
+  const lines: string[] = [];
+  lines.push(`*${data.tag ? L.digestTitleTag(data.tag) : L.digestTitleAll}*`);
+  lines.push(data.period.allTime ? `_${L.allTime} · ${data.period.to}_` : L.digestRange(data.period.from, data.period.to));
+
+  if (!data.sites) { lines.push("", data.tag ? L.digestNoSitesTag(data.tag) : L.digestNoSites); return lines.join("\n"); }
+
+  const P = data.portfolio;
+  lines.push("");
+  if (data.showDelta) lines.push(L.portfolio(P.counted, P.up, P.down));
+  lines.push(L.clicksLine(fmtNum(P.clicks), data.showDelta ? pctStr(P.clicks, P.prevClicks) : "—", fmtNum(P.impr), data.showDelta ? pctStr(P.impr, P.prevImpr) : "—"));
+
+  if (data.showDelta) {
+    if (data.gainers.length) { lines.push("", L.topGainers); for (const s of data.gainers.slice(0, 8)) lines.push(`🟢 ${s.name} — ${fmtNum(s.cur)} (${sign(s.d)}, ${pctStr(s.cur, s.prev)})`); }
+    if (data.losers.length) { lines.push("", L.topLosers); for (const s of data.losers.slice(0, 8)) lines.push(`🔴 ${s.name} — ${fmtNum(s.cur)} (${sign(s.d)}, ${pctStr(s.cur, s.prev)})`); }
+  } else if (data.topSites.length) {
+    lines.push("", L.topGainers);
+    for (const s of data.topSites.slice(0, 15)) lines.push(`${s.name} — ${fmtNum(s.cur)} ${L.unitClicks} · ${fmtNum(s.impr)} ${L.unitImpr}`);
+  }
+
+  if (data.winnersQ.length) { lines.push("", L.winners); for (const w of data.winnersQ.slice(0, 8)) lines.push(`  ${w.q} — ${w.cur} (${sign(w.d)})`); }
+  if (data.losersQ.length) { lines.push("", L.losers); for (const l of data.losersQ.slice(0, 8)) lines.push(`  ${l.q} — ${l.cur} (${sign(l.d)})`); }
+
+  if (data.striking.length) {
+    lines.push("", L.strikingHdr(data.strikingCount));
+    for (const r of data.striking.slice(0, 8)) lines.push(L.strikingRow(r.query, r.site, String(r.pos), fmtNum(r.impr)));
+    if (data.strikingCount > 8) lines.push(L.digestMore(data.strikingCount - 8));
+  }
+
+  if (data.attention.length) {
+    lines.push("", L.attentionHdr);
+    for (const d of data.attention.slice(0, 6)) lines.push(L.attentionDrop(d.name, d.pct));
+    if (data.attention.length > 6) lines.push(L.digestMore(data.attention.length - 6));
+  }
+
+  if (data.rankMoves.length) {
+    lines.push("", L.rankMoves);
+    for (const m of data.rankMoves.slice(0, 10)) lines.push(`  ${m.d > 0 ? "▲" : "▼"} ${m.keyword}: ${m.from} → ${m.to}`);
+  }
+
+  for (const [name, rows] of [["Bing", data.engines.bing], ["Яндекс", data.engines.yandex]] as [string, EngineRow[]][]) {
+    if (!rows.length) continue;
+    const tc = rows.reduce((s, r) => s + r.clicks, 0), ti = rows.reduce((s, r) => s + r.impr, 0);
+    if (!tc && !ti) continue;
+    lines.push("", L.engineHdr(name), L.engineTotals(fmtNum(tc), fmtNum(ti)));
+    for (const s of [...rows].sort((a, b) => b.clicks - a.clicks).slice(0, 3)) lines.push(L.engineTopSite(s.name, fmtNum(s.clicks), fmtNum(s.impr)));
+  }
+
+  return lines.join("\n");
+}
+
+// Back-compat wrapper: returns the Markdown (with engines, for Telegram) + the structured data.
+export async function buildDigest(
+  userId: string, tag: string, days: number, lang: NotifyLang = "en",
+  opts: { engineCap?: number } = { engineCap: 25 },
+): Promise<{ content: string; sites: number; data: DigestData }> {
+  const data = await buildDigestData(userId, tag, days, lang, opts);
+  return { content: renderDigestMarkdown(data), sites: data.sites, data };
 }
 
 // Optional AI paragraph on top of the numbers — uses the server-side backup of the

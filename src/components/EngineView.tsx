@@ -9,10 +9,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ComposedChart, Line, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { Loader2, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, AlertTriangle, ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { severityMeta, problemLabel } from "@/lib/yandexDiagnostics";
 import { resolveEngineKey } from "@/lib/engineKeys";
+import { withShare, isGuestView } from "@/lib/shareParam";
 
 export type AltEngine = "bing" | "yandex";
 export type EngineMetric = "clicks" | "impressions" | "ctr" | "position";
@@ -21,6 +22,31 @@ const card: React.CSSProperties = { background: "var(--color-card)", borderRadiu
 
 interface Row { key: string; clicks: number; impressions: number; position?: number }
 interface Point { date: string; clicks: number; impressions: number; ctr: number; position: number | null }
+type CmpPoint = Point & { clicksC: number | null; impressionsC: number | null; ctrC: number | null; positionC: number | null };
+
+// Lifted to the parent so it can render the same compact KPI row (with period-over-period
+// deltas) that the Google view shows in the header.
+export interface EngineSummary {
+  clicks: number; impressions: number; ctr: number; position: number | null;
+  dClicks: number; dImpr: number; dCtr: number; dPos: number; hasCmp: boolean;
+}
+
+// Chart tooltip that shows only the current period (hides the dashed comparison series).
+function EngTooltip({ active, payload, label, t }: any) {
+  if (!active || !payload?.length) return null;
+  const rows = payload.filter((p: any) => !String(p.dataKey).endsWith("C"));
+  if (!rows.length) return null;
+  const nm = (k: string) => k === "ctr" ? "CTR" : k === "position" ? t("avgPosition") : k === "clicks" ? t("clicks") : t("impressions");
+  const fmt = (k: string, v: any) => k === "ctr" ? `${v}%` : k === "position" ? (v == null ? "—" : Number(v).toFixed(1)) : Number(v).toLocaleString();
+  return (
+    <div style={{ background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "8px", fontSize: "12px", padding: "8px 10px" }}>
+      <div style={{ fontWeight: 600, marginBottom: "4px", color: "var(--color-text-primary)" }}>{label}</div>
+      {rows.map((p: any) => (
+        <div key={p.dataKey} style={{ color: p.color }}>{nm(p.dataKey)}: {fmt(p.dataKey, p.value)}</div>
+      ))}
+    </div>
+  );
+}
 
 // Bing's OData JSON dates arrive as "/Date(1610000000000)/" OR with a timezone offset
 // "/Date(1760166000000-0700)/" — parse the millisecond epoch, ignore the offset suffix.
@@ -31,6 +57,16 @@ function parseBingDate(v: any): string {
 }
 
 const pct = (clicks: number, impr: number) => (impr ? `${(Math.round((clicks / impr) * 1000) / 10).toFixed(1)}%` : "—");
+
+// CSV download (mirrors the Google tables' exporter).
+function downloadCsv(filename: string, headers: string[], rows: (string | number)[][]) {
+  const lines = [headers.join(","), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(","))];
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
 
 // Same metric colors as the Google (GSC) chart so the Bing/Yandex view feels identical.
 const EC: Record<EngineMetric, string> = {
@@ -56,7 +92,7 @@ function StatCard({ val, label, hint }: { val: string | number; label: string; h
 
 const PER_PAGE = 10;
 
-function RowsTable({ title, rows, keyLabel, t }: { title: string; rows: Row[]; keyLabel: string; t: any }) {
+function RowsTable({ title, rows, keyLabel, t, csvName }: { title: string; rows: Row[]; keyLabel: string; t: any; csvName: string }) {
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "clicks", dir: "desc" });
   const [page, setPage] = useState(0);
 
@@ -85,7 +121,13 @@ function RowsTable({ title, rows, keyLabel, t }: { title: string; rows: Row[]; k
     <div style={{ ...card, padding: 0, overflow: "hidden" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 16px", borderBottom: "1px solid var(--color-border)" }}>
         <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)" }}>{title}</div>
-        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{sorted.length}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{sorted.length}</div>
+          <button onClick={() => downloadCsv(csvName, [keyLabel, t("clicks"), t("impressions"), "CTR", t("avgPosition")], sorted.map(r => [r.key, r.clicks, r.impressions, pct(r.clicks, r.impressions), r.position != null ? Number(r.position).toFixed(1) : ""]))}
+            title={t("exportCsv")} style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "4px 10px", borderRadius: "7px", border: "1px solid var(--color-border)", background: "var(--color-card)", color: "var(--color-text-secondary)", fontSize: "11px", fontWeight: 600, cursor: "pointer" }}>
+            <Download size={12} /> {t("exportCsv")}
+          </button>
+        </div>
       </div>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
         <thead>
@@ -120,7 +162,7 @@ function RowsTable({ title, rows, keyLabel, t }: { title: string; rows: Row[]; k
   );
 }
 
-export default function EngineView({ engine, domain, siteDbId, refreshKey, metrics, days }: { engine: AltEngine; domain: string; siteDbId: string; refreshKey: number; metrics?: Set<string>; days?: number }) {
+export default function EngineView({ engine, domain, siteDbId, refreshKey, metrics, days, onSummary }: { engine: AltEngine; domain: string; siteDbId: string; refreshKey: number; metrics?: Set<string>; days?: number; onSummary?: (s: EngineSummary | null) => void }) {
   const { t, language } = useLanguage() as any;
   const lang = (language === "ru" || language === "uk" ? language : "en") as "en" | "ru" | "uk";
   // Which metric lines to draw — driven by the shared toolbar toggles; default: all on.
@@ -141,10 +183,14 @@ export default function EngineView({ engine, domain, siteDbId, refreshKey, metri
     (async () => {
       setLoading(true); setErr("");
       try {
+        const guest = isGuestView();
         if (engine === "bing") {
-          const apiKey = resolveEngineKey("bing", siteDbId);
-          if (!apiKey) { setErr(t("seNeedKey")); setLoading(false); return; }
-          const d = await fetch(`/api/indexing/bing?siteUrl=${encodeURIComponent(`https://${cleanDomain}/`)}&apiKey=${encodeURIComponent(apiKey)}`).then(r => r.json());
+          // Owner: key from localStorage. Guest (share link): resolved server-side from the
+          // owner's saved settings via the shareToken, so no client key is needed.
+          const apiKey = guest ? "" : resolveEngineKey("bing", siteDbId);
+          if (!guest && !apiKey) { setErr(t("seNeedKey")); setLoading(false); return; }
+          const url = withShare(`/api/indexing/bing?siteUrl=${encodeURIComponent(`https://${cleanDomain}/`)}&siteId=${encodeURIComponent(siteDbId)}${apiKey ? `&apiKey=${encodeURIComponent(apiKey)}` : ""}`);
+          const d = await fetch(url).then(r => r.json());
           if (cancelled) return;
           if (d.error) { setErr(String(d.error)); }
           else {
@@ -165,9 +211,10 @@ export default function EngineView({ engine, domain, siteDbId, refreshKey, metri
             setProblems([]);
           }
         } else {
-          const token = resolveEngineKey("yandex", siteDbId);
-          if (!token) { setErr(t("seNeedToken")); setLoading(false); return; }
-          const d = await fetch(`/api/indexing/yandex?siteUrl=${encodeURIComponent(cleanDomain)}&token=${encodeURIComponent(token)}&days=56`).then(r => r.json());
+          const token = guest ? "" : resolveEngineKey("yandex", siteDbId);
+          if (!guest && !token) { setErr(t("seNeedToken")); setLoading(false); return; }
+          const url = withShare(`/api/indexing/yandex?siteUrl=${encodeURIComponent(cleanDomain)}&siteId=${encodeURIComponent(siteDbId)}&days=56${token ? `&token=${encodeURIComponent(token)}` : ""}`);
+          const d = await fetch(url).then(r => r.json());
           if (cancelled) return;
           if (d.error) { setErr(d.error === "host_not_found" ? t("seYandexHostNotFound") : d.error === "host_not_verified" ? t("seYandexHostNotVerified") : String(d.error)); }
           else {
@@ -187,15 +234,59 @@ export default function EngineView({ engine, domain, siteDbId, refreshKey, metri
     return () => { cancelled = true; };
   }, [engine, cleanDomain, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // The shared period dropdown controls how many trailing days are shown.
-  const view = useMemo(() => (days && days > 0 ? series.slice(-days) : series), [series, days]);
-  const totClicks = view.reduce((s, r) => s + r.clicks, 0);
-  const totImpr = view.reduce((s, r) => s + r.impressions, 0);
+  // Trim trailing "lag" days that have no data reported yet, so the chart ends at the last
+  // real day (like the Google view) instead of flat-lining to today. Interior zeros stay.
+  const trimmed = useMemo(() => {
+    let end = series.length;
+    while (end > 0 && series[end - 1].clicks === 0 && series[end - 1].impressions === 0) end--;
+    return series.slice(0, end);
+  }, [series]);
+
+  const win = days && days > 0 ? days : trimmed.length;
+  const curArr = useMemo(() => trimmed.slice(-win), [trimmed, win]);
+  const prevArr = useMemo(() => trimmed.slice(-2 * win, -win), [trimmed, win]);
+
+  // Merge the current window with the previous equal-length window so the chart can draw a
+  // dashed "previous period" line in the same colors (matching the Google comparison).
+  const view = useMemo<CmpPoint[]>(() => {
+    const off = curArr.length - prevArr.length; // align a shorter prev window to the tail
+    return curArr.map((p, i) => {
+      const c = prevArr[i - off];
+      return { ...p, clicksC: c?.clicks ?? null, impressionsC: c?.impressions ?? null, ctrC: c?.ctr ?? null, positionC: c?.position ?? null };
+    });
+  }, [curArr, prevArr]);
+
+  const sumK = (arr: Point[], k: "clicks" | "impressions") => arr.reduce((s, r) => s + (r[k] || 0), 0);
+  const totClicks = sumK(curArr, "clicks"), totImpr = sumK(curArr, "impressions");
+  const prevClicks = sumK(prevArr, "clicks"), prevImpr = sumK(prevArr, "impressions");
   const anyPos = view.some(p => p.position != null);
-  // Weighted average position over the top queries (impression-weighted) — best available
-  // approximation, since neither API exposes a sitewide daily position series.
+  const anyCmp = prevArr.length > 0 && view.some(p => p.clicksC != null || p.impressionsC != null);
+
+  // Impression-weighted average position from the daily series when present, else the
+  // top-query approximation (neither API exposes a sitewide daily position for every day).
+  const dailyPos = (arr: Point[]) => {
+    const pts = arr.filter(p => p.position != null && p.impressions > 0);
+    return pts.length ? pts.reduce((s, p) => s + (p.position as number) * p.impressions, 0) / pts.reduce((s, p) => s + p.impressions, 0) : null;
+  };
   const posRows = queries.filter(q => q.position != null && q.impressions > 0);
-  const wAvgPos = posRows.length ? (posRows.reduce((s, q) => s + (q.position as number) * q.impressions, 0) / posRows.reduce((s, q) => s + q.impressions, 0)) : null;
+  const wAvgPosQ = posRows.length ? (posRows.reduce((s, q) => s + (q.position as number) * q.impressions, 0) / posRows.reduce((s, q) => s + q.impressions, 0)) : null;
+  const curPos = dailyPos(curArr) ?? wAvgPosQ;
+  const prevPos = dailyPos(prevArr);
+  const curCtr = totImpr ? (totClicks / totImpr) * 100 : 0;
+  const prevCtr = prevImpr ? (prevClicks / prevImpr) * 100 : 0;
+  const pctChg = (cur: number, prev: number) => (prev ? Math.round(((cur - prev) / prev) * 100) : 0);
+
+  // Push the summary + deltas up so the parent header can render the same KPI row as Google.
+  useEffect(() => {
+    if (loading || err || !series.length) { onSummary?.(null); return; }
+    onSummary?.({
+      clicks: totClicks, impressions: totImpr, ctr: Math.round(curCtr * 100) / 100, position: curPos != null ? Math.round(curPos * 10) / 10 : null,
+      dClicks: pctChg(totClicks, prevClicks), dImpr: pctChg(totImpr, prevImpr), dCtr: pctChg(curCtr, prevCtr),
+      dPos: curPos != null && prevPos != null ? pctChg(curPos, prevPos) : 0, hasCmp: prevArr.length > 0,
+    });
+  }, [loading, err, totClicks, totImpr, curCtr, curPos, prevClicks, prevImpr, prevCtr, prevPos, series.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Clear the lifted summary when this view unmounts (switching back to Google).
+  useEffect(() => () => onSummary?.(null), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return <div style={{ ...card, textAlign: "center", padding: "48px" }}><Loader2 size={20} className="spin" style={{ color: "var(--color-text-secondary)" }} /></div>;
   if (err) return (
@@ -212,7 +303,7 @@ export default function EngineView({ engine, domain, siteDbId, refreshKey, metri
         <StatCard val={totClicks.toLocaleString()} label={t("clicks")} />
         <StatCard val={totImpr.toLocaleString()} label={t("impressions")} />
         <StatCard val={pct(totClicks, totImpr)} label="CTR" />
-        {wAvgPos != null && <StatCard val={`≈ ${wAvgPos.toFixed(1)}`} label={t("avgPosition")} hint={t("seAvgPosNote")} />}
+        {curPos != null && <StatCard val={`≈ ${curPos.toFixed(1)}`} label={t("avgPosition")} hint={t("seAvgPosNote")} />}
         {meta.sqi != null && <StatCard val={meta.sqi} label={t("seSqiLabel")} />}
         {meta.inSearch != null && <StatCard val={Number(meta.inSearch).toLocaleString()} label={t("seYandexInSearch")} />}
         {meta.excluded != null && <StatCard val={Number(meta.excluded).toLocaleString()} label={t("seYandexExcluded")} />}
@@ -262,15 +353,12 @@ export default function EngineView({ engine, domain, siteDbId, refreshKey, metri
               <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--color-text-secondary)" }} axisLine={false} tickLine={false} minTickGap={24} />
               <YAxis yAxisId="left" tick={{ fontSize: 10, fill: "var(--color-text-secondary)" }} axisLine={false} tickLine={false} width={40} />
               <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: "var(--color-text-secondary)" }} axisLine={false} tickLine={false} width={44} />
-              <Tooltip
-                contentStyle={{ background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "8px", fontSize: "12px" }}
-                formatter={(val: any, _n: any, item: any) => {
-                  const k = item?.dataKey;
-                  if (k === "ctr") return [`${val}%`, "CTR"];
-                  if (k === "position") return [val == null ? "—" : Number(val).toFixed(1), t("avgPosition")];
-                  return [Number(val).toLocaleString(), k === "clicks" ? t("clicks") : t("impressions")];
-                }}
-              />
+              <Tooltip content={<EngTooltip t={t} />} />
+              {/* Previous-period comparison (dashed, thin, same colors) — drawn underneath. */}
+              {anyCmp && active.has("clicks") && <Line yAxisId="left" type="monotone" dataKey="clicksC" stroke={EC.clicks} strokeWidth={1} strokeDasharray="4 3" dot={false} connectNulls legendType="none" />}
+              {anyCmp && active.has("impressions") && <Line yAxisId="right" type="monotone" dataKey="impressionsC" stroke={EC.impressions} strokeWidth={1} strokeDasharray="4 3" dot={false} connectNulls legendType="none" />}
+              {anyCmp && active.has("ctr") && <Line yAxisId="left" type="monotone" dataKey="ctrC" stroke={EC.ctr} strokeWidth={1} strokeDasharray="4 3" dot={false} connectNulls legendType="none" />}
+              {anyCmp && active.has("position") && anyPos && <Line yAxisId="left" type="monotone" dataKey="positionC" stroke={EC.position} strokeWidth={1} strokeDasharray="4 3" dot={false} connectNulls legendType="none" />}
               {active.has("clicks") && <Area yAxisId="left" type="monotone" dataKey="clicks" name={t("clicks")} stroke={EC.clicks} strokeWidth={2} fill="url(#eng-clicks)" dot={false} />}
               {active.has("impressions") && <Area yAxisId="right" type="monotone" dataKey="impressions" name={t("impressions")} stroke={EC.impressions} strokeWidth={2} fill="url(#eng-impressions)" dot={false} />}
               {active.has("ctr") && <Line yAxisId="left" type="monotone" dataKey="ctr" name="CTR" stroke={EC.ctr} strokeWidth={1.5} dot={false} />}
@@ -292,8 +380,8 @@ export default function EngineView({ engine, domain, siteDbId, refreshKey, metri
         </div>
       )}
       {tab === "queries" || !pages.length
-        ? <RowsTable title={`${t("seTopQueries")} — ${engine === "bing" ? "Bing" : t("seEngineYandex")}`} rows={queries} keyLabel={t("seQuery")} t={t} />
-        : <RowsTable title={`${t("seTopPages")} — Bing`} rows={pages} keyLabel="URL" t={t} />}
+        ? <RowsTable title={`${t("seTopQueries")} — ${engine === "bing" ? "Bing" : t("seEngineYandex")}`} rows={queries} keyLabel={t("seQuery")} t={t} csvName={`${engine}-queries-${cleanDomain}.csv`} />
+        : <RowsTable title={`${t("seTopPages")} — Bing`} rows={pages} keyLabel="URL" t={t} csvName={`${engine}-pages-${cleanDomain}.csv`} />}
     </div>
   );
 }

@@ -2,12 +2,22 @@ import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 
 export default withAuth(
-  function middleware(req) {
+  function middleware() {
     return NextResponse.next();
   },
   {
     callbacks: {
-      authorized: ({ token }) => !!token,
+      // Allow, in addition to authenticated owners:
+      //   • the public guest dashboard pages  (/share/[siteId]/[token])
+      //   • API calls that carry a shareToken  (each such route re-validates the token
+      //     against site.shareToken + shareEnabled, so this is not a bypass — endpoints
+      //     without shareToken support still enforce their own getServerSession check)
+      authorized: ({ token, req }) => {
+        const { pathname, searchParams } = req.nextUrl;
+        if (pathname.startsWith("/share/")) return true;
+        if (pathname.startsWith("/api/") && searchParams.has("shareToken")) return true;
+        return !!token;
+      },
     },
   }
 );

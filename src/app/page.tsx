@@ -8,7 +8,7 @@ import {
   ArrowUpDown, SlidersHorizontal, Sparkles, Percent, MoveUp,
   Globe, Monitor, FileText, ChevronDown, Check,
   Image, Video, Newspaper, Compass,
-  Download, Tag, X,
+  Download, Tag, X, Loader2, RefreshCw,
 } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer, Tooltip } from "recharts";
 import { usePrivacy } from "@/lib/PrivacyContext";
@@ -504,6 +504,10 @@ const tbBtn = (active = false): React.CSSProperties => ({
 });
 
 // ─── Main page ────────────────────────────────────────────────────────────────
+const DashGoogleIcon = ({ s = 14 }) => (<svg width={s} height={s} viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>);
+const DashBingIcon = ({ s = 14 }) => (<svg width={s} height={s} viewBox="0 0 512 512"><polygon points="166.685,38.682 52.904,0 52.904,422.118 166.685,321.987" fill="#008373"/><polygon points="206.501,133.117 253.157,249.166 319.397,270.361 56.324,431.215 170.095,512 459.096,336.78 459.096,216.17" fill="#008373"/></svg>);
+const DashYandexIcon = ({ s = 14 }) => (<svg width={s} height={s} viewBox="0 0 32 32"><path d="M21.88,2h-4c-4,0-8.07,3-8.07,9.62a8.33,8.33,0,0,0,4.14,7.66L9,28.13A1.25,1.25,0,0,0,9,29.4a1.21,1.21,0,0,0,1,.6h2.49a1.24,1.24,0,0,0,1.2-.75l4.59-9h.34v8.62A1.14,1.14,0,0,0,19.82,30H22a1.12,1.12,0,0,0,1.16-1.06V3.22A1.19,1.19,0,0,0,22,2ZM18.7,16.28h-.59c-2.3,0-3.66-1.87-3.66-5,0-3.9,1.73-5.29,3.34-5.29h.94Z" fill="#d61e3b"/></svg>);
+
 function PortfolioPageContent() {
   const { t } = useLanguage();
   const router = useRouter();
@@ -537,6 +541,12 @@ function PortfolioPageContent() {
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [editingTagSiteId, setEditingTagSiteId] = useState<string | null>(null);
   const [period, setPeriod]     = useState("7d");
+  // Search-engine portfolio tabs. Google = local DB; Bing/Yandex = live, fetched on tab
+  // click and cached per engine+period so switching back is instant.
+  const [engine, setEngine] = useState<"google" | "bing" | "yandex">("google");
+  const [altEngines, setAltEngines] = useState<("bing" | "yandex")[]>([]);
+  const [engineCache, setEngineCache] = useState<Record<string, any[]>>({});
+  const [engineLoading, setEngineLoading] = useState(false);
   const [periodView, setPeriodView] = useState<PeriodView>("day");
   const [comparison, setComparison] = useState<Comparison>("previous");
   const [prevTrend, setPrevTrend]   = useState(true);
@@ -674,6 +684,33 @@ function PortfolioPageContent() {
       .finally(() => setLoading(false));
   }, [period, matchWd]);
 
+  // Which engine tabs to show (owner keys live in localStorage, same as the site page).
+  useEffect(() => {
+    const has = (e: string) => {
+      if (localStorage.getItem(`seoKey_${e}`)) return true;
+      try { return (JSON.parse(localStorage.getItem(`seoKey_${e}_accounts_list`) || "[]") as any[]).length > 0; } catch { return false; }
+    };
+    const list: ("bing" | "yandex")[] = [];
+    if (has("bing")) list.push("bing");
+    if (has("yandex")) list.push("yandex");
+    setAltEngines(list);
+  }, []);
+
+  const engineKey = `${engine}_${period}`;
+  // Lazy-load a live Bing/Yandex portfolio when its tab is opened; cache per engine+period.
+  useEffect(() => {
+    if (engine === "google" || engineCache[engineKey]) return;
+    setEngineLoading(true);
+    fetch(`/api/gsc/portfolio-engine?engine=${engine}&period=${period}`)
+      .then(r => r.json())
+      .then(d => { if (d.sites) setEngineCache(c => ({ ...c, [engineKey]: d.sites })); })
+      .catch(() => {})
+      .finally(() => setEngineLoading(false));
+  }, [engine, period]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The dataset the whole dashboard renders from — Google (DB) or the active engine (cache).
+  const activeSites = engine === "google" ? sites : (engineCache[engineKey] ?? []);
+
   // sitesWithData = sites already have real .data and .summary from the API
   // Fall back to fake data only if the site has no real metrics yet
   const sitesWithData = useMemo(() => {
@@ -684,7 +721,7 @@ function PortfolioPageContent() {
     const startDate = new Date(yd);
     startDate.setDate(yd.getDate() - n + 1);
 
-    return sites.map(s => {
+    return activeSites.map(s => {
       if (s.hasData && s.data?.length > 0) {
         // Real data: normalise chart arrays the same way the fake data does
         return s;
@@ -711,7 +748,7 @@ function PortfolioPageContent() {
         },
       };
     });
-  }, [sites, period]);
+  }, [activeSites, period]);
   const activeFilterCount = [
     branded !== "all",
     filterDimension !== null && filterText.trim() !== "",
@@ -745,7 +782,8 @@ function PortfolioPageContent() {
       if (!domain.includes(searchLower) && !tagsStr.includes(searchLower)) return false;
       if (branded === "branded"    && brandedRatio(s.url) <  0.45) return false;
       if (branded === "nonbranded" && brandedRatio(s.url) >= 0.45) return false;
-      if (filterText.trim() && filterText !== "__longtail__") {
+      // Google-only dimension filters (query/page/country/device don't apply to engine APIs).
+      if (engine === "google" && filterText.trim() && filterText !== "__longtail__") {
         const txt = filterText.trim().toLowerCase();
         if (filterDimension === "country") {
           const tld = domain.split(".").pop() ?? "";
@@ -755,7 +793,7 @@ function PortfolioPageContent() {
         }
       }
       // Long Tail preset on portfolio: filter sites where avg position > 10 (tail traffic proxy)
-      if (filterDimension === "query" && filterText === "__longtail__") {
+      if (engine === "google" && filterDimension === "query" && filterText === "__longtail__") {
         const pos = s.summary?.position?.value ?? 0;
         if (pos > 0 && pos <= 10) return false;
       }
@@ -1308,8 +1346,21 @@ function PortfolioPageContent() {
         .period-scroll::-webkit-scrollbar-thumb:hover { background: var(--color-text-secondary); }
       `}</style>
 
-      {/* ─── Accounts bar ─── */}
-      {accounts.length > 0 && (
+      {/* ─── Search-engine tabs ─── */}
+      {altEngines.length > 0 && (
+        <div style={{display:"flex",gap:"2px",background:"rgba(255,255,255,0.06)",borderRadius:"10px",padding:"3px",width:"fit-content",marginBottom:"10px"}}>
+          {(["google", ...altEngines] as ("google"|"bing"|"yandex")[]).map(id => (
+            <button key={id} onClick={() => setEngine(id)}
+              style={{display:"inline-flex",alignItems:"center",gap:"6px",padding:"7px 15px",borderRadius:"7px",fontSize:"12px",fontWeight:700,cursor:"pointer",border:"none",background:engine===id?"var(--color-card)":"transparent",color:engine===id?"var(--color-text-primary)":"var(--color-text-secondary)"}}>
+              {id==="google"?<DashGoogleIcon/>:id==="bing"?<DashBingIcon/>:<DashYandexIcon/>}
+              {id==="google"?"Google":id==="bing"?"Bing":"Яндекс"}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ─── Accounts bar (Google) / Engine source bar (Bing·Yandex) ─── */}
+      {engine === "google" ? (accounts.length > 0 && (
         <div style={{marginBottom:"10px",padding:"10px 14px",borderRadius:"12px",background:"var(--color-card)",border:"1px solid var(--color-border)",display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
           <span style={{fontSize:"11px",fontWeight:700,color:"var(--color-text-secondary)",textTransform:"uppercase",letterSpacing:"0.06em",whiteSpace:"nowrap",marginRight:"2px"}}>{t("googleAccountsLabel")}</span>
           <div style={{display:"flex",alignItems:"center",gap:"6px",padding:"4px 12px",borderRadius:"20px",fontSize:"12px",fontWeight:600,cursor:"default",border:"1px solid rgba(59,130,246,0.4)",background:"rgba(59,130,246,0.12)",color:"#3B82F6",whiteSpace:"nowrap"}}>
@@ -1327,6 +1378,17 @@ function PortfolioPageContent() {
           <a href="/settings" style={{display:"flex",alignItems:"center",gap:"4px",padding:"4px 10px",borderRadius:"20px",fontSize:"12px",fontWeight:500,color:"#3B82F6",border:"1px solid rgba(59,130,246,0.25)",background:"transparent",textDecoration:"none",whiteSpace:"nowrap",cursor:"pointer"}}>
             {t("addGoogleAccount")}
           </a>
+        </div>
+      )) : (
+        <div style={{marginBottom:"10px",padding:"10px 14px",borderRadius:"12px",background:"var(--color-card)",border:"1px solid var(--color-border)",display:"flex",alignItems:"center",gap:"10px",flexWrap:"wrap"}}>
+          <span style={{display:"flex",alignItems:"center",gap:"6px",fontSize:"12px",fontWeight:700,color:engine==="bing"?"#00809D":"#FC3F1D"}}>
+            {engine==="bing"?<DashBingIcon/>:<DashYandexIcon/>} {engine==="bing"?"Bing Webmaster API":"Яндекс.Вебмастер API"}
+          </span>
+          <span style={{fontSize:"11px",color:"var(--color-text-secondary)"}}>· {t("seLiveData")}</span>
+          <span style={{flex:1}}/>
+          {engineLoading
+            ? <span style={{display:"inline-flex",alignItems:"center",gap:"6px",fontSize:"12px",color:"var(--color-text-secondary)"}}><Loader2 size={13} className="spin"/> {t("dashEngineLoading")}</span>
+            : <button onClick={()=>setEngineCache(c=>{const n={...c};delete n[engineKey];return n;})} title={t("refresh")} style={{display:"inline-flex",alignItems:"center",gap:"5px",padding:"5px 11px",borderRadius:"8px",border:"1px solid var(--color-border)",background:"var(--color-card)",color:"var(--color-text-secondary)",fontSize:"12px",fontWeight:500,cursor:"pointer"}}><RefreshCw size={12}/> {t("refresh")}</button>}
         </div>
       )}
 
@@ -1375,10 +1437,10 @@ function PortfolioPageContent() {
             style={{width:"100%",padding:"7px 12px 7px 32px",borderRadius:"8px",border:"1px solid var(--color-border)",background:"var(--color-card)",color:"var(--color-text-primary)",fontSize:"13px",outline:"none"}}/>
         </div>
         {SortDd}
-        {FilterDd}
+        {engine === "google" && FilterDd}
 
-        {/* ── Manual sync button ── */}
-        <button
+        {/* ── Manual sync button (Google only; engines refresh from their own bar) ── */}
+        {engine === "google" && <button
           onClick={handleSync}
           disabled={syncStatus === "syncing"}
           title={syncedAt ? `${t("dashLastSync")} ${syncedAt.toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" })} ${syncedAt.toLocaleDateString("ru", { day: "numeric", month: "short" })}` : t("dashSyncGscTitle")}
@@ -1412,7 +1474,7 @@ function PortfolioPageContent() {
             : syncStatus === "error" ? t("dashSyncErrorShort")
             : syncedAt ? syncedAt.toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" })
             : t("dashSyncGsc")}
-        </button>
+        </button>}
       </div>
 
       {/* ── Sync warning banner ── */}
@@ -1454,7 +1516,7 @@ function PortfolioPageContent() {
               onRemove={() => setBranded("all")}
             />
           )}
-          {filterDimension && filterText.trim() && (
+          {engine === "google" && filterDimension && filterText.trim() && (
             <FilterChip
               label={`${filterDimension}: ${filterText.trim()}`}
               onRemove={() => { setFilterDimension(null); setFilterText(""); }}
@@ -1485,11 +1547,15 @@ function PortfolioPageContent() {
       )}
 
       {/* Body */}
-      {loading ? (
-        <div style={{textAlign:"center",color:"var(--color-text-secondary)",padding:"80px 0",fontSize:"14px"}}>{t("loadingSites")}</div>
-      ) : sites.length===0 ? (
+      {(engine === "google" && loading) || (engine !== "google" && engineLoading && activeSites.length === 0) ? (
+        <div style={{textAlign:"center",color:"var(--color-text-secondary)",padding:"80px 0",fontSize:"14px",display:"flex",alignItems:"center",justifyContent:"center",gap:"8px"}}>
+          {engine !== "google" && <Loader2 size={16} className="spin"/>}{engine === "google" ? t("loadingSites") : t("dashEngineLoading")}
+        </div>
+      ) : (engine === "google" ? sites.length === 0 : activeSites.length === 0) ? (
         <div style={{textAlign:"center",color:"var(--color-text-secondary)",padding:"80px 0",fontSize:"14px"}}>
-          {t("noSitesYet")} <a href="/settings" style={{color:"var(--color-accent-purple)"}}>{t("connectGoogleAccount")}</a>
+          {engine === "google"
+            ? <>{t("noSitesYet")} <a href="/settings" style={{color:"var(--color-accent-purple)"}}>{t("connectGoogleAccount")}</a></>
+            : t("seEngineNoData")}
         </div>
       ) : (
         <>

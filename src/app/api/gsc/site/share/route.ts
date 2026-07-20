@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { getOwnerEngineKey } from '@/lib/engineKeysServer';
 import crypto from 'crypto';
 
 export async function GET(req: Request) {
@@ -16,9 +17,15 @@ export async function GET(req: Request) {
       select: { id: true, url: true, shareEnabled: true },
     });
     if (!site) return NextResponse.json({ error: 'Invalid share token' }, { status: 403 });
+    // Full site (need userId to resolve the owner's engine keys server-side).
+    const full = await prisma.site.findFirst({ where: { id: siteId, shareToken, shareEnabled: true }, select: { id: true, url: true, userId: true } });
+    const engines = full
+      ? { bing: !!(await getOwnerEngineKey(full.userId, "bing", full.id)), yandex: !!(await getOwnerEngineKey(full.userId, "yandex", full.id)) }
+      : { bing: false, yandex: false };
     return NextResponse.json({
       shareEnabled: site.shareEnabled,
       domain: site.url,
+      engines,
     });
   }
 

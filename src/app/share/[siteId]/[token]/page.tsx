@@ -11,6 +11,7 @@ export default function GuestSharePage() {
   const siteId = params.siteId as string;
   const token = params.token as string;
   const [domain, setDomain] = useState<string | null>(null);
+  const [engines, setEngines] = useState<{ bing: boolean; yandex: boolean }>({ bing: false, yandex: false });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -24,6 +25,7 @@ export default function GuestSharePage() {
       })
       .then(d => {
         setDomain(d.domain);
+        if (d.engines) setEngines(d.engines);
       })
       .catch(err => {
         setError(err.message || t("shareInvalidOrExpired") || "Failed to load dashboard");
@@ -65,6 +67,7 @@ export default function GuestSharePage() {
       domain={domain}
       readOnly={true}
       shareToken={token}
+      guestEngines={engines}
     />
   );
 }

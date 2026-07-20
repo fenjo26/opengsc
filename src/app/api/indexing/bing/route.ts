@@ -1,16 +1,29 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { verifyAuthOrShare } from "@/lib/authShare";
+import { getOwnerEngineKey } from "@/lib/engineKeysServer";
 
-// GET /api/indexing/bing?siteUrl=...&apiKey=... -> Get stats from Bing Webmaster API
+// GET /api/indexing/bing?siteUrl=...&apiKey=...            (owner: key from browser)
+//     /api/indexing/bing?siteUrl=...&siteId=...&shareToken=...  (guest: key resolved server-side)
 export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  const userId = (session?.user as any)?.id as string | undefined;
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const { searchParams } = new URL(req.url);
   const siteUrl = searchParams.get("siteUrl") || "";
-  const apiKey = searchParams.get("apiKey") || "";
+  let apiKey = searchParams.get("apiKey") || "";
+  const siteId = searchParams.get("siteId") || "";
+  const shareToken = searchParams.get("shareToken") || "";
+
+  // Authenticate as the logged-in owner OR via a valid share link for this site.
+  const session = await getServerSession(authOptions);
+  let ownerId = (session?.user as any)?.id as string | undefined;
+  if (!ownerId && shareToken && siteId) {
+    const auth = await verifyAuthOrShare(req, siteId);
+    if (auth) ownerId = auth.userId;
+  }
+  if (!ownerId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Guests (and owners who didn't pass a key) get the key resolved from the owner's saved settings.
+  if (!apiKey && siteId) apiKey = await getOwnerEngineKey(ownerId, "bing", siteId);
 
   if (!siteUrl || !apiKey) {
     return NextResponse.json({ error: "Missing siteUrl or apiKey" }, { status: 400 });
