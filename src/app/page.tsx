@@ -1302,16 +1302,23 @@ function PortfolioPageContent() {
 
             {/* Action buttons */}
             <div style={{display:"flex",gap:"2px",flexShrink:0}}>
-              {/* Google Search Link (site: domain) */}
-              <CardBtn
-                tooltip={`site:${domain} — Google`}
-                onClick={e => {
-                  e.stopPropagation();
-                  window.open(`https://www.google.com/search?q=site:${encodeURIComponent(domain.replace(/^www\./,""))}`, '_blank', 'noreferrer');
-                }}
-              >
-                <span style={{ fontSize: "11px", fontWeight: 800, fontFamily: "sans-serif" }}>G</span>
-              </CardBtn>
+              {/* site: search in the active engine (Google / Bing / Yandex) */}
+              {(() => {
+                const dom = encodeURIComponent(domain.replace(/^www\./, ""));
+                const es = engine === "bing"
+                  ? { label: "b", color: "#00809D", url: `https://www.bing.com/search?q=site:${dom}`, name: "Bing" }
+                  : engine === "yandex"
+                  ? { label: "Я", color: "#FC3F1D", url: `https://yandex.com/search/?text=site:${dom}`, name: "Яндекс" }
+                  : { label: "G", color: "var(--color-text-secondary)", url: `https://www.google.com/search?q=site:${dom}`, name: "Google" };
+                return (
+                  <CardBtn
+                    tooltip={`site:${domain} — ${es.name}`}
+                    onClick={e => { e.stopPropagation(); window.open(es.url, "_blank", "noreferrer"); }}
+                  >
+                    <span style={{ fontSize: "11px", fontWeight: 800, fontFamily: "sans-serif", color: es.color }}>{es.label}</span>
+                  </CardBtn>
+                );
+              })()}
 
               {/* Export */}
               <CardBtn
