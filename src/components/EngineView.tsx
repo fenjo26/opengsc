@@ -7,9 +7,9 @@
 // stats for Bing, SQI + site diagnostics for Yandex). Refetches when the Sync-all
 // button bumps refreshKey. Setup guide: docs/SEARCH-ENGINES-SETUP.md.
 
-import { useEffect, useState } from "react";
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { Loader2, AlertTriangle } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ComposedChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { Loader2, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { severityMeta, problemLabel } from "@/lib/yandexDiagnostics";
 import { resolveEngineKey } from "@/lib/engineKeys";
@@ -20,14 +20,22 @@ const card: React.CSSProperties = { background: "var(--color-card)", borderRadiu
 
 interface Row { key: string; clicks: number; impressions: number; position?: number }
 
-// Bing's OData JSON dates arrive as "/Date(1610000000000)/" — normalize both formats.
+// Bing's OData JSON dates arrive as "/Date(1610000000000)/" OR with a timezone offset
+// "/Date(1760166000000-0700)/" — parse the millisecond epoch, ignore the offset suffix.
 function parseBingDate(v: any): string {
-  const m = String(v ?? "").match(/\/Date\((\d+)\)\//);
+  const m = String(v ?? "").match(/\/Date\((\d+)(?:[+-]\d+)?\)\//);
   const d = m ? new Date(parseInt(m[1], 10)) : new Date(v);
-  return isNaN(d.getTime()) ? String(v) : d.toISOString().slice(0, 10);
+  return isNaN(d.getTime()) ? String(v).slice(0, 10) : d.toISOString().slice(0, 10);
 }
 
 const pct = (clicks: number, impr: number) => (impr ? `${(Math.round((clicks / impr) * 1000) / 10).toFixed(1)}%` : "—");
+
+// GSC-style chart colors so Bing/Yandex charts feel familiar.
+const C_CLICKS = "#3A57FC";     // blue — clicks
+const C_IMPR = "#8B5CF6";       // purple — impressions
+type MetricKey = "clicks" | "impressions";
+
+type SortKey = "key" | "clicks" | "impressions" | "ctr" | "position";
 
 function StatCard({ val, label, hint }: { val: string | number; label: string; hint?: string }) {
   return (
@@ -41,23 +49,51 @@ function StatCard({ val, label, hint }: { val: string | number; label: string; h
   );
 }
 
+const PER_PAGE = 10;
+
 function RowsTable({ title, rows, keyLabel, t }: { title: string; rows: Row[]; keyLabel: string; t: any }) {
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "clicks", dir: "desc" });
+  const [page, setPage] = useState(0);
+
+  const sorted = useMemo(() => {
+    const val = (r: Row, k: SortKey) => k === "key" ? r.key.toLowerCase() : k === "ctr" ? (r.impressions ? r.clicks / r.impressions : 0) : k === "position" ? (r.position ?? 999) : (r as any)[k] ?? 0;
+    return [...rows].sort((a, b) => {
+      const va = val(a, sort.key), vb = val(b, sort.key);
+      const cmp = typeof va === "string" ? va.localeCompare(vb as string) : (va as number) - (vb as number);
+      return sort.dir === "asc" ? cmp : -cmp;
+    });
+  }, [rows, sort]);
+
+  const pageCount = Math.ceil(sorted.length / PER_PAGE);
+  const pageRows = sorted.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
+  const setSortKey = (k: SortKey) => { setSort(s => s.key === k ? { key: k, dir: s.dir === "asc" ? "desc" : "asc" } : { key: k, dir: k === "key" || k === "position" ? "asc" : "desc" }); setPage(0); };
+
   if (!rows.length) return null;
+
+  const Th = ({ k, label, align = "right" }: { k: SortKey; label: string; align?: "left" | "right" }) => (
+    <th onClick={() => setSortKey(k)} style={{ padding: align === "left" ? "8px 16px" : "8px 8px", fontWeight: 600, textAlign: align, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap", color: sort.key === k ? "var(--color-accent-blue)" : "var(--color-text-secondary)" }}>
+      {label}{sort.key === k ? (sort.dir === "asc" ? " ↑" : " ↓") : ""}
+    </th>
+  );
+
   return (
     <div style={{ ...card, padding: 0, overflow: "hidden" }}>
-      <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)", padding: "13px 16px", borderBottom: "1px solid var(--color-border)" }}>{title}</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 16px", borderBottom: "1px solid var(--color-border)" }}>
+        <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)" }}>{title}</div>
+        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{sorted.length}</div>
+      </div>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
         <thead>
-          <tr style={{ color: "var(--color-text-secondary)", textAlign: "left" }}>
-            <th style={{ padding: "8px 16px", fontWeight: 500 }}>{keyLabel}</th>
-            <th style={{ padding: "8px 8px", fontWeight: 500, textAlign: "right" }}>{t("clicks")}</th>
-            <th style={{ padding: "8px 8px", fontWeight: 500, textAlign: "right" }}>{t("impressions")}</th>
-            <th style={{ padding: "8px 8px", fontWeight: 500, textAlign: "right" }}>CTR</th>
-            <th style={{ padding: "8px 16px", fontWeight: 500, textAlign: "right" }}>{t("avgPosition")}</th>
+          <tr style={{ textAlign: "left" }}>
+            <Th k="key" label={keyLabel} align="left" />
+            <Th k="clicks" label={t("clicks")} />
+            <Th k="impressions" label={t("impressions")} />
+            <Th k="ctr" label="CTR" />
+            <Th k="position" label={t("avgPosition")} />
           </tr>
         </thead>
         <tbody>
-          {rows.map(r => (
+          {pageRows.map(r => (
             <tr key={r.key} style={{ borderTop: "1px solid var(--color-border)" }}>
               <td style={{ padding: "7px 16px", maxWidth: "300px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--color-text-primary)" }}>{r.key}</td>
               <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 600, color: "var(--color-text-primary)" }}>{r.clicks.toLocaleString()}</td>
@@ -68,6 +104,13 @@ function RowsTable({ title, rows, keyLabel, t }: { title: string; rows: Row[]; k
           ))}
         </tbody>
       </table>
+      {pageCount > 1 && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "12px", padding: "10px", borderTop: "1px solid var(--color-border)" }}>
+          <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} style={{ background: "none", border: "none", cursor: page === 0 ? "default" : "pointer", color: page === 0 ? "var(--color-border)" : "var(--color-text-secondary)", display: "flex" }}><ChevronLeft size={16} /></button>
+          <span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>{page + 1} / {pageCount}</span>
+          <button onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))} disabled={page >= pageCount - 1} style={{ background: "none", border: "none", cursor: page >= pageCount - 1 ? "default" : "pointer", color: page >= pageCount - 1 ? "var(--color-border)" : "var(--color-text-secondary)", display: "flex" }}><ChevronRight size={16} /></button>
+        </div>
+      )}
     </div>
   );
 }
@@ -83,6 +126,7 @@ export default function EngineView({ engine, domain, siteDbId, refreshKey }: { e
   const [meta, setMeta] = useState<Record<string, any>>({});
   const [problems, setProblems] = useState<{ code: string; severity: string }[]>([]);
   const [tab, setTab] = useState<"queries" | "pages">("queries");
+  const [shown, setShown] = useState<Record<MetricKey, boolean>>({ clicks: true, impressions: true });
 
   const cleanDomain = domain.replace(/^https?:\/\//, "").replace(/^sc-domain:/, "").replace(/\/.*$/, "");
 
@@ -136,7 +180,6 @@ export default function EngineView({ engine, domain, siteDbId, refreshKey }: { e
   // approximation, since neither API exposes a sitewide daily position series.
   const posRows = queries.filter(q => q.position != null && q.impressions > 0);
   const wAvgPos = posRows.length ? (posRows.reduce((s, q) => s + (q.position as number) * q.impressions, 0) / posRows.reduce((s, q) => s + q.impressions, 0)) : null;
-  const color = engine === "bing" ? "#00809D" : "#FC3F1D";
 
   if (loading) return <div style={{ ...card, textAlign: "center", padding: "48px" }}><Loader2 size={20} className="spin" style={{ color: "var(--color-text-secondary)" }} /></div>;
   if (err) return (
@@ -184,24 +227,38 @@ export default function EngineView({ engine, domain, siteDbId, refreshKey }: { e
         </div>
       )}
 
-      {/* Chart */}
+      {/* Chart — GSC-style: clicks (blue, left axis) + impressions (purple, right axis),
+          each toggleable via the legend chips. */}
       {series.length > 0 && (
-        <div style={{ ...card, height: "280px" }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={series} margin={{ top: 8, right: 8, bottom: 0, left: -10 }}>
+        <div style={card}>
+          <div style={{ display: "flex", gap: "8px", marginBottom: "10px" }}>
+            {([["clicks", C_CLICKS, t("clicks")], ["impressions", C_IMPR, t("impressions")]] as [MetricKey, string, string][]).map(([m, col, label]) => {
+              const on = shown[m];
+              return (
+                <button key={m} onClick={() => setShown(s => ({ ...s, [m]: !s[m] }))}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "5px 12px", borderRadius: "8px", border: `1px solid ${on ? col : "var(--color-border)"}`, background: on ? `${col}14` : "transparent", cursor: "pointer", fontSize: "12px", fontWeight: 600, color: on ? col : "var(--color-text-secondary)", opacity: on ? 1 : 0.6 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: "3px", background: on ? col : "var(--color-border)" }} />
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <ResponsiveContainer width="100%" height={250}>
+            <ComposedChart data={series} margin={{ top: 8, right: 6, bottom: 0, left: -6 }}>
               <defs>
-                <linearGradient id={`eng-${engine}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={color} stopOpacity={0.3} />
-                  <stop offset="100%" stopColor={color} stopOpacity={0} />
+                <linearGradient id="eng-clicks" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={C_CLICKS} stopOpacity={0.25} />
+                  <stop offset="100%" stopColor={C_CLICKS} stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
-              <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--color-text-secondary)" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 10, fill: "var(--color-text-secondary)" }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--color-text-secondary)" }} axisLine={false} tickLine={false} minTickGap={24} />
+              <YAxis yAxisId="clicks" tick={{ fontSize: 10, fill: C_CLICKS }} axisLine={false} tickLine={false} width={36} />
+              <YAxis yAxisId="impr" orientation="right" tick={{ fontSize: 10, fill: C_IMPR }} axisLine={false} tickLine={false} width={44} />
               <Tooltip contentStyle={{ background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "8px", fontSize: "12px" }} />
-              <Area type="monotone" dataKey="impressions" stroke={color} strokeOpacity={0.45} strokeWidth={1.5} fill="none" />
-              <Area type="monotone" dataKey="clicks" stroke={color} strokeWidth={2} fill={`url(#eng-${engine})`} />
-            </AreaChart>
+              {shown.impressions && <Line yAxisId="impr" type="monotone" dataKey="impressions" name={t("impressions")} stroke={C_IMPR} strokeWidth={2} dot={false} />}
+              {shown.clicks && <Line yAxisId="clicks" type="monotone" dataKey="clicks" name={t("clicks")} stroke={C_CLICKS} strokeWidth={2.5} dot={false} />}
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       )}
