@@ -33,6 +33,14 @@ type Tpl = {
   unitClicks: string;
   unitImpr: string;
   allTime: string;
+  portfolio: (n: number, up: number, down: number) => string;
+  clicksLine: (cur: string, delta: string, impr: string, imprDelta: string) => string;
+  topGainers: string;
+  topLosers: string;
+  strikingHdr: (n: number) => string;
+  strikingRow: (kw: string, site: string, pos: string, impr: string) => string;
+  attentionHdr: string;
+  attentionDrop: (site: string, pct: number) => string;
 };
 
 export const NOTIFY_L: Record<NotifyLang, Tpl> = {
@@ -59,6 +67,14 @@ export const NOTIFY_L: Record<NotifyLang, Tpl> = {
     unitClicks: "clicks",
     unitImpr: "impressions",
     allTime: "all time",
+    portfolio: (n, up, down) => `*Portfolio:* ${n} sites · 🟢 ${up} up · 🔴 ${down} down`,
+    clicksLine: (cur, delta, impr, imprDelta) => `*Clicks:* ${cur} (${delta}) · *Impressions:* ${impr} (${imprDelta})`,
+    topGainers: "*📈 Biggest gainers (sites):*",
+    topLosers: "*📉 Biggest drops (sites):*",
+    strikingHdr: n => `*🎯 Striking distance (pos 4–20): ${n} keywords*`,
+    strikingRow: (kw, site, pos, impr) => `  ${kw} — ${site} · pos ${pos} · ${impr} impr`,
+    attentionHdr: "*🚨 Needs attention:*",
+    attentionDrop: (site, pct) => `  ${site} — traffic down ${pct}%`,
   },
   ru: {
     rankDropTitle: kw => `📉 Падение позиции: ${kw}`,
@@ -83,6 +99,14 @@ export const NOTIFY_L: Record<NotifyLang, Tpl> = {
     unitClicks: "кликов",
     unitImpr: "показов",
     allTime: "всё время",
+    portfolio: (n, up, down) => `*Портфель:* ${n} сайтов · 🟢 ${up} вверх · 🔴 ${down} вниз`,
+    clicksLine: (cur, delta, impr, imprDelta) => `*Клики:* ${cur} (${delta}) · *Показы:* ${impr} (${imprDelta})`,
+    topGainers: "*📈 Сильнее всего выросли (сайты):*",
+    topLosers: "*📉 Сильнее всего просели (сайты):*",
+    strikingHdr: n => `*🎯 На пороге топ-10 (поз. 4–20): ${n} запросов*`,
+    strikingRow: (kw, site, pos, impr) => `  ${kw} — ${site} · поз ${pos} · ${impr} показов`,
+    attentionHdr: "*🚨 Требуют внимания:*",
+    attentionDrop: (site, pct) => `  ${site} — трафик упал на ${pct}%`,
   },
   uk: {
     rankDropTitle: kw => `📉 Падіння позиції: ${kw}`,
@@ -107,5 +131,13 @@ export const NOTIFY_L: Record<NotifyLang, Tpl> = {
     unitClicks: "кліків",
     unitImpr: "показів",
     allTime: "весь час",
+    portfolio: (n, up, down) => `*Портфель:* ${n} сайтів · 🟢 ${up} вгору · 🔴 ${down} вниз`,
+    clicksLine: (cur, delta, impr, imprDelta) => `*Кліки:* ${cur} (${delta}) · *Покази:* ${impr} (${imprDelta})`,
+    topGainers: "*📈 Найбільше зросли (сайти):*",
+    topLosers: "*📉 Найбільше просіли (сайти):*",
+    strikingHdr: n => `*🎯 На порозі топ-10 (поз. 4–20): ${n} запитів*`,
+    strikingRow: (kw, site, pos, impr) => `  ${kw} — ${site} · поз ${pos} · ${impr} показів`,
+    attentionHdr: "*🚨 Потребують уваги:*",
+    attentionDrop: (site, pct) => `  ${site} — трафік впав на ${pct}%`,
   },
 };

@@ -78,35 +78,77 @@ export async function buildDigest(userId: string, tag: string, days: number, lan
     return { content: lines.join("\n"), sites: 0 };
   }
 
-  // ── per-site traffic table
+  // ── per-site traffic (portfolio-aware)
   // CRITICAL: GSC sync writes THREE row kinds per site into DailyMetric — date-only totals
   // (url:'' query:''), page rows (url:X query:''), and query rows (url:X query:X). Summing
   // without a filter triple-counts. The date-only rows are the accurate daily totals, so we
   // scope every site/total aggregate to `url:'' , query:''`.
   const dateOnly = { url: "", query: "" };
-  const perSite: { name: string; cur: number; prev: number; impr: number }[] = [];
-  for (const site of sites) {
-    const [cur, prev] = await Promise.all([
-      prisma.dailyMetric.aggregate({ where: { siteId: site.id, ...dateOnly, date: { gte: effectiveCurStart, lte: now } }, _sum: { clicks: true, impressions: true } }),
-      showDelta
-        ? prisma.dailyMetric.aggregate({ where: { siteId: site.id, ...dateOnly, date: { gte: effectivePrevStart, lt: effectiveCurStart } }, _sum: { clicks: true } })
-        : Promise.resolve({ _sum: { clicks: 0 } }),
-    ]);
-    perSite.push({ name: clean(site.url), cur: cur._sum.clicks ?? 0, prev: prev._sum.clicks ?? 0, impr: cur._sum.impressions ?? 0 });
+  const nameOf = new Map(sites.map(s => [s.id, clean(s.url)]));
+
+  // One grouped query per period instead of 200 per-site aggregates — scales to big portfolios.
+  const siteAgg = (gte: Date, lt?: Date) => prisma.dailyMetric.groupBy({
+    by: ["siteId"],
+    where: { siteId: { in: siteIds }, ...dateOnly, date: lt ? { gte, lt } : { gte, lte: now } },
+    _sum: { clicks: true, impressions: true },
+  });
+  const [curSites, prevSites] = await Promise.all([
+    siteAgg(effectiveCurStart, undefined),
+    showDelta ? siteAgg(effectivePrevStart, effectiveCurStart) : Promise.resolve([] as any[]),
+  ]);
+  const prevBySite = new Map<string, number>(prevSites.map((r: any) => [r.siteId, r._sum.clicks ?? 0]));
+  const totPrevImpr = (prevSites as any[]).reduce((s, r) => s + (r._sum.impressions ?? 0), 0);
+  const perSite = curSites.map((r: any) => ({
+    id: r.siteId, name: nameOf.get(r.siteId) ?? r.siteId,
+    cur: r._sum.clicks ?? 0, impr: r._sum.impressions ?? 0, prev: prevBySite.get(r.siteId) ?? 0,
+  }));
+  // include sites that had traffic before but zero now (full drops)
+  for (const [id, prev] of prevBySite) if (!perSite.some(p => p.id === id) && prev > 0) {
+    perSite.push({ id, name: nameOf.get(id) ?? id, cur: 0, impr: 0, prev });
   }
-  perSite.sort((a, b) => b.cur - a.cur);
+
   const totCur = perSite.reduce((s, x) => s + x.cur, 0);
   const totPrev = perSite.reduce((s, x) => s + x.prev, 0);
+  const totImpr = perSite.reduce((s, x) => s + x.impr, 0);
 
-  lines.push("", `${L.totalClicks(totCur, showDelta ? sign(totCur - totPrev) : "")} ${showDelta ? arrow(totCur, totPrev) : ""}`, "");
-  for (const s of perSite.slice(0, 25)) {
-    const delta = showDelta ? ` (${sign(s.cur - s.prev)})` : "";
-    const ico = showDelta ? `${arrow(s.cur, s.prev)} ` : "";
-    lines.push(`${ico}${s.name} — ${fmtNum(s.cur)} ${L.unitClicks}${delta} · ${fmtNum(s.impr)} ${L.unitImpr}`);
+  // A move is "significant" if it's ≥5 clicks AND ≥10% of the previous value — filters
+  // out the noise that dominates a 200-site portfolio.
+  const significant = (p: { cur: number; prev: number }) => {
+    const d = p.cur - p.prev;
+    return Math.abs(d) >= 5 && (p.prev === 0 ? p.cur >= 5 : Math.abs(d) / p.prev >= 0.1);
+  };
+  const up = showDelta ? perSite.filter(p => p.cur > p.prev && significant(p)).length : 0;
+  const down = showDelta ? perSite.filter(p => p.cur < p.prev && significant(p)).length : 0;
+
+  const pctDelta = (cur: number, prev: number) => (prev > 0 ? `${sign(Math.round(((cur - prev) / prev) * 100))}%` : cur > 0 ? "new" : "0%");
+
+  // ── Portfolio KPI header
+  lines.push("");
+  if (showDelta) lines.push(L.portfolio(perSite.length, up, down));
+  lines.push(L.clicksLine(fmtNum(totCur), showDelta ? pctDelta(totCur, totPrev) : "—", fmtNum(totImpr), showDelta ? pctDelta(totImpr, totPrevImpr) : "—"));
+
+  // ── Biggest movers by site (the actionable part for a large portfolio)
+  if (showDelta) {
+    const byDelta = perSite.map(p => ({ ...p, d: p.cur - p.prev })).filter(p => significant(p));
+    const gainers = [...byDelta].filter(p => p.d > 0).sort((a, b) => b.d - a.d).slice(0, 8);
+    const losers = [...byDelta].filter(p => p.d < 0).sort((a, b) => a.d - b.d).slice(0, 8);
+    if (gainers.length) {
+      lines.push("", L.topGainers);
+      for (const s of gainers) lines.push(`🟢 ${s.name} — ${fmtNum(s.cur)} (${sign(s.d)}, ${pctDelta(s.cur, s.prev)})`);
+    }
+    if (losers.length) {
+      lines.push("", L.topLosers);
+      for (const s of losers) lines.push(`🔴 ${s.name} — ${fmtNum(s.cur)} (${sign(s.d)}, ${pctDelta(s.cur, s.prev)})`);
+    }
+  } else {
+    // "all time" — no deltas, just the biggest sites
+    lines.push("", L.topGainers);
+    for (const s of [...perSite].sort((a, b) => b.cur - a.cur).slice(0, 15)) {
+      lines.push(`${s.name} — ${fmtNum(s.cur)} ${L.unitClicks} · ${fmtNum(s.impr)} ${L.unitImpr}`);
+    }
   }
-  if (perSite.length > 25) lines.push(L.moreSites(perSite.length - 25));
 
-  // ── winners / losers queries across the tag's sites
+  // ── winners / losers queries across the portfolio/tag
   const agg = (gte: Date, lt?: Date) => prisma.dailyMetric.groupBy({
     by: ["query"],
     where: { siteId: { in: siteIds }, date: lt ? { gte, lt } : { gte, lte: now }, query: { not: "" } },
@@ -118,15 +160,42 @@ export async function buildDigest(userId: string, tag: string, days: number, lan
   const deltas: { q: string; d: number; cur: number; prev: number }[] = [];
   for (const [q, c] of curMap) deltas.push({ q, cur: c, prev: prevMap.get(q) ?? 0, d: c - (prevMap.get(q) ?? 0) });
   for (const [q, p] of prevMap) if (!curMap.has(q)) deltas.push({ q, cur: 0, prev: p, d: -p });
-  const winners = deltas.filter(x => x.d > 0).sort((a, b) => b.d - a.d).slice(0, 5);
-  const losers = deltas.filter(x => x.d < 0).sort((a, b) => a.d - b.d).slice(0, 5);
-  if (winners.length) {
-    lines.push("", L.winners);
-    for (const w of winners) lines.push(`  ${w.q} — ${w.cur} (${sign(w.d)})`);
-  }
-  if (losers.length) {
-    lines.push("", L.losers);
-    for (const l of losers) lines.push(`  ${l.q} — ${l.cur} (${sign(l.d)})`);
+  const wq = deltas.filter(x => x.d > 0).sort((a, b) => b.d - a.d).slice(0, 8);
+  const lq = deltas.filter(x => x.d < 0).sort((a, b) => a.d - b.d).slice(0, 8);
+  if (wq.length) { lines.push("", L.winners); for (const w of wq) lines.push(`  ${w.q} — ${w.cur} (${sign(w.d)})`); }
+  if (lq.length) { lines.push("", L.losers); for (const l of lq) lines.push(`  ${l.q} — ${l.cur} (${sign(l.d)})`); }
+
+  // ── Striking distance across the portfolio (near-page-1 opportunities)
+  let strikingCount = 0;
+  try {
+    const strk = await prisma.dailyMetric.groupBy({
+      by: ["siteId", "query"],
+      where: { siteId: { in: siteIds }, date: { gte: effectiveCurStart, lte: now }, query: { not: "" }, position: { gte: 4, lte: 20 } },
+      _sum: { impressions: true }, _avg: { position: true },
+      having: { impressions: { _sum: { gte: 20 } } },
+      orderBy: { _sum: { impressions: "desc" } },
+      take: 200,
+    });
+    strikingCount = strk.length;
+    if (strk.length) {
+      lines.push("", L.strikingHdr(strk.length));
+      for (const r of strk.slice(0, 8)) {
+        lines.push(L.strikingRow(r.query, nameOf.get(r.siteId) ?? "", (Math.round((r._avg.position ?? 0) * 10) / 10).toString(), fmtNum(r._sum.impressions ?? 0)));
+      }
+    }
+  } catch { /* striking distance is best-effort on huge portfolios */ }
+
+  // ── Sites needing attention: biggest % traffic drops
+  if (showDelta) {
+    const drops = perSite
+      .filter(p => p.prev >= 30 && p.cur < p.prev * 0.7)
+      .map(p => ({ name: p.name, pct: Math.round((1 - p.cur / p.prev) * 100) }))
+      .sort((a, b) => b.pct - a.pct)
+      .slice(0, 6);
+    if (drops.length) {
+      lines.push("", L.attentionHdr);
+      for (const d of drops) lines.push(L.attentionDrop(d.name, d.pct));
+    }
   }
 
   // ── rank tracker movements
@@ -134,15 +203,13 @@ export async function buildDigest(userId: string, tag: string, days: number, lan
     where: { siteId: { in: siteIds }, lastPosition: { not: null }, prevPosition: { not: null } },
   });
   const moved = kws
-    .map(k => ({ k, d: (k.prevPosition ?? 0) - (k.lastPosition ?? 0) })) // positive = improved
+    .map(k => ({ k, d: (k.prevPosition ?? 0) - (k.lastPosition ?? 0) }))
     .filter(x => x.d !== 0)
     .sort((a, b) => Math.abs(b.d) - Math.abs(a.d))
-    .slice(0, 8);
+    .slice(0, 10);
   if (moved.length) {
     lines.push("", L.rankMoves);
-    for (const { k, d } of moved) {
-      lines.push(`  ${d > 0 ? "▲" : "▼"} ${k.keyword}: ${k.prevPosition} → ${k.lastPosition}`);
-    }
+    for (const { k, d } of moved) lines.push(`  ${d > 0 ? "▲" : "▼"} ${k.keyword}: ${k.prevPosition} → ${k.lastPosition}`);
   }
 
   return { content: lines.join("\n"), sites: sites.length };
@@ -161,8 +228,13 @@ export async function aiSummary(userId: string, digestMarkdown: string, lang: No
     const model = s.seoModel || s[`aiModel_${provider}`] || undefined;
     const langName = lang === "ru" ? "Russian" : lang === "uk" ? "Ukrainian" : "English";
     const text = await fetchLLM(
-      `You are an SEO analyst. Below is a metrics digest for a period. Write 3-5 sentences of conclusions in ${langName}: what important happened and what needs action. No fluff, do not repeat the raw numbers as a list.\n\n${digestMarkdown.slice(0, 12_000)}`,
-      provider, apiKey, 800, model, s.aiBaseUrl_custom || undefined,
+      `You are a senior SEO analyst reviewing a multi-site portfolio digest. Write in ${langName}.\n\n` +
+      `Rules:\n` +
+      `- Be SPECIFIC: name the exact site domains and queries from the data, never generalize into "some projects".\n` +
+      `- Structure: (1) one line on overall portfolio direction with the % change; (2) which specific sites drove gains and which drove losses — name them; (3) 3-5 concrete prioritized actions tied to the data (which site to investigate first, which striking-distance queries to push, which pages to optimize for CTR).\n` +
+      `- Prefer bullet points for the actions. No fluff, no repeating the whole table, no invented facts.\n\n` +
+      `DIGEST DATA:\n${digestMarkdown.slice(0, 14_000)}`,
+      provider, apiKey, 1000, model, s.aiBaseUrl_custom || undefined,
     );
     return text ? `${NOTIFY_L[normalizeLang(lang)].aiSummary}\n${text.trim()}` : null;
   } catch {

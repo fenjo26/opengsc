@@ -141,7 +141,7 @@ export default function EngineView({ engine, domain, siteDbId, refreshKey }: { e
   if (loading) return <div style={{ ...card, textAlign: "center", padding: "48px" }}><Loader2 size={20} className="spin" style={{ color: "var(--color-text-secondary)" }} /></div>;
   if (err) return (
     <div style={{ ...card, display: "flex", alignItems: "center", gap: "8px", color: "#f87171", fontSize: "13px", flexWrap: "wrap" }}>
-      <AlertTriangle size={14} /> {err} — <a href="/settings?tab=indexing-api" style={{ color: "var(--color-accent-blue)" }}>{t("seNeedKey")}</a>
+      <AlertTriangle size={14} /> {err} — <a href={`/settings?tab=${engine}`} style={{ color: "var(--color-accent-blue)" }}>{engine === "bing" ? t("seNeedKey") : t("seNeedToken")}</a>
       <a href="https://github.com/fenjo26/opengsc/blob/main/docs/SEARCH-ENGINES-SETUP.md" target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)" }}>{t("seSetupGuide")}</a>
     </div>
   );

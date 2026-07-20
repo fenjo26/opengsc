@@ -2036,5 +2036,6 @@
   "updateFailed": "Update failed",
   "updateFailedHint": "Check the log above. You can also update manually on the server: cd to the project and run: bash update.sh",
   "updateReload": "Reload page",
-  "updateWaiting": "Starting…"
+  "updateWaiting": "Starting…",
+  "digestAiHint": "Adds an AI-written analysis (specific sites, queries, actions) on top of the numbers. Generated when you click Preview or Send."
 }

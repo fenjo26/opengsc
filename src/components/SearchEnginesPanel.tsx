@@ -9,12 +9,13 @@
 import { useEffect, useState } from "react";
 import { Loader2, Send, RefreshCw, ExternalLink, Settings } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
+import { resolveEngineKey } from "@/lib/engineKeys";
 
 const card: React.CSSProperties = { background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "12px", padding: "16px", display: "flex", flexDirection: "column", gap: "10px" };
 const btn: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 13px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "12px", fontWeight: 600, cursor: "pointer" };
 const inputS: React.CSSProperties = { padding: "8px 10px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "12px", outline: "none", width: "100%", boxSizing: "border-box" };
 
-function Head({ logo, color, title, connected, hintKey }: { logo: string; color: string; title: string; connected: boolean; hintKey: string }) {
+function Head({ logo, color, title, connected, hintKey, settingsTab }: { logo: string; color: string; title: string; connected: boolean; hintKey: string; settingsTab: string }) {
   const { t } = useLanguage();
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -22,7 +23,7 @@ function Head({ logo, color, title, connected, hintKey }: { logo: string; color:
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)" }}>{title}</div>
         {!connected && (
-          <a href="/settings?tab=indexing-api" style={{ fontSize: "11px", color: "var(--color-accent-blue)", textDecoration: "none" }}>{t(hintKey as any)}</a>
+          <a href={`/settings?tab=${settingsTab}`} style={{ fontSize: "11px", color: "var(--color-accent-blue)", textDecoration: "none" }}>{t(hintKey as any)}</a>
         )}
       </div>
       {connected && <span style={{ fontSize: "11px", color: "#10B981", fontWeight: 600 }}>●</span>}
@@ -77,19 +78,15 @@ export default function SearchEnginesPanel({ siteDbId, domain }: { siteDbId: str
   const matchedBingAcc = bingAccounts.find(a => a.id === selectedBingAccId);
   const matchedYandexAcc = yandexAccounts.find(a => a.id === selectedYandexAccId);
 
+  // Prefer an explicitly-selected account, else fall back to the shared resolver (which
+  // itself prefers a connected account over any stale legacy global key).
   const bingKey = selectedBingAccId === "custom"
     ? siteBing
-    : (matchedBingAcc
-        ? matchedBingAcc.key
-        : (mounted ? localStorage.getItem("seoKey_bing") || "" : "")
-      );
+    : (matchedBingAcc ? matchedBingAcc.key : (mounted ? resolveEngineKey("bing", siteDbId) : ""));
 
   const yandexToken = selectedYandexAccId === "custom"
     ? siteYandex
-    : (matchedYandexAcc
-        ? matchedYandexAcc.key
-        : (mounted ? localStorage.getItem("seoKey_yandex") || "" : "")
-      );
+    : (matchedYandexAcc ? matchedYandexAcc.key : (mounted ? resolveEngineKey("yandex", siteDbId) : ""));
 
   const indexNowKey = hasLocalIndexNow ? siteIndexNow : (mounted ? localStorage.getItem("seoKey_indexnow") || "" : "");
 
@@ -313,7 +310,7 @@ export default function SearchEnginesPanel({ siteDbId, domain }: { siteDbId: str
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "10px" }}>
         {/* ── Bing ── */}
         <div style={card}>
-          <Head logo="B" color="#00809D" title="Bing Webmaster" connected={!!bingKey} hintKey="seNeedKey" />
+          <Head logo="B" color="#00809D" title="Bing Webmaster" connected={!!bingKey} hintKey="seNeedKey" settingsTab="bing" />
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             <button onClick={bingLoad} disabled={!bingKey || !!bingBusy} style={{ ...btn, opacity: bingKey ? 1 : 0.5 }}>
               {bingBusy === "stats" ? <Loader2 size={12} className="spin" /> : <RefreshCw size={12} />} {t("seLoadStats")}
@@ -335,7 +332,7 @@ export default function SearchEnginesPanel({ siteDbId, domain }: { siteDbId: str
 
         {/* ── Yandex ── */}
         <div style={card}>
-          <Head logo="Я" color="#FC3F1D" title="Яндекс.Вебмастер" connected={!!yandexToken} hintKey="seNeedToken" />
+          <Head logo="Я" color="#FC3F1D" title="Яндекс.Вебмастер" connected={!!yandexToken} hintKey="seNeedToken" settingsTab="yandex" />
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             <button onClick={yLoad} disabled={!yandexToken || !!yBusy} style={{ ...btn, opacity: yandexToken ? 1 : 0.5 }}>
               {yBusy === "stats" ? <Loader2 size={12} className="spin" /> : <RefreshCw size={12} />} {t("seLoadStats")}
@@ -363,7 +360,7 @@ export default function SearchEnginesPanel({ siteDbId, domain }: { siteDbId: str
 
         {/* ── IndexNow ── */}
         <div style={card}>
-          <Head logo="IN" color="#7C3AED" title="IndexNow" connected={!!indexNowKey} hintKey="seNeedKey" />
+          <Head logo="IN" color="#7C3AED" title="IndexNow" connected={!!indexNowKey} hintKey="seNeedKey" settingsTab="indexing-api" />
           <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: 1.5 }}>
             {t("seIndexNowNote")} <code style={{ fontSize: "10px" }}>https://{cleanDomain}/{indexNowKey ? indexNowKey.slice(0, 8) + "…" : "<key>"}.txt</code>
           </div>

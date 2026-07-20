@@ -166,10 +166,10 @@ export default function DigestPage() {
             </select>
           </div>
 
-          <label style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "var(--color-text-secondary)", cursor: "pointer", padding: "6px 10px", borderRadius: "8px", background: ai ? "rgba(139,92,246,0.1)" : "transparent", border: ai ? "1px solid rgba(139,92,246,0.3)" : "1px solid transparent", transition: "all 0.15s" }}>
+          <label title={t("digestAiHint")} style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "12px", color: ai ? "#8B5CF6" : "var(--color-text-secondary)", fontWeight: ai ? 600 : 400, cursor: "pointer", padding: "6px 10px", borderRadius: "8px", background: ai ? "rgba(139,92,246,0.12)" : "transparent", border: ai ? "1px solid rgba(139,92,246,0.35)" : "1px solid var(--color-border)", transition: "all 0.15s" }}>
             <Sparkles size={12} style={{ color: ai ? "#8B5CF6" : "var(--color-text-secondary)" }} />
             <input type="checkbox" checked={ai} onChange={e => setAi(e.target.checked)} style={{ display: "none" }} />
-            {t("digestAiToggle")}
+            {t("digestAiToggle")} {ai ? "✓" : ""}
           </label>
 
           <span style={{ flex: 1 }} />
