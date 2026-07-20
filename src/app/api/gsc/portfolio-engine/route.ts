@@ -2,14 +2,17 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getOwnerSettings, resolveEngineKeyFromSettings } from "@/lib/engineKeysServer";
+import { getOwnerSettings, listEngineKeys } from "@/lib/engineKeysServer";
 
-// Live portfolio for Bing / Yandex — returns the SAME per-site shape as /api/gsc/portfolio
-// (data[] daily series + normalized sparkline values + comparison, and a summary with deltas),
-// so the main dashboard can render Bing/Yandex tabs through the exact same UI as Google.
+// Live portfolio for Bing / Yandex. Unlike the Google portfolio (which lists the sites in our
+// DB), this enumerates the engine's OWN verified sites — across every connected account —
+// because a user may have sites in Bing/Yandex that were never added to Google. Each site is
+// returned in the SAME per-site shape as /api/gsc/portfolio so the dashboard renders it through
+// the identical UI. Where an engine site matches a DB site by domain, we reuse that DB id so
+// tags/favorites carry over; otherwise it gets a synthetic id.
 //
-// Data is fetched live per site (Bing: 1 call/site; Yandex: 1 call/site after a shared
-// user+hosts lookup), concurrency-limited. The client caches the result per engine+period.
+// Cost: Bing = 1 GetUserSites/key + 1 traffic call/site. Yandex = 1 user + 1 hosts/token + 1
+// history/site. Concurrency-limited; the client caches the result per engine+period.
 
 function periodToDays(period: string): number {
   const today = new Date();
@@ -25,6 +28,7 @@ function periodToDays(period: string): number {
 const pct = (curr: number, prev: number) => (prev === 0 ? 0 : Math.round(((curr - prev) / prev) * 100));
 const clean = (u: string) => u.replace(/^https?:\/\//, "").replace(/^sc-domain:/, "").replace(/\/.*$/, "");
 const dstr = (d: Date) => d.toISOString().slice(0, 10);
+const parseBingDate = (v: any): string => { const m = String(v ?? "").match(/\/Date\((\d+)/); return m ? new Date(parseInt(m[1], 10)).toISOString().slice(0, 10) : String(v).slice(0, 10); };
 
 type Daily = { date: string; clicks: number; impressions: number; ctr: number; position: number }; // ctr as fraction
 
@@ -36,13 +40,11 @@ async function pool<T, R>(items: T[], n: number, fn: (t: T) => Promise<R>): Prom
   return out;
 }
 
-// Turn daily rows (current + previous window) into the portfolio per-site payload.
 function buildPayload(site: any, curr: Daily[], prev: Daily[], days: number) {
   const norm = (arr: number[]) => { const lo = Math.min(...arr, 0), hi = Math.max(...arr, 1); return arr.map(v => (hi === lo ? 50 : Math.round(((v - lo) / (hi - lo)) * 85 + 5))); };
   const sum = (rows: Daily[]) => rows.reduce((a, m) => ({ clicks: a.clicks + m.clicks, impressions: a.impressions + m.impressions, ctr: a.ctr + m.ctr, position: a.position + m.position, n: a.n + 1 }), { clicks: 0, impressions: 0, ctr: 0, position: 0, n: 0 });
   const c = sum(curr), p = sum(prev);
   const avgCtr = (s: typeof c) => (s.n > 0 ? +((s.ctr / s.n) * 100).toFixed(2) : 0);
-  // Position averaged only over days that actually have a position (>0), so empty days don't drag it to 0.
   const avgPos = (rows: Daily[]) => { const pts = rows.filter(r => r.position > 0); return pts.length ? +(pts.reduce((a, r) => a + r.position, 0) / pts.length).toFixed(1) : 0; };
   const summary = {
     clicks: { value: c.clicks, change: pct(c.clicks, p.clicks) },
@@ -50,7 +52,6 @@ function buildPayload(site: any, curr: Daily[], prev: Daily[], days: number) {
     ctr: { value: avgCtr(c), change: pct(avgCtr(c), avgCtr(p)) },
     position: { value: avgPos(curr), change: pct(avgPos(curr), avgPos(prev)) },
   };
-
   const prevByDate = new Map(prev.map(r => [r.date, r]));
   const clicks = curr.map(r => r.clicks), impressions = curr.map(r => r.impressions);
   const ctrs = curr.map(r => +((r.ctr * 100).toFixed(2))), positions = curr.map(r => +r.position.toFixed(1));
@@ -71,23 +72,10 @@ function buildPayload(site: any, curr: Daily[], prev: Daily[], days: number) {
   return { ...site, data, summary, hasData: curr.some(r => r.clicks > 0 || r.impressions > 0) };
 }
 
-const parseBingDate = (v: any): string => { const m = String(v ?? "").match(/\/Date\((\d+)/); return m ? new Date(parseInt(m[1], 10)).toISOString().slice(0, 10) : String(v).slice(0, 10); };
-
-async function bingSite(key: string, site: any, start: string, prevStart: string, days: number, curEnd: string, prevEnd: string) {
-  const dom = clean(site.url);
-  const url = `https://ssl.bing.com/webmaster/api.svc/json/GetRankAndTrafficStats?siteUrl=${encodeURIComponent(`https://${dom}/`)}&apikey=${encodeURIComponent(key)}`;
-  const r = await fetch(url, { signal: AbortSignal.timeout(12_000) });
-  if (!r.ok) return { ...site, data: [], summary: null, hasData: false };
-  const rows: any[] = (await r.json())?.d ?? [];
-  const daily: Daily[] = rows.map(x => {
-    const clicks = Number(x.Clicks) || 0, impressions = Number(x.Impressions) || 0;
-    const posv = Number(x.AvgImpressionPosition ?? x.AvgClickPosition ?? 0);
-    return { date: parseBingDate(x.Date), clicks, impressions, ctr: impressions ? clicks / impressions : 0, position: posv > 0 ? posv : 0 };
-  }).sort((a, b) => a.date.localeCompare(b.date));
-  const curr = daily.filter(d => d.date >= start && d.date <= curEnd);
-  const prev = daily.filter(d => d.date >= prevStart && d.date <= prevEnd);
-  return buildPayload(site, curr, prev, days);
-}
+const splitWindows = (daily: Daily[], start: string, curEnd: string, prevStart: string, prevEnd: string) => ({
+  curr: daily.filter(d => d.date >= start && d.date <= curEnd),
+  prev: daily.filter(d => d.date >= prevStart && d.date <= prevEnd),
+});
 
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
@@ -105,49 +93,86 @@ export async function GET(req: Request) {
   const prevEnd = dstr(new Date(now.getTime() - days * 86_400_000));
   const prevStart = dstr(new Date(now.getTime() - (2 * days - 1) * 86_400_000));
 
-  const sites = await prisma.site.findMany({ where: { userId }, orderBy: { createdAt: "asc" } });
   const settings = await getOwnerSettings(userId);
-  const keyFor = (siteId: string) => resolveEngineKeyFromSettings(settings, engine, siteId);
-  // Any key configured at all? (used only to short-circuit the "not connected" case)
-  const anyKey = sites.some((s: any) => keyFor(s.id)) || resolveEngineKeyFromSettings(settings, engine, "");
-  if (!anyKey) return NextResponse.json({ sites: sites.map(s => ({ ...s, data: [], summary: null, hasData: false })), engine, noKey: true });
+  const keys = listEngineKeys(settings, engine);
+  if (!keys.length) return NextResponse.json({ sites: [], engine, noKey: true });
+
+  // Match engine sites to DB sites by domain so tags/favorites carry over.
+  const dbSites = await prisma.site.findMany({ where: { userId }, select: { id: true, url: true, tags: true } });
+  const dbByDomain = new Map<string, any>(dbSites.map((s: any) => [clean(s.url).replace(/^www\./, "").toLowerCase(), s]));
+  const makeSite = (url: string) => {
+    const dom = clean(url).replace(/^www\./, "").toLowerCase();
+    const db = dbByDomain.get(dom);
+    return db ? { id: db.id, url: db.url, tags: db.tags } : { id: `${engine}:${dom}`, url, tags: null };
+  };
 
   if (engine === "bing") {
-    // Bing keys can differ per site (multi-account) — resolve each site's own key.
-    const res = await pool(sites, 6, (s: any) => { const k = keyFor(s.id); return k ? bingSite(k, s, start, prevStart, days, curEnd, prevEnd) : Promise.resolve({ ...s, data: [], summary: null, hasData: false }); });
-    return NextResponse.json({ sites: res.map((x, i) => x ?? { ...sites[i], data: [], summary: null, hasData: false }), engine });
+    // 1) Enumerate verified sites for each Bing key. 2) Fetch traffic per site with its key.
+    const targets: { url: string; key: string }[] = [];
+    const seen = new Set<string>();
+    await Promise.all(keys.map(async (key) => {
+      try {
+        const r = await fetch(`https://ssl.bing.com/webmaster/api.svc/json/GetUserSites?apikey=${encodeURIComponent(key)}`, { signal: AbortSignal.timeout(12_000) });
+        if (!r.ok) return;
+        const d: any[] = (await r.json())?.d ?? [];
+        for (const s of d) {
+          const url = String(s.Url ?? s.url ?? "");
+          const dom = clean(url).replace(/^www\./, "").toLowerCase();
+          if (url && !seen.has(dom)) { seen.add(dom); targets.push({ url, key }); }
+        }
+      } catch { /* skip this key */ }
+    }));
+
+    const res = await pool(targets, 6, async ({ url, key }) => {
+      const dom = clean(url);
+      const r = await fetch(`https://ssl.bing.com/webmaster/api.svc/json/GetRankAndTrafficStats?siteUrl=${encodeURIComponent(`https://${dom}/`)}&apikey=${encodeURIComponent(key)}`, { signal: AbortSignal.timeout(12_000) });
+      if (!r.ok) return { ...makeSite(url), data: [], summary: null, hasData: false };
+      const rows: any[] = (await r.json())?.d ?? [];
+      const daily: Daily[] = rows.map(x => {
+        const clicks = Number(x.Clicks) || 0, impressions = Number(x.Impressions) || 0;
+        const posv = Number(x.AvgImpressionPosition ?? x.AvgClickPosition ?? 0);
+        return { date: parseBingDate(x.Date), clicks, impressions, ctr: impressions ? clicks / impressions : 0, position: posv > 0 ? posv : 0 };
+      }).sort((a, b) => a.date.localeCompare(b.date));
+      const { curr, prev } = splitWindows(daily, start, curEnd, prevStart, prevEnd);
+      return buildPayload(makeSite(url), curr, prev, days);
+    });
+    return NextResponse.json({ sites: res.filter(Boolean), engine });
   }
 
-  const key = keyFor(sites[0]?.id ?? "") || resolveEngineKeyFromSettings(settings, engine, "");
-
-  // Yandex: shared user + hosts lookup, then one history call per site.
+  // Yandex: for each token, resolve user + hosts, then one history call per verified host.
   const BASE = "https://api.webmaster.yandex.net/v4";
-  const headers = { Authorization: `OAuth ${key}`, "Content-Type": "application/json" };
-  const yGet = async (path: string) => { const r = await fetch(`${BASE}${path}`, { headers, signal: AbortSignal.timeout(12_000) }); return r.ok ? r.json() : null; };
-  const user = await yGet("/user/");
-  const uid = user?.user_id;
-  const hostsBody = uid ? await yGet(`/user/${uid}/hosts/`) : null;
-  const list: any[] = hostsBody?.hosts ?? [];
-  const hostname = (u: string) => clean(u).replace(/^www\./, "").toLowerCase();
+  const targets: { url: string; token: string; uid: any; hostId: string }[] = [];
+  const seen = new Set<string>();
+  await Promise.all(keys.map(async (token) => {
+    const headers = { Authorization: `OAuth ${token}`, "Content-Type": "application/json" };
+    const yGet = async (path: string) => { const r = await fetch(`${BASE}${path}`, { headers, signal: AbortSignal.timeout(12_000) }); return r.ok ? r.json() : null; };
+    try {
+      const user = await yGet("/user/");
+      if (!user?.user_id) return;
+      const hostsBody = await yGet(`/user/${user.user_id}/hosts/`);
+      for (const h of (hostsBody?.hosts ?? [])) {
+        if (!h?.host_id) continue;
+        const url = String(h.ascii_host_url ?? h.unicode_host_url ?? "");
+        const dom = clean(url).replace(/^www\./, "").toLowerCase();
+        if (url && !seen.has(dom)) { seen.add(dom); targets.push({ url, token, uid: user.user_id, hostId: h.host_id }); }
+      }
+    } catch { /* skip this token */ }
+  }));
 
-  const res = await pool(sites, 5, async (site: any) => {
-    if (!uid) return { ...site, data: [], summary: null, hasData: false };
-    const want = hostname(site.url);
-    const matches = list.filter(h => String(h.ascii_host_url ?? h.unicode_host_url ?? "").replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/[:/].*$/, "").toLowerCase() === want);
-    const best = matches.find(h => h.verified && String(h.ascii_host_url).startsWith("https")) ?? matches.find(h => h.verified) ?? matches[0];
-    if (!best?.host_id) return { ...site, data: [], summary: null, hasData: false };
-    const path = `/user/${uid}/hosts/${encodeURIComponent(best.host_id)}/search-queries/all/history/?query_indicator=TOTAL_SHOWS&query_indicator=TOTAL_CLICKS&query_indicator=AVG_SHOW_POSITION&date_from=${prevStart}&date_to=${curEnd}`;
-    const h = await yGet(path);
-    const ind = h?.indicators ?? {};
+  const res = await pool(targets, 5, async ({ url, token, uid, hostId }) => {
+    const headers = { Authorization: `OAuth ${token}`, "Content-Type": "application/json" };
+    const path = `${BASE}/user/${uid}/hosts/${encodeURIComponent(hostId)}/search-queries/all/history/?query_indicator=TOTAL_SHOWS&query_indicator=TOTAL_CLICKS&query_indicator=AVG_SHOW_POSITION&date_from=${prevStart}&date_to=${curEnd}`;
+    const r = await fetch(path, { headers, signal: AbortSignal.timeout(12_000) });
+    if (!r.ok) return { ...makeSite(url), data: [], summary: null, hasData: false };
+    const ind = (await r.json())?.indicators ?? {};
     const byDate = new Map<string, Daily>();
     const get = (d: string) => byDate.get(d) ?? { date: d, clicks: 0, impressions: 0, ctr: 0, position: 0 };
     for (const p of ind.TOTAL_SHOWS ?? []) { const d = String(p.date).slice(0, 10); byDate.set(d, { ...get(d), impressions: Math.round(p.value ?? 0) }); }
     for (const p of ind.TOTAL_CLICKS ?? []) { const d = String(p.date).slice(0, 10); byDate.set(d, { ...get(d), clicks: Math.round(p.value ?? 0) }); }
     for (const p of ind.AVG_SHOW_POSITION ?? []) { const d = String(p.date).slice(0, 10); const v = Number(p.value); byDate.set(d, { ...get(d), position: isFinite(v) && v > 0 ? v : 0 }); }
-    const daily = [...byDate.values()].map(r => ({ ...r, ctr: r.impressions ? r.clicks / r.impressions : 0 })).sort((a, b) => a.date.localeCompare(b.date));
-    const curr = daily.filter(d => d.date >= start && d.date <= curEnd);
-    const prev = daily.filter(d => d.date >= prevStart && d.date <= prevEnd);
-    return buildPayload(site, curr, prev, days);
+    const daily = [...byDate.values()].map(x => ({ ...x, ctr: x.impressions ? x.clicks / x.impressions : 0 })).sort((a, b) => a.date.localeCompare(b.date));
+    const { curr, prev } = splitWindows(daily, start, curEnd, prevStart, prevEnd);
+    return buildPayload(makeSite(url), curr, prev, days);
   });
-  return NextResponse.json({ sites: res.map((x, i) => x ?? { ...sites[i], data: [], summary: null, hasData: false }), engine });
+  return NextResponse.json({ sites: res.filter(Boolean), engine });
 }

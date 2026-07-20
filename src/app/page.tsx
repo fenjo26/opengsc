@@ -546,6 +546,7 @@ function PortfolioPageContent() {
   const [engine, setEngine] = useState<"google" | "bing" | "yandex">("google");
   const [altEngines, setAltEngines] = useState<("bing" | "yandex")[]>([]);
   const [engineCache, setEngineCache] = useState<Record<string, any[]>>({});
+  const [engineSyncedAt, setEngineSyncedAt] = useState<Record<string, number>>({});
   const [engineLoading, setEngineLoading] = useState(false);
   const [periodView, setPeriodView] = useState<PeriodView>("day");
   const [comparison, setComparison] = useState<Comparison>("previous");
@@ -636,6 +637,10 @@ function PortfolioPageContent() {
     setSyncStatus("syncing");
     setSyncWarning(null);
 
+    // Also refresh the live Bing/Yandex portfolios so "Sync" updates every engine at once
+    // and their tabs are ready (no per-tab reload). Runs in parallel with the GSC sync.
+    refreshEngines();
+
     fetch('/api/gsc/sync', { method: 'POST' })
       .then(r => r.json())
       .then(() => {
@@ -697,15 +702,24 @@ function PortfolioPageContent() {
   }, []);
 
   const engineKey = `${engine}_${period}`;
-  // Lazy-load a live Bing/Yandex portfolio when its tab is opened; cache per engine+period.
+
+  // Fetch one engine's live portfolio and cache it (by engine+period).
+  const loadEngine = (eng: "bing" | "yandex", p = period, setLoading = false) => {
+    const key = `${eng}_${p}`;
+    if (setLoading) setEngineLoading(true);
+    return fetch(`/api/gsc/portfolio-engine?engine=${eng}&period=${p}`)
+      .then(r => r.json())
+      .then(d => { if (d.sites) { setEngineCache(c => ({ ...c, [key]: d.sites })); setEngineSyncedAt(t => ({ ...t, [key]: Date.now() })); } })
+      .catch(() => {})
+      .finally(() => { if (setLoading) setEngineLoading(false); });
+  };
+  // Refresh every configured engine for the current period (used by the global Sync button).
+  const refreshEngines = (p = period) => { altEngines.forEach(eng => loadEngine(eng, p, engine === eng)); };
+
+  // Lazy-load a live Bing/Yandex portfolio when its tab is first opened.
   useEffect(() => {
     if (engine === "google" || engineCache[engineKey]) return;
-    setEngineLoading(true);
-    fetch(`/api/gsc/portfolio-engine?engine=${engine}&period=${period}`)
-      .then(r => r.json())
-      .then(d => { if (d.sites) setEngineCache(c => ({ ...c, [engineKey]: d.sites })); })
-      .catch(() => {})
-      .finally(() => setEngineLoading(false));
+    loadEngine(engine, period, true);
   }, [engine, period]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The dataset the whole dashboard renders from — Google (DB) or the active engine (cache).
@@ -1388,7 +1402,10 @@ function PortfolioPageContent() {
           <span style={{flex:1}}/>
           {engineLoading
             ? <span style={{display:"inline-flex",alignItems:"center",gap:"6px",fontSize:"12px",color:"var(--color-text-secondary)"}}><Loader2 size={13} className="spin"/> {t("dashEngineLoading")}</span>
-            : <button onClick={()=>setEngineCache(c=>{const n={...c};delete n[engineKey];return n;})} title={t("refresh")} style={{display:"inline-flex",alignItems:"center",gap:"5px",padding:"5px 11px",borderRadius:"8px",border:"1px solid var(--color-border)",background:"var(--color-card)",color:"var(--color-text-secondary)",fontSize:"12px",fontWeight:500,cursor:"pointer"}}><RefreshCw size={12}/> {t("refresh")}</button>}
+            : <>
+                {engineSyncedAt[engineKey] && <span style={{fontSize:"11px",color:"var(--color-text-secondary)"}}>{t("dashLastSync")} {new Date(engineSyncedAt[engineKey]).toLocaleTimeString("ru",{hour:"2-digit",minute:"2-digit"})}</span>}
+                <button onClick={()=>loadEngine(engine as "bing"|"yandex", period, true)} title={t("refresh")} style={{display:"inline-flex",alignItems:"center",gap:"5px",padding:"5px 11px",borderRadius:"8px",border:"1px solid var(--color-border)",background:"var(--color-card)",color:"var(--color-text-secondary)",fontSize:"12px",fontWeight:500,cursor:"pointer"}}><RefreshCw size={12}/> {t("refresh")}</button>
+              </>}
         </div>
       )}
 

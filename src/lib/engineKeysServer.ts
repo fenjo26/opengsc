@@ -37,3 +37,13 @@ export async function getOwnerSettings(ownerUserId: string): Promise<Record<stri
 export async function getOwnerEngineKey(ownerUserId: string, engine: Engine, siteId: string): Promise<string> {
   return resolveEngineKeyFromSettings(await getOwnerSettings(ownerUserId), engine, siteId);
 }
+
+// Every key/token configured for an engine (all connected accounts + the legacy global),
+// deduped — used to enumerate the engine's OWN verified sites across all accounts.
+export function listEngineKeys(settings: Record<string, any>, engine: Engine): string[] {
+  const out: string[] = [];
+  try { for (const a of JSON.parse(settings[`seoKey_${engine}_accounts_list`] || "[]")) if (a?.key) out.push(String(a.key).trim()); } catch { /* ignore */ }
+  const g = (settings[`seoKey_${engine}`] || "").trim();
+  if (g) out.push(g);
+  return [...new Set(out.filter(Boolean))];
+}
