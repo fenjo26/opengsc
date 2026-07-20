@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Loader2, Send, Eye, Trash2, AlertTriangle, Newspaper, Save, Calendar, Clock, Tag, ChevronRight, Sparkles } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
+import { useLayout } from "@/lib/LayoutContext";
 import { markdownToHtml } from "@/lib/seo/outlineFormat";
 
 // Period options — labels resolved via i18n at render (see PERIOD_LABEL keys).
@@ -24,6 +25,7 @@ const PERIODS: { value: number; key: string }[] = [
 
 export default function DigestPage() {
   const { t, language } = useLanguage() as any;
+  const { layout } = useLayout();
   const [tags, setTags] = useState<string[]>([]);
   const [telegram, setTelegram] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
@@ -118,7 +120,7 @@ export default function DigestPage() {
   });
 
   return (
-    <div style={{ maxWidth: "860px", margin: "0 auto", width: "100%", padding: "24px 16px", display: "flex", flexDirection: "column", gap: "18px" }}>
+    <div style={{ maxWidth: layout === "wide" ? "100%" : "860px", margin: "0 auto", width: "100%", padding: "24px 16px", display: "flex", flexDirection: "column", gap: "18px" }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
         <div style={{ width: 40, height: 40, borderRadius: "12px", background: "rgba(52,199,89,0.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>

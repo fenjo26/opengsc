@@ -1982,7 +1982,7 @@
   "seBingCrawlErrors": "Crawl errors",
   "seYandexProblems": "Site diagnostics (Yandex)",
   "seSetupGuide": "Setup guide",
-  "bingHowTo": "Get the key: Bing Webmaster Tools → ⚙ Settings → API access → API Key.",
+  "bingHowTo": "Bing Webmaster Tools → ⚙ Settings → API Access → pick API Key (NOT OAuth Client) → Generate API Key. Paste that single string below — one key works for all your verified sites.",
   "yandexHowTo": "Token: create the app with Webmaster permissions, then open oauth.yandex.ru/authorize?response_type=token&client_id=<ClientID> and copy the token.",
   "seAvgPosNote": "Approximation: neither Bing nor Yandex expose a sitewide daily position like GSC does. This is the impression-weighted average across the top queries shown below — good for trends, not directly comparable to the GSC number.",
   "seSqiLabel": "SQI (Yandex site quality index)",
@@ -2006,5 +2006,6 @@
   "digestDaysShort": "d",
   "strikingPageSub": "Queries ranking just off page 1 across all your sites — your fastest wins.",
   "cannibalizationPageSub": "Queries where several of your own pages compete against each other, across all sites.",
-  "decayPageSub": "Pages losing traffic over time across your whole portfolio."
+  "decayPageSub": "Pages losing traffic over time across your whole portfolio.",
+  "seEngineNoData": "Connected, but no data yet. Bing/Yandex accumulate stats over a few days after the site is verified — check back later."
 }

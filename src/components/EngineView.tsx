@@ -96,10 +96,16 @@ export default function EngineView({ engine, domain, refreshKey }: { engine: Alt
           if (cancelled) return;
           if (d.error) { setErr(String(d.error)); }
           else {
-            setSeries((d.traffic ?? []).map((r: any) => ({ date: parseBingDate(r.Date ?? r.date), clicks: r.Clicks ?? 0, impressions: r.Impressions ?? 0 })));
-            setQueries((d.queries ?? []).slice(0, 25).map((q: any) => ({ key: q.Query ?? q.query ?? "", clicks: q.Clicks ?? 0, impressions: q.Impressions ?? 0, position: q.AvgImpressionPosition ?? q.AvgClickPosition ?? undefined })));
-            setPages((d.pages ?? []).slice(0, 25).map((p: any) => ({ key: String(p.Query ?? p.Page ?? p.Url ?? "").replace(/^https?:\/\/[^/]+/, "") || "/", clicks: p.Clicks ?? 0, impressions: p.Impressions ?? 0, position: p.AvgImpressionPosition ?? undefined })));
-            setMeta({ inIndex: d.crawl?.InIndex, crawlErrors: d.crawl?.AllOtherCodes != null ? (d.crawl.Code4xx ?? 0) + (d.crawl.Code5xx ?? 0) : d.crawl?.CrawlErrors, blockedByRobots: d.crawl?.BlockedByRobotsTxt });
+            // Bing's JSON keys are PascalCase but casing/shape has drifted across API
+            // versions — read defensively (any-case) so a renamed field never blanks the view.
+            const g = (o: any, ...keys: string[]) => { for (const k of keys) { if (o?.[k] != null) return o[k]; const lk = Object.keys(o ?? {}).find(x => x.toLowerCase() === k.toLowerCase()); if (lk != null && o[lk] != null) return o[lk]; } return undefined; };
+            const num = (v: any) => { const n = Number(v); return isFinite(n) ? n : 0; };
+            setSeries((d.traffic ?? []).map((r: any) => ({ date: parseBingDate(g(r, "Date")), clicks: num(g(r, "Clicks")), impressions: num(g(r, "Impressions")) })));
+            setQueries((d.queries ?? []).slice(0, 25).map((q: any) => ({ key: String(g(q, "Query") ?? ""), clicks: num(g(q, "Clicks")), impressions: num(g(q, "Impressions")), position: g(q, "AvgImpressionPosition", "AvgClickPosition", "Position") })));
+            setPages((d.pages ?? []).slice(0, 25).map((p: any) => ({ key: String(g(p, "Query", "Page", "Url") ?? "").replace(/^https?:\/\/[^/]+/, "") || "/", clicks: num(g(p, "Clicks")), impressions: num(g(p, "Impressions")), position: g(p, "AvgImpressionPosition", "Position") })));
+            const cr = d.crawl;
+            const crawlErrors = cr ? num(g(cr, "Code4xx", "Code400")) + num(g(cr, "Code5xx", "Code500")) || g(cr, "CrawlErrors") : undefined;
+            setMeta({ inIndex: cr ? g(cr, "InIndex") : undefined, crawlErrors, blockedByRobots: cr ? g(cr, "BlockedByRobotsTxt") : undefined });
             setProblems([]);
           }
         } else {
@@ -151,6 +157,13 @@ export default function EngineView({ engine, domain, refreshKey }: { engine: Alt
         {meta.inIndex != null && <StatCard val={Number(meta.inIndex).toLocaleString()} label={t("seBingInIndex")} />}
         {meta.crawlErrors != null && <StatCard val={Number(meta.crawlErrors).toLocaleString()} label={t("seBingCrawlErrors")} />}
       </div>
+
+      {/* Empty state — connected but no data yet (e.g. freshly verified site) */}
+      {!series.length && !queries.length && (
+        <div style={{ ...card, textAlign: "center", padding: "28px", color: "var(--color-text-secondary)", fontSize: "13px" }}>
+          {t("seEngineNoData")}
+        </div>
+      )}
 
       {/* Yandex site diagnostics */}
       {problems.length > 0 && (

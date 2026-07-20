@@ -23,14 +23,21 @@ parties beyond the engine's own API.
 
 ## Bing Webmaster API
 
+> ⚠️ **Use API Key, NOT OAuth Client.** Bing offers two auth methods — OAuth 2.0
+> (Client ID + Client Secret) and a simple API Key. OpenGSC uses the **API Key** method.
+> If you generate an OAuth Client, OpenGSC has nowhere to put the Client ID/Secret — you
+> need the single API Key string instead.
+
 **Getting the key (~2 minutes):**
 
 1. Sign in to [Bing Webmaster Tools](https://www.bing.com/webmasters) and make sure your
    site is added and verified there (import from Google Search Console is the fastest way —
    Bing offers it on first login).
-2. Click the **⚙ Settings** gear (top right) → **API access** → **API Key**.
-3. Generate/copy the key and paste it into **OpenGSC → Settings → Indexing API → Bing
-   Webmaster API**.
+2. Click the **⚙ Settings** gear (top right) → **API Access**.
+3. Choose **API Key** (not *OAuth Client*), then click **Generate API Key**. One key is
+   generated per user and works for all your verified sites.
+4. Copy the key and paste it into **OpenGSC → Settings → Indexing API → Bing Webmaster API →
+   Global Default API Key**, then Save.
 
 **What OpenGSC pulls:** rank & traffic stats (clicks/impressions series), top queries with
 average impression position, top pages, and crawl stats (pages in the Bing index, 4xx/5xx
