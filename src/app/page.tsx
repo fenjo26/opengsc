@@ -547,6 +547,7 @@ function PortfolioPageContent() {
   const [altEngines, setAltEngines] = useState<("bing" | "yandex")[]>([]);
   const [engineCache, setEngineCache] = useState<Record<string, any[]>>({});
   const [engineSyncedAt, setEngineSyncedAt] = useState<Record<string, number>>({});
+  const [engineAccounts, setEngineAccounts] = useState<Record<string, { name: string }[]>>({ bing: [], yandex: [] });
   const [engineLoading, setEngineLoading] = useState(false);
   const [periodView, setPeriodView] = useState<PeriodView>("day");
   const [comparison, setComparison] = useState<Comparison>("previous");
@@ -699,6 +700,15 @@ function PortfolioPageContent() {
     if (has("bing")) list.push("bing");
     if (has("yandex")) list.push("yandex");
     setAltEngines(list);
+    // Connected accounts per engine (name from Settings), mirroring the Google accounts bar.
+    const accsOf = (e: string): { name: string }[] => {
+      let arr: any[] = [];
+      try { arr = JSON.parse(localStorage.getItem(`seoKey_${e}_accounts_list`) || "[]"); } catch { arr = []; }
+      const out = arr.filter(a => a?.key).map(a => ({ name: a.name || a.email || (e === "bing" ? "Bing" : "Yandex") }));
+      if (!out.length && localStorage.getItem(`seoKey_${e}`)) out.push({ name: "Default" });
+      return out;
+    };
+    setEngineAccounts({ bing: accsOf("bing"), yandex: accsOf("yandex") });
   }, []);
 
   const engineKey = `${engine}_${period}`;
@@ -1394,11 +1404,22 @@ function PortfolioPageContent() {
           </a>
         </div>
       )) : (
-        <div style={{marginBottom:"10px",padding:"10px 14px",borderRadius:"12px",background:"var(--color-card)",border:"1px solid var(--color-border)",display:"flex",alignItems:"center",gap:"10px",flexWrap:"wrap"}}>
-          <span style={{display:"flex",alignItems:"center",gap:"6px",fontSize:"12px",fontWeight:700,color:engine==="bing"?"#00809D":"#FC3F1D"}}>
-            {engine==="bing"?<DashBingIcon/>:<DashYandexIcon/>} {engine==="bing"?"Bing Webmaster API":"Яндекс.Вебмастер API"}
+        <div style={{marginBottom:"10px",padding:"10px 14px",borderRadius:"12px",background:"var(--color-card)",border:"1px solid var(--color-border)",display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
+          <span style={{display:"flex",alignItems:"center",gap:"6px",fontSize:"11px",fontWeight:700,color:engine==="bing"?"#00809D":"#FC3F1D",textTransform:"uppercase",letterSpacing:"0.06em",whiteSpace:"nowrap",marginRight:"2px"}}>
+            {engine==="bing"?<DashBingIcon/>:<DashYandexIcon/>} {t("googleAccountsLabel").replace(/Google/gi, engine==="bing"?"Bing":"Яндекс")}
           </span>
-          <span style={{fontSize:"11px",color:"var(--color-text-secondary)"}}>· {t("seLiveData")}</span>
+          <div style={{display:"flex",alignItems:"center",gap:"6px",padding:"4px 12px",borderRadius:"20px",fontSize:"12px",fontWeight:600,cursor:"default",border:`1px solid ${engine==="bing"?"rgba(0,128,115,0.4)":"rgba(252,63,29,0.4)"}`,background:engine==="bing"?"rgba(0,128,115,0.12)":"rgba(252,63,29,0.12)",color:engine==="bing"?"#00809D":"#FC3F1D",whiteSpace:"nowrap"}}>
+            {t("allSitesSection")} (<span style={{filter:blur?"blur(5px)":"none",transition:"filter 0.25s"}}>{activeSites.length}</span>)
+          </div>
+          {(engineAccounts[engine] || []).map((acc,i) => (
+            <div key={i} style={{display:"flex",alignItems:"center",gap:"5px",padding:"4px 10px",borderRadius:"20px",fontSize:"12px",background:"var(--color-bg-secondary,rgba(255,255,255,0.04))",border:"1px solid var(--color-border)"}}>
+              {engine==="bing"?<DashBingIcon s={12}/>:<DashYandexIcon s={12}/>}
+              <span style={{color:"var(--color-text-secondary)",maxWidth:"200px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",filter:blur?"blur(5px)":"none",transition:"filter 0.25s"}}>{acc.name}</span>
+            </div>
+          ))}
+          <a href="/settings" style={{display:"flex",alignItems:"center",gap:"4px",padding:"4px 10px",borderRadius:"20px",fontSize:"12px",fontWeight:500,color:engine==="bing"?"#00809D":"#FC3F1D",border:`1px solid ${engine==="bing"?"rgba(0,128,115,0.25)":"rgba(252,63,29,0.25)"}`,background:"transparent",textDecoration:"none",whiteSpace:"nowrap",cursor:"pointer"}}>
+            + {engine==="bing"?"Bing":"Яндекс"} {t("account")}
+          </a>
           <span style={{flex:1}}/>
           {engineLoading
             ? <span style={{display:"inline-flex",alignItems:"center",gap:"6px",fontSize:"12px",color:"var(--color-text-secondary)"}}><Loader2 size={13} className="spin"/> {t("dashEngineLoading")}</span>

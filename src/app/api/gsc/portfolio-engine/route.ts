@@ -125,16 +125,32 @@ export async function GET(req: Request) {
 
     const res = await pool(targets, 6, async ({ url, key }) => {
       const dom = clean(url);
-      const r = await fetch(`https://ssl.bing.com/webmaster/api.svc/json/GetRankAndTrafficStats?siteUrl=${encodeURIComponent(`https://${dom}/`)}&apikey=${encodeURIComponent(key)}`, { signal: AbortSignal.timeout(12_000) });
-      if (!r.ok) return { ...makeSite(url), data: [], summary: null, hasData: false };
-      const rows: any[] = (await r.json())?.d ?? [];
+      const api = (method: string) => `https://ssl.bing.com/webmaster/api.svc/json/${method}?siteUrl=${encodeURIComponent(`https://${dom}/`)}&apikey=${encodeURIComponent(key)}`;
+      // Traffic gives the daily series; query stats give a reliable avg position (the daily
+      // stats often omit it), impression-weighted like the per-site engine view.
+      const [tr, qs] = await Promise.all([
+        fetch(api("GetRankAndTrafficStats"), { signal: AbortSignal.timeout(12_000) }),
+        fetch(api("GetQueryStats"), { signal: AbortSignal.timeout(12_000) }).catch(() => null),
+      ]);
+      if (!tr.ok) return { ...makeSite(url), data: [], summary: null, hasData: false };
+      const rows: any[] = (await tr.json())?.d ?? [];
       const daily: Daily[] = rows.map(x => {
         const clicks = Number(x.Clicks) || 0, impressions = Number(x.Impressions) || 0;
         const posv = Number(x.AvgImpressionPosition ?? x.AvgClickPosition ?? 0);
         return { date: parseBingDate(x.Date), clicks, impressions, ctr: impressions ? clicks / impressions : 0, position: posv > 0 ? posv : 0 };
       }).sort((a, b) => a.date.localeCompare(b.date));
       const { curr, prev } = splitWindows(daily, start, curEnd, prevStart, prevEnd);
-      return buildPayload(makeSite(url), curr, prev, days);
+      const payload = buildPayload(makeSite(url), curr, prev, days);
+      // Fallback avg position from query stats when the daily series carried none.
+      if (payload.summary && !payload.summary.position.value && qs && qs.ok) {
+        try {
+          const qd: any[] = (await qs.json())?.d ?? [];
+          let ws = 0, wi = 0;
+          for (const q of qd) { const p = Number(q.AvgImpressionPosition ?? q.AvgClickPosition ?? 0); const im = Number(q.Impressions) || 0; if (p > 0 && im > 0) { ws += p * im; wi += im; } }
+          if (wi > 0) payload.summary.position.value = +(ws / wi).toFixed(1);
+        } catch { /* ignore */ }
+      }
+      return payload;
     });
     return NextResponse.json({ sites: res.filter(Boolean), engine });
   }
