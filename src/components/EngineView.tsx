@@ -12,6 +12,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { Loader2, AlertTriangle } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { severityMeta, problemLabel } from "@/lib/yandexDiagnostics";
+import { resolveEngineKey } from "@/lib/engineKeys";
 
 export type AltEngine = "bing" | "yandex";
 
@@ -71,7 +72,7 @@ function RowsTable({ title, rows, keyLabel, t }: { title: string; rows: Row[]; k
   );
 }
 
-export default function EngineView({ engine, domain, refreshKey }: { engine: AltEngine; domain: string; refreshKey: number }) {
+export default function EngineView({ engine, domain, siteDbId, refreshKey }: { engine: AltEngine; domain: string; siteDbId: string; refreshKey: number }) {
   const { t, language } = useLanguage() as any;
   const lang = (language === "ru" || language === "uk" ? language : "en") as "en" | "ru" | "uk";
   const [loading, setLoading] = useState(true);
@@ -91,7 +92,8 @@ export default function EngineView({ engine, domain, refreshKey }: { engine: Alt
       setLoading(true); setErr("");
       try {
         if (engine === "bing") {
-          const apiKey = localStorage.getItem("seoKey_bing") || "";
+          const apiKey = resolveEngineKey("bing", siteDbId);
+          if (!apiKey) { setErr(t("seNeedKey")); setLoading(false); return; }
           const d = await fetch(`/api/indexing/bing?siteUrl=${encodeURIComponent(`https://${cleanDomain}/`)}&apiKey=${encodeURIComponent(apiKey)}`).then(r => r.json());
           if (cancelled) return;
           if (d.error) { setErr(String(d.error)); }
@@ -109,7 +111,8 @@ export default function EngineView({ engine, domain, refreshKey }: { engine: Alt
             setProblems([]);
           }
         } else {
-          const token = localStorage.getItem("seoKey_yandex") || "";
+          const token = resolveEngineKey("yandex", siteDbId);
+          if (!token) { setErr(t("seNeedToken")); setLoading(false); return; }
           const d = await fetch(`/api/indexing/yandex?siteUrl=${encodeURIComponent(cleanDomain)}&token=${encodeURIComponent(token)}&days=56`).then(r => r.json());
           if (cancelled) return;
           if (d.error) { setErr(d.error === "host_not_found" ? t("seYandexHostNotFound") : d.error === "host_not_verified" ? t("seYandexHostNotVerified") : String(d.error)); }

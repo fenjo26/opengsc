@@ -419,9 +419,13 @@ pm2 status             # status of all processes
 
 ### Updating to a new version
 
+**From the UI (easiest):** when a newer version is on `main`, a **"New version available"** bar appears at the top of the dashboard. Click **Update** → **Start update** and OpenGSC runs the whole upgrade on your server (fetch, install, migrate, rebuild, restart), streaming the log live; when it's done it prompts a page reload. The update button is owner-only and never shown to guests.
+
+**By hand (or for Docker):**
+
 ```bash
 cd /root/opengsc
-git pull
+git pull            # or: bash update.sh  (does everything below in one step)
 npm install
 npx prisma db push
 npm run build

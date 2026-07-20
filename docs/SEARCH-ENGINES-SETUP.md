@@ -36,8 +36,9 @@ parties beyond the engine's own API.
 2. Click the **⚙ Settings** gear (top right) → **API Access**.
 3. Choose **API Key** (not *OAuth Client*), then click **Generate API Key**. One key is
    generated per user and works for all your verified sites.
-4. Copy the key and paste it into **OpenGSC → Settings → Indexing API → Bing Webmaster API →
-   Global Default API Key**, then Save.
+4. Copy the key and add it in **OpenGSC → Settings → Indexing API → Bing Webmaster** as a
+   connected account (an optional name + the key). If you manage several Bing accounts, add
+   each one; then pick which account a site uses in that site's **Indexing** tab.
 
 **What OpenGSC pulls:** rank & traffic stats (clicks/impressions series), top queries with
 average impression position, top pages, and crawl stats (pages in the Bing index, 4xx/5xx

@@ -75,12 +75,38 @@ interface SearchEngineAccount {
   key: string;
 }
 
+// Collapsible step-by-step setup guide, shown above the Bing/Yandex account managers.
+function EngineHowTo({ color, steps, note, docHref, linkHref, linkLabel }: { color: string; steps: string[]; note?: string; docHref: string; linkHref: string; linkLabel: string }) {
+  const { t } = useLanguage();
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ border: `1px solid ${color}30`, background: `${color}0d`, borderRadius: "10px", overflow: "hidden" }}>
+      <button onClick={() => setOpen(o => !o)} style={{ width: "100%", display: "flex", alignItems: "center", gap: "8px", padding: "10px 14px", background: "transparent", border: "none", cursor: "pointer", color: "var(--color-text-primary)", fontSize: "13px", fontWeight: 600 }}>
+        <span style={{ color }}>💡</span> {t("seHowToTitle")}
+        <span style={{ flex: 1 }} />
+        <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s", color: "var(--color-text-secondary)" }} />
+      </button>
+      {open && (
+        <div style={{ padding: "0 16px 14px 16px" }}>
+          <ol style={{ margin: 0, paddingLeft: "18px", fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: 1.7 }}>
+            {steps.map((s, i) => <li key={i}>{s}</li>)}
+          </ol>
+          {note && <div style={{ marginTop: "8px", fontSize: "12px", color: "#f59e0b", fontWeight: 600 }}>⚠️ {note}</div>}
+          <div style={{ marginTop: "10px", display: "flex", gap: "14px", flexWrap: "wrap" }}>
+            <a href={linkHref} target="_blank" rel="noreferrer" style={{ fontSize: "12px", color: "var(--color-accent-blue)", fontWeight: 600 }}>{linkLabel} ↗</a>
+            <a href={docHref} target="_blank" rel="noreferrer" style={{ fontSize: "12px", color: "var(--color-accent-blue)", fontWeight: 600 }}>{t("seSetupGuide")} ↗</a>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function BingAccountsManager() {
+  const { t } = useLanguage();
   const [accounts, setAccounts] = useState<SearchEngineAccount[]>([]);
   const [newName, setNewName] = useState("");
   const [newKey, setNewKey] = useState("");
-  const [globalKey, setGlobalKey] = useState("");
-  const [globalSaved, setGlobalSaved] = useState(false);
 
   useEffect(() => {
     try {
@@ -88,12 +114,12 @@ function BingAccountsManager() {
     } catch (e) {
       setAccounts([]);
     }
-    setGlobalKey(localStorage.getItem("seoKey_bing") || "");
   }, []);
 
   const addAccount = () => {
-    if (!newName.trim() || !newKey.trim()) return;
-    const newList = [...accounts, { id: Math.random().toString(36).slice(2, 9), name: newName.trim(), key: newKey.trim() }];
+    if (!newKey.trim()) return;
+    const name = newName.trim() || `Bing ${accounts.length + 1}`;
+    const newList = [...accounts, { id: Math.random().toString(36).slice(2, 9), name, key: newKey.trim() }];
     setAccounts(newList);
     localStorage.setItem("seoKey_bing_accounts_list", JSON.stringify(newList));
     setNewName("");
@@ -106,34 +132,19 @@ function BingAccountsManager() {
     localStorage.setItem("seoKey_bing_accounts_list", JSON.stringify(newList));
   };
 
-  const saveGlobal = () => {
-    if (globalKey.trim()) localStorage.setItem("seoKey_bing", globalKey.trim());
-    else localStorage.removeItem("seoKey_bing");
-    setGlobalSaved(true);
-    setTimeout(() => setGlobalSaved(false), 2000);
-  };
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "14px", width: "100%", marginTop: "14px" }}>
-      <div style={{ borderBottom: "1px solid var(--color-border)", paddingBottom: "14px" }}>
-        <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "6px", color: "var(--color-text-primary)" }}>Global Default API Key</div>
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-          <input
-            type="password" value={globalKey} onChange={e => { setGlobalKey(e.target.value); setGlobalSaved(false); }}
-            placeholder="Global Bing API key fallback..."
-            style={{ width: "260px", padding: "8px 11px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "13px", outline: "none" }}
-          />
-          <button onClick={saveGlobal}
-            style={{ padding: "8px 14px", borderRadius: "8px", border: "1px solid var(--color-border)", background: globalSaved ? "rgba(52,199,89,0.12)" : "var(--color-bg)", color: globalSaved ? "var(--color-accent-green)" : "var(--color-text-primary)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
-            {globalSaved ? "✓" : "Save"}
-          </button>
-        </div>
-      </div>
-
+      <EngineHowTo
+        color="#00809D"
+        steps={[t("bingStep1"), t("bingStep2"), t("bingStep3")]}
+        note={t("bingStepWarn")}
+        docHref="https://github.com/fenjo26/opengsc/blob/main/docs/SEARCH-ENGINES-SETUP.md"
+        linkHref="https://www.bing.com/webmasters" linkLabel="bing.com/webmasters"
+      />
       <div>
-        <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "8px", color: "var(--color-text-primary)" }}>Connected Bing Accounts ({accounts.length})</div>
+        <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "8px", color: "var(--color-text-primary)" }}>{t("seAccountsBing")} ({accounts.length})</div>
         {accounts.length === 0 ? (
-          <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "10px" }}>No accounts connected yet. Add one below to segregate sites.</div>
+          <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "10px" }}>{t("seAccountsEmpty")}</div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "10px" }}>
             {accounts.map(acc => (
@@ -150,14 +161,14 @@ function BingAccountsManager() {
 
         <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", background: "rgba(255,255,255,0.02)", padding: "10px", borderRadius: "8px", border: "1px dashed var(--color-border)" }}>
           <div style={{ flex: 1 }}>
-            <label style={{ fontSize: "11px", color: "var(--color-text-secondary)", display: "block", marginBottom: "4px" }}>Account Name</label>
+            <label style={{ fontSize: "11px", color: "var(--color-text-secondary)", display: "block", marginBottom: "4px" }}>{t("seAccountNameOpt")}</label>
             <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. White Sites" style={{ width: "100%", padding: "7px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "12px", outline: "none" }} />
           </div>
           <div style={{ flex: 2 }}>
             <label style={{ fontSize: "11px", color: "var(--color-text-secondary)", display: "block", marginBottom: "4px" }}>API Key</label>
             <input type="password" value={newKey} onChange={e => setNewKey(e.target.value)} placeholder="Bing API key..." style={{ width: "100%", padding: "7px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "12px", outline: "none" }} />
           </div>
-          <button onClick={addAccount} disabled={!newName.trim() || !newKey.trim()} style={{ padding: "8px 14px", borderRadius: "6px", border: "none", background: "var(--color-accent-blue)", color: "#fff", fontSize: "12px", fontWeight: 600, cursor: "pointer", opacity: (newName.trim() && newKey.trim()) ? 1 : 0.5 }}>Add</button>
+          <button onClick={addAccount} disabled={!newKey.trim()} style={{ padding: "8px 14px", borderRadius: "6px", border: "none", background: "var(--color-accent-blue)", color: "#fff", fontSize: "12px", fontWeight: 600, cursor: "pointer", opacity: newKey.trim() ? 1 : 0.5 }}>{t("seAdd")}</button>
         </div>
       </div>
     </div>
@@ -165,11 +176,10 @@ function BingAccountsManager() {
 }
 
 function YandexAccountsManager() {
+  const { t } = useLanguage();
   const [accounts, setAccounts] = useState<SearchEngineAccount[]>([]);
   const [newName, setNewName] = useState("");
   const [newKey, setNewKey] = useState("");
-  const [globalKey, setGlobalKey] = useState("");
-  const [globalSaved, setGlobalSaved] = useState(false);
 
   useEffect(() => {
     try {
@@ -177,12 +187,12 @@ function YandexAccountsManager() {
     } catch (e) {
       setAccounts([]);
     }
-    setGlobalKey(localStorage.getItem("seoKey_yandex") || "");
   }, []);
 
   const addAccount = () => {
-    if (!newName.trim() || !newKey.trim()) return;
-    const newList = [...accounts, { id: Math.random().toString(36).slice(2, 9), name: newName.trim(), key: newKey.trim() }];
+    if (!newKey.trim()) return;
+    const name = newName.trim() || `Yandex ${accounts.length + 1}`;
+    const newList = [...accounts, { id: Math.random().toString(36).slice(2, 9), name, key: newKey.trim() }];
     setAccounts(newList);
     localStorage.setItem("seoKey_yandex_accounts_list", JSON.stringify(newList));
     setNewName("");
@@ -195,34 +205,18 @@ function YandexAccountsManager() {
     localStorage.setItem("seoKey_yandex_accounts_list", JSON.stringify(newList));
   };
 
-  const saveGlobal = () => {
-    if (globalKey.trim()) localStorage.setItem("seoKey_yandex", globalKey.trim());
-    else localStorage.removeItem("seoKey_yandex");
-    setGlobalSaved(true);
-    setTimeout(() => setGlobalSaved(false), 2000);
-  };
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "14px", width: "100%", marginTop: "14px" }}>
-      <div style={{ borderBottom: "1px solid var(--color-border)", paddingBottom: "14px" }}>
-        <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "6px", color: "var(--color-text-primary)" }}>Global Default OAuth Token</div>
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-          <input
-            type="password" value={globalKey} onChange={e => { setGlobalKey(e.target.value); setGlobalSaved(false); }}
-            placeholder="Global Yandex token fallback..."
-            style={{ width: "260px", padding: "8px 11px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "13px", outline: "none" }}
-          />
-          <button onClick={saveGlobal}
-            style={{ padding: "8px 14px", borderRadius: "8px", border: "1px solid var(--color-border)", background: globalSaved ? "rgba(52,199,89,0.12)" : "var(--color-bg)", color: globalSaved ? "var(--color-accent-green)" : "var(--color-text-primary)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
-            {globalSaved ? "✓" : "Save"}
-          </button>
-        </div>
-      </div>
-
+      <EngineHowTo
+        color="#FC3F1D"
+        steps={[t("yandexStep1"), t("yandexStep2"), t("yandexStep3"), t("yandexStep4")]}
+        docHref="https://github.com/fenjo26/opengsc/blob/main/docs/SEARCH-ENGINES-SETUP.md"
+        linkHref="https://oauth.yandex.ru" linkLabel="oauth.yandex.ru"
+      />
       <div>
-        <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "8px", color: "var(--color-text-primary)" }}>Connected Yandex Accounts ({accounts.length})</div>
+        <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "8px", color: "var(--color-text-primary)" }}>{t("seAccountsYandex")} ({accounts.length})</div>
         {accounts.length === 0 ? (
-          <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "10px" }}>No accounts connected yet. Add one below to segregate sites.</div>
+          <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "10px" }}>{t("seAccountsEmpty")}</div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "10px" }}>
             {accounts.map(acc => (
@@ -239,14 +233,14 @@ function YandexAccountsManager() {
 
         <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", background: "rgba(255,255,255,0.02)", padding: "10px", borderRadius: "8px", border: "1px dashed var(--color-border)" }}>
           <div style={{ flex: 1 }}>
-            <label style={{ fontSize: "11px", color: "var(--color-text-secondary)", display: "block", marginBottom: "4px" }}>Account Name</label>
+            <label style={{ fontSize: "11px", color: "var(--color-text-secondary)", display: "block", marginBottom: "4px" }}>{t("seAccountNameOpt")}</label>
             <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. White Sites" style={{ width: "100%", padding: "7px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "12px", outline: "none" }} />
           </div>
           <div style={{ flex: 2 }}>
             <label style={{ fontSize: "11px", color: "var(--color-text-secondary)", display: "block", marginBottom: "4px" }}>OAuth Token</label>
             <input type="password" value={newKey} onChange={e => setNewKey(e.target.value)} placeholder="Yandex token..." style={{ width: "100%", padding: "7px 10px", borderRadius: "6px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-primary)", fontSize: "12px", outline: "none" }} />
           </div>
-          <button onClick={addAccount} disabled={!newName.trim() || !newKey.trim()} style={{ padding: "8px 14px", borderRadius: "6px", border: "none", background: "var(--color-accent-blue)", color: "#fff", fontSize: "12px", fontWeight: 600, cursor: "pointer", opacity: (newName.trim() && newKey.trim()) ? 1 : 0.5 }}>Add</button>
+          <button onClick={addAccount} disabled={!newKey.trim()} style={{ padding: "8px 14px", borderRadius: "6px", border: "none", background: "var(--color-accent-blue)", color: "#fff", fontSize: "12px", fontWeight: 600, cursor: "pointer", opacity: newKey.trim() ? 1 : 0.5 }}>{t("seAdd")}</button>
         </div>
       </div>
     </div>

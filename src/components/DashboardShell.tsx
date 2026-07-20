@@ -8,6 +8,7 @@ import { usePrivacy } from "@/lib/PrivacyContext";
 import { useTheme } from "@/lib/ThemeContext";
 import { useLayout } from "@/lib/LayoutContext";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
+import UpdateBanner from "@/components/UpdateBanner";
 
 // ─── Popup menu helpers ───────────────────────────────────────────────────────
 function MenuItem({ icon, label, onClick }: { icon: string; label: string; onClick?: () => void }) {
@@ -721,6 +722,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
       <TopBar />
+      <UpdateBanner />
       <main style={{
         flex: 1,
         overflow: "auto",

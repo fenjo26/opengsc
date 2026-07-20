@@ -16,23 +16,35 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Missing siteUrl or apiKey" }, { status: 400 });
   }
 
-  try {
-    // 1. Get Rank and Traffic Stats
-    const trafficRes = await fetch(
-      `https://ssl.bing.com/webmaster/api.svc/json/GetRankAndTrafficStats?siteUrl=${encodeURIComponent(siteUrl)}&apikey=${encodeURIComponent(apiKey)}`,
-      { signal: AbortSignal.timeout(10000) }
-    );
-    let trafficData = null;
-    if (trafficRes.ok) {
-      const json = await trafficRes.json();
-      trafficData = json.d || [];
+  const api = (method: string) =>
+    `https://ssl.bing.com/webmaster/api.svc/json/${method}?siteUrl=${encodeURIComponent(siteUrl)}&apikey=${encodeURIComponent(apiKey)}`;
+
+  // Bing returns errors as HTTP 400 with { ErrorCode, Message } (e.g. InvalidApiKey,
+  // InvalidSiteUrl). Surface them instead of silently returning empty data.
+  async function bingErrorFrom(res: Response): Promise<string> {
+    const raw = await res.text().catch(() => "");
+    try {
+      const j = JSON.parse(raw);
+      const msg = j?.Message || j?.message || raw;
+      // Friendlier hint for the most common cause (wrong key type / bad key).
+      if (/invalidapikey/i.test(String(msg))) return "Bing: InvalidApiKey — check you pasted an API Key (Bing → Settings → API Access → API Key), not an OAuth Client ID.";
+      if (/invalidsiteurl/i.test(String(msg))) return `Bing: InvalidSiteUrl — this exact URL (${siteUrl}) isn't a verified site in this Bing account.`;
+      return `Bing ${res.status}: ${String(msg).slice(0, 200)}`;
+    } catch {
+      return `Bing ${res.status}: ${raw.slice(0, 200) || "request failed"}`;
     }
+  }
+
+  try {
+    // 1. Get Rank and Traffic Stats (PRIMARY — its error is the whole call's error)
+    const trafficRes = await fetch(api("GetRankAndTrafficStats"), { signal: AbortSignal.timeout(10000) });
+    if (!trafficRes.ok) {
+      return NextResponse.json({ error: await bingErrorFrom(trafficRes) }, { status: 200 });
+    }
+    const trafficData = (await trafficRes.json()).d || [];
 
     // 2. Get Query Stats (Top queries)
-    const queryRes = await fetch(
-      `https://ssl.bing.com/webmaster/api.svc/json/GetQueryStats?siteUrl=${encodeURIComponent(siteUrl)}&apikey=${encodeURIComponent(apiKey)}`,
-      { signal: AbortSignal.timeout(10000) }
-    );
+    const queryRes = await fetch(api("GetQueryStats"), { signal: AbortSignal.timeout(10000) });
     let queryData = null;
     if (queryRes.ok) {
       const json = await queryRes.json();
@@ -42,20 +54,14 @@ export async function GET(req: Request) {
     // 3. Top pages (GetPageStats) — best-effort, some accounts/sites don't expose it
     let pageData = null;
     try {
-      const pageRes = await fetch(
-        `https://ssl.bing.com/webmaster/api.svc/json/GetPageStats?siteUrl=${encodeURIComponent(siteUrl)}&apikey=${encodeURIComponent(apiKey)}`,
-        { signal: AbortSignal.timeout(10000) }
-      );
+      const pageRes = await fetch(api("GetPageStats"), { signal: AbortSignal.timeout(10000) });
       if (pageRes.ok) pageData = (await pageRes.json()).d || [];
     } catch { /* optional */ }
 
     // 4. Crawl stats (pages in index, crawl errors) — best-effort
     let crawlData = null;
     try {
-      const crawlRes = await fetch(
-        `https://ssl.bing.com/webmaster/api.svc/json/GetCrawlStats?siteUrl=${encodeURIComponent(siteUrl)}&apikey=${encodeURIComponent(apiKey)}`,
-        { signal: AbortSignal.timeout(10000) }
-      );
+      const crawlRes = await fetch(api("GetCrawlStats"), { signal: AbortSignal.timeout(10000) });
       if (crawlRes.ok) {
         const arr = (await crawlRes.json()).d || [];
         crawlData = Array.isArray(arr) && arr.length ? arr[arr.length - 1] : null; // latest day

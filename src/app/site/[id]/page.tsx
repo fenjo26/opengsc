@@ -3962,9 +3962,15 @@ export default function SitePage({
   const [engineRefresh, setEngineRefresh] = useState(0); // bumped by Sync to refetch live views
   const [altEngines, setAltEngines] = useState<AltEngine[]>([]);
   useEffect(() => {
+    // An engine is available if a global key OR at least one connected account exists.
+    const has = (eng: string) => {
+      if (localStorage.getItem(`seoKey_${eng}`)) return true;
+      try { return (JSON.parse(localStorage.getItem(`seoKey_${eng}_accounts_list`) || "[]") as any[]).length > 0; }
+      catch { return false; }
+    };
     const list: AltEngine[] = [];
-    if (localStorage.getItem("seoKey_bing")) list.push("bing");
-    if (localStorage.getItem("seoKey_yandex")) list.push("yandex");
+    if (has("bing")) list.push("bing");
+    if (has("yandex")) list.push("yandex");
     setAltEngines(list);
   }, []);
   const aioChartData = useMemo(() => {
@@ -4263,7 +4269,7 @@ export default function SitePage({
 
         {/* Main chart — GSC (local) or a live Bing/Yandex view */}
         {engine !== "google" ? (
-          <EngineView engine={engine} domain={domain} refreshKey={engineRefresh} />
+          <EngineView engine={engine} domain={domain} siteDbId={siteDbId} refreshKey={engineRefresh} />
         ) : (
         <div style={{ background: "var(--color-card)", borderRadius: "12px", padding: "16px", border: "1px solid var(--color-border)" }}>
           <ResponsiveContainer width="100%" height={300}>
