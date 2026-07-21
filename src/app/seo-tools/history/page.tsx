@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Eye, Trash2, FileText, ScrollText, BarChart3, LayoutTemplate, Loader2, AlertTriangle, X, Boxes } from "lucide-react";
+import { Search, Eye, Trash2, FileText, ScrollText, BarChart3, LayoutTemplate, Loader2, AlertTriangle, X, Boxes, Bot } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { loadHistory, removeHistory, clearHistory, HistoryItem, HistoryType } from "@/lib/seo/history";
 import { listJobs, importJob, deleteJob, clearFailedJobs, SeoJobRec } from "@/lib/seo/jobs";
@@ -13,9 +13,10 @@ const TYPE_META: Record<HistoryType, { labelKey: string; color: string; icon: an
   analysis: { labelKey: "seoBadgeAnalysis", color: "#ff9f0a", icon: BarChart3 },
   landing: { labelKey: "seoBadgeLanding", color: "#bf5af2", icon: LayoutTemplate },
   cluster: { labelKey: "seoBadgeCluster", color: "#34c759", icon: Boxes },
+  googlebot: { labelKey: "seoBadgeGooglebot", color: "#4285F4", icon: Bot },
 };
 
-type Filter = "all" | "done" | "progress" | "outline" | "text" | "analysis" | "landing" | "cluster";
+type Filter = "all" | "done" | "progress" | "outline" | "text" | "analysis" | "landing" | "cluster" | "googlebot";
 
 export default function HistoryPage() {
   const { t } = useLanguage();
@@ -58,14 +59,14 @@ export default function HistoryPage() {
   const visibleJobs = useMemo(() => jobs.filter(j => {
     if (filter === "done") return false;
     if (filter === "progress") return j.status === "processing";
-    if (filter === "outline" || filter === "text" || filter === "analysis" || filter === "landing") return j.type === filter;
+    if (filter === "outline" || filter === "text" || filter === "analysis" || filter === "landing" || filter === "cluster" || filter === "googlebot") return j.type === filter;
     if (q.trim()) return j.keyword.toLowerCase().includes(q.toLowerCase());
     return true;
   }), [jobs, filter, q]);
 
   const filtered = useMemo(() => {
     let list = items;
-    if (filter === "outline" || filter === "text" || filter === "analysis" || filter === "landing") list = list.filter(i => i.type === filter);
+    if (filter === "outline" || filter === "text" || filter === "analysis" || filter === "landing" || filter === "cluster" || filter === "googlebot") list = list.filter(i => i.type === filter);
     if (filter === "done") list = list.filter(i => i.status === "completed");
     if (filter === "progress") list = list.filter(i => i.status === "processing");
     if (q.trim()) list = list.filter(i => i.keyword.toLowerCase().includes(q.toLowerCase()));
@@ -85,6 +86,7 @@ export default function HistoryPage() {
     { key: "text", label: t("seoHistFilterTexts") },
     { key: "analysis", label: t("seoHistFilterAnalyses") },
     { key: "landing", label: t("seoHistFilterLanding") },
+    { key: "googlebot", label: t("seoHistFilterGooglebot") },
   ];
 
   return (

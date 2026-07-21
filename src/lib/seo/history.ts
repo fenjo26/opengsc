@@ -2,7 +2,7 @@
 // Stored in localStorage — same browser-only convention as keys/policies.
 "use client";
 
-export type HistoryType = "outline" | "text" | "analysis" | "landing" | "cluster";
+export type HistoryType = "outline" | "text" | "analysis" | "landing" | "cluster" | "googlebot";
 export type HistoryStatus = "processing" | "completed" | "error";
 
 export interface HistoryItem {

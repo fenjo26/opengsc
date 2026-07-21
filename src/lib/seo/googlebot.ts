@@ -53,8 +53,9 @@ export interface SeoSignals {
 }
 
 export interface ViewResult {
-  ua: UaKey;
+  ua: string;
   ok: boolean;
+  rendered?: boolean; // true = JS-executed render via Firecrawl (not a raw fetch)
   blocked?: boolean; // 403/429 — site rejects a fake bot
   hops: Hop[];
   finalUrl: string;
@@ -81,10 +82,18 @@ export interface CloakingDiff {
   flags: string[];
 }
 
+export interface WaybackSnapshot {
+  available: boolean;
+  url?: string; // archived snapshot URL
+  timestamp?: string; // YYYYMMDDhhmmss
+}
+
 export interface AnalyzeResult {
   url: string;
   views: ViewResult[];
   diff: CloakingDiff;
+  renderedDiff?: CloakingDiff; // separate verdict for the JS-rendered views
+  wayback?: WaybackSnapshot | null;
 }
 
 // ─── HTML helpers (mirror scrape.ts) ─────────────────────────────────────────
@@ -293,7 +302,7 @@ export async function followChain(startUrl: string, ua: UaKey, opts?: { referer?
   }
 }
 
-function blankView(ua: UaKey, url: string, status: number, hops: Hop[], error: string): ViewResult {
+function blankView(ua: string, url: string, status: number, hops: Hop[], error: string): ViewResult {
   return {
     ua, ok: false, hops, finalUrl: url, finalStatus: status,
     headers: {},
@@ -334,8 +343,69 @@ function safeHost(u: string): string {
   try { return new URL(u).host.toLowerCase(); } catch { return ""; }
 }
 
+// ─── JS render via Firecrawl ─────────────────────────────────────────────────
+// Raw fetch (followChain) doesn't run JavaScript, so it misses JS-based cloaking — where the
+// server sends identical HTML to everyone and the swap happens in the browser via JS. Firecrawl
+// renders the page in a headless browser with the User-Agent we pass, so we can diff the
+// *rendered* DOM (Googlebot-UA vs browser-UA) and catch that class of cloaking.
+export async function renderWithFirecrawl(url: string, uaKey: UaKey, label: string, firecrawlKey: string): Promise<ViewResult> {
+  try {
+    const res = await fetch("https://api.firecrawl.dev/v1/scrape", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${firecrawlKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url,
+        formats: ["html"],
+        onlyMainContent: false,
+        mobile: uaKey === "gbMobile",
+        headers: { "User-Agent": UA[uaKey] },
+        waitFor: 2500,
+      }),
+      signal: AbortSignal.timeout(45000),
+    });
+    if (!res.ok) throw new Error(`firecrawl ${res.status}`);
+    const data = await res.json();
+    const html: string = data?.data?.html ?? "";
+    if (!html) throw new Error("empty_render");
+    const signals = parseSeoSignals(url, html);
+    const bodyText = stripTags(html);
+    const wordCount = bodyText ? bodyText.split(/\s+/).filter(Boolean).length : 0;
+    return {
+      ua: label, ok: true, rendered: true,
+      hops: [{ url, status: 200 }],
+      finalUrl: url, finalStatus: 200,
+      headers: {},
+      signals,
+      bodyHash: createHash("sha1").update(bodyText).digest("hex"),
+      wordCount,
+      bodyText: bodyText.slice(0, MAX_TEXT_RETURN),
+      htmlRaw: html.slice(0, MAX_HTML_RETURN),
+    };
+  } catch (e: any) {
+    const v = blankView(label, url, 0, [], e?.message ?? "render_failed");
+    v.rendered = true;
+    return v;
+  }
+}
+
+// ─── Wayback (archive.org) — latest snapshot ─────────────────────────────────
+export async function getWayback(url: string): Promise<WaybackSnapshot | null> {
+  try {
+    const res = await fetch(`https://archive.org/wayback/available?url=${encodeURIComponent(url)}`, {
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return { available: false };
+    const data = await res.json();
+    const snap = data?.archived_snapshots?.closest;
+    if (snap?.available && snap.url) return { available: true, url: snap.url, timestamp: snap.timestamp };
+    return { available: false };
+  } catch {
+    return null;
+  }
+}
+
 // ─── Orchestrator ────────────────────────────────────────────────────────────
-export async function analyzeUrl(url: string, opts?: { desktop?: boolean; referer?: boolean }): Promise<AnalyzeResult> {
+export async function analyzeUrl(url: string, opts?: { desktop?: boolean; referer?: boolean; firecrawlKey?: string; wayback?: boolean }): Promise<AnalyzeResult> {
   const views: ViewResult[] = [];
   const gbMobile = await followChain(url, "gbMobile");
   const chrome = await followChain(url, "chrome");
@@ -343,10 +413,30 @@ export async function analyzeUrl(url: string, opts?: { desktop?: boolean; refere
   if (opts?.desktop) views.push(await followChain(url, "gbDesktop"));
   if (opts?.referer) {
     const gbRef = await followChain(url, "gbMobile", { referer: true });
-    gbRef.ua = "gbMobile";
+    gbRef.ua = "gbReferer";
     views.push(gbRef);
   }
 
   const diff = diffViews(gbMobile, chrome);
-  return { url, views, diff };
+
+  // JS-rendered diff (optional, needs a Firecrawl key)
+  let renderedDiff: CloakingDiff | undefined;
+  if (opts?.firecrawlKey) {
+    const gbRender = await renderWithFirecrawl(url, "gbMobile", "gbRender", opts.firecrawlKey);
+    const brRender = await renderWithFirecrawl(url, "chrome", "browserRender", opts.firecrawlKey);
+    views.push(gbRender, brRender);
+    if (gbRender.ok && brRender.ok) {
+      renderedDiff = diffViews(gbRender, brRender);
+      // Fold rendered findings into the headline verdict
+      if (renderedDiff.score > 0) {
+        diff.flags.push(...renderedDiff.flags.map(f => `${f} (JS-рендер)`));
+        diff.score = Math.min(100, Math.max(diff.score, renderedDiff.score));
+        diff.verdict = diff.score >= 50 ? "cloaking" : diff.score >= 20 ? "suspicious" : "clean";
+      }
+    }
+  }
+
+  const wayback = opts?.wayback ? await getWayback(url) : null;
+
+  return { url, views, diff, renderedDiff, wayback };
 }

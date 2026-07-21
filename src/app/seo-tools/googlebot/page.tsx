@@ -5,10 +5,12 @@
 // For your OWN verified GSC sites, a "True Google View" panel adds Google's real verdict
 // (googleCanonical vs userCanonical). See docs/GOOGLEBOT-VIEW-SPEC.md.
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Loader2, AlertTriangle, Bot, Monitor, ShieldCheck, ShieldAlert, ShieldX, ArrowRight, Globe, CheckCircle2, ExternalLink } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
+import { addHistory, getHistoryItem } from "@/lib/seo/history";
+import { getFirecrawlKey } from "@/lib/seo/keys";
 
 const card = "panel";
 const inputStyle = "tool-input";
@@ -19,38 +21,95 @@ type Signals = { canonicalHtml?: string; metaRobots?: string; hreflang: { lang: 
 type View = { ua: string; ok: boolean; blocked?: boolean; hops: Hop[]; finalUrl: string; finalStatus: number; headers: Record<string, string | undefined>; signals: Signals; wordCount: number; bodyText: string; htmlRaw: string; error?: string };
 type Diff = { verdict: "clean" | "suspicious" | "cloaking"; score: number; flags: string[] };
 type Gsc = { verdict?: string | null; coverageState?: string | null; indexingState?: string | null; robotsTxtState?: string | null; pageFetchState?: string | null; crawledAs?: string | null; googleCanonical?: string | null; userCanonical?: string | null; lastCrawlTime?: string | null };
-type Result = { url: string; views: View[]; diff: Diff; ownSite?: { id: string; url: string } | null; gsc?: Gsc | null };
+type Result = { url: string; views: View[]; diff: Diff; ownSite?: { id: string; url: string } | null; gsc?: Gsc | null; wayback?: { available: boolean; url?: string; timestamp?: string } | null };
 
-const UA_LABEL: Record<string, string> = { gbMobile: "Googlebot (mobile)", gbDesktop: "Googlebot (desktop)", chrome: "Browser" };
+const UA_LABEL: Record<string, string> = {
+  gbMobile: "Googlebot (mobile)",
+  gbDesktop: "Googlebot (desktop)",
+  chrome: "Browser",
+  gbRender: "Googlebot (JS-render)",
+  browserRender: "Browser (JS-render)",
+};
 
 export default function GooglebotViewPage() {
   const { t } = useLanguage();
   const [url, setUrl] = useState("");
   const [desktop, setDesktop] = useState(false);
   const [referer, setReferer] = useState(false);
+  const [firecrawl, setFirecrawl] = useState(false);
+  const [wayback, setWayback] = useState(false);
+  const [compareMode, setCompareMode] = useState<"raw" | "js">("raw");
   const [running, setRunning] = useState(false);
   const [err, setErr] = useState("");
   const [res, setRes] = useState<Result | null>(null);
   const [viewIdx, setViewIdx] = useState(0);
   const [mode, setMode] = useState<"preview" | "text" | "html">("preview");
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const historyId = params.get("historyId");
+      if (historyId) {
+        const item = getHistoryItem(historyId);
+        if (item && item.type === "googlebot") {
+          setRes(item.data);
+          setUrl(item.data.url);
+          const hasJsRender = item.data.views.some((v: any) => v.ua === "gbRender" || v.ua === "browserRender");
+          if (hasJsRender) {
+            setFirecrawl(true);
+            setCompareMode("js");
+          }
+          if (item.data.wayback) {
+            setWayback(true);
+          }
+        }
+      }
+    }
+  }, []);
+
   async function run() {
     if (!url.trim()) return;
+    if (firecrawl && !getFirecrawlKey()) {
+      setErr(t("gbvFirecrawlMissingKey"));
+      return;
+    }
     setRunning(true); setErr(""); setRes(null); setViewIdx(0); setMode("preview");
     try {
+      const fcKey = firecrawl ? getFirecrawlKey() : undefined;
       const r = await fetch("/api/seo/googlebot", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: url.trim(), desktop, referer }),
+        body: JSON.stringify({ url: url.trim(), desktop, referer, firecrawlKey: fcKey, wayback }),
       });
       const d = await r.json();
-      if (!r.ok) setErr(d.error === "private_host" ? t("gbvErrPrivate") : d.error === "bad_url" ? t("gbvErrUrl") : d.error || "error");
-      else setRes(d);
+      if (!r.ok) {
+        setErr(d.error === "private_host" ? t("gbvErrPrivate") : d.error === "bad_url" ? t("gbvErrUrl") : d.error || "error");
+      } else {
+        setRes(d);
+        const historyData = {
+          ...d,
+          views: d.views.map((v: any) => ({
+            ...v,
+            htmlRaw: "",
+          })),
+        };
+        addHistory({
+          type: "googlebot",
+          keyword: url.trim(),
+          data: historyData,
+        });
+      }
     } catch (e: any) { setErr(String(e?.message ?? e)); }
     setRunning(false);
   }
 
   const gb = res?.views.find(v => v.ua === "gbMobile");
   const br = res?.views.find(v => v.ua === "chrome");
+  const gbRender = res?.views.find(v => v.ua === "gbRender");
+  const brRender = res?.views.find(v => v.ua === "browserRender");
+
+  const hasJsRender = !!gbRender && !!brRender;
+  const activeGb = compareMode === "js" && gbRender ? gbRender : gb;
+  const activeBr = compareMode === "js" && brRender ? brRender : br;
 
   const verdictUi = {
     clean: { icon: ShieldCheck, color: "var(--color-accent-green)", bg: "rgba(52,199,89,0.08)", bd: "rgba(52,199,89,0.35)", label: t("gbvVerdictClean") },
@@ -89,7 +148,18 @@ export default function GooglebotViewPage() {
           <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "var(--color-text-secondary)", cursor: "pointer" }}>
             <input type="checkbox" checked={referer} onChange={e => setReferer(e.target.checked)} /> {t("gbvOptReferer")}
           </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "var(--color-text-secondary)", cursor: "pointer" }}>
+            <input type="checkbox" checked={firecrawl} onChange={e => setFirecrawl(e.target.checked)} /> {t("gbvOptFirecrawl")}
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "var(--color-text-secondary)", cursor: "pointer" }}>
+            <input type="checkbox" checked={wayback} onChange={e => setWayback(e.target.checked)} /> {t("gbvOptWayback")}
+          </label>
         </div>
+        {firecrawl && (
+          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "10px", padding: "10px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-bg)", lineHeight: 1.5 }}>
+            {t("gbvFirecrawlExplain")}
+          </div>
+        )}
         <div style={{ fontSize: "11px", color: "var(--color-text-tertiary)", marginTop: "10px", lineHeight: 1.5 }}>{t("gbvDisclaimer")}</div>
       </div>
 
@@ -119,10 +189,40 @@ export default function GooglebotViewPage() {
             );
           })()}
 
+          {/* Cross-check with the real Google */}
+          <div className={card} style={{ borderColor: "rgba(66,133,244,0.3)", background: "rgba(66,133,244,0.04)" }}>
+            <div className="tool-section-label" style={{ marginBottom: "6px", display: "flex", alignItems: "center", gap: "7px" }}>
+              <Globe size={14} color="#4285F4" /> {t("gbvCrossTitle")}
+            </div>
+            <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.6, marginBottom: "10px" }}>{t("gbvCrossNote")}</div>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              <a href={`https://search.google.com/test/rich-results?url=${encodeURIComponent(res.url)}`} target="_blank" rel="noreferrer"
+                style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 13px", borderRadius: "8px", border: "1px solid rgba(66,133,244,0.4)", background: "var(--color-bg)", color: "#4285F4", fontSize: "12px", fontWeight: 600, textDecoration: "none" }}>
+                <ExternalLink size={13} /> {t("gbvOpenRRT")}
+              </a>
+              <a href={`https://pagespeed.web.dev/analysis?url=${encodeURIComponent(res.url)}&form_factor=mobile`} target="_blank" rel="noreferrer"
+                style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 13px", borderRadius: "8px", border: "1px solid rgba(66,133,244,0.4)", background: "var(--color-bg)", color: "#4285F4", fontSize: "12px", fontWeight: 600, textDecoration: "none" }}>
+                <ExternalLink size={13} /> {t("gbvOpenPSI")}
+              </a>
+            </div>
+          </div>
+
           {/* Comparison table */}
-          {gb && br && (
+          {activeGb && activeBr && (
             <div className={card}>
-              <div className="tool-section-label" style={{ marginBottom: "10px" }}>{t("gbvCompare")}</div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "10px" }}>
+                <div className="tool-section-label" style={{ margin: 0 }}>{t("gbvCompare")}</div>
+                {hasJsRender && (
+                  <div style={{ display: "flex", border: "1px solid var(--color-border)", borderRadius: "8px", overflow: "hidden" }}>
+                    <button onClick={() => setCompareMode("raw")} style={{ padding: "5px 10px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "none", background: compareMode === "raw" ? "var(--color-text-primary)" : "var(--color-bg)", color: compareMode === "raw" ? "var(--color-bg)" : "var(--color-text-secondary)" }}>
+                      Raw Fetch
+                    </button>
+                    <button onClick={() => setCompareMode("js")} style={{ padding: "5px 10px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "none", background: compareMode === "js" ? "var(--color-text-primary)" : "var(--color-bg)", color: compareMode === "js" ? "var(--color-bg)" : "var(--color-text-secondary)" }}>
+                      JS-rendered (Firecrawl)
+                    </button>
+                  </div>
+                )}
+              </div>
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
                   <thead>
@@ -133,14 +233,14 @@ export default function GooglebotViewPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {compareRow(t("gbvRowStatus"), String(gb.finalStatus) + (gb.blocked ? ` · ${t("gbvBlocked")}` : ""), String(br.finalStatus) + (br.blocked ? ` · ${t("gbvBlocked")}` : ""), gb.finalStatus !== br.finalStatus)}
-                    {compareRow(t("gbvRowFinalUrl"), gb.finalUrl, br.finalUrl, hostOf(gb.finalUrl) !== hostOf(br.finalUrl))}
-                    {compareRow(t("gbvCanonicalHtml"), gb.signals.canonicalHtml || "—", br.signals.canonicalHtml || "—", !!gb.signals.canonicalHtml && !!br.signals.canonicalHtml && gb.signals.canonicalHtml !== br.signals.canonicalHtml)}
-                    {compareRow(t("gbvMetaRobots"), gb.signals.metaRobots || "—", br.signals.metaRobots || "—", (gb.signals.metaRobots || "") !== (br.signals.metaRobots || ""))}
-                    {compareRow(t("gbvXRobots"), gb.headers.xRobotsTag || "—", br.headers.xRobotsTag || "—", (gb.headers.xRobotsTag || "") !== (br.headers.xRobotsTag || ""))}
-                    {compareRow(t("gbvRowTitle"), gb.signals.title || "—", br.signals.title || "—", (gb.signals.title || "") !== (br.signals.title || ""))}
-                    {compareRow(t("gbvRowWords"), String(gb.wordCount), String(br.wordCount), Math.abs(gb.wordCount - br.wordCount) / Math.max(gb.wordCount, br.wordCount || 1) > 0.4)}
-                    {compareRow(t("gbvRowIndexable"), gb.signals.indexable ? "✓" : "noindex", br.signals.indexable ? "✓" : "noindex", gb.signals.indexable !== br.signals.indexable)}
+                    {compareRow(t("gbvRowStatus"), String(activeGb.finalStatus) + (activeGb.blocked ? ` · ${t("gbvBlocked")}` : ""), String(activeBr.finalStatus) + (activeBr.blocked ? ` · ${t("gbvBlocked")}` : ""), activeGb.finalStatus !== activeBr.finalStatus)}
+                    {compareRow(t("gbvRowFinalUrl"), activeGb.finalUrl, activeBr.finalUrl, hostOf(activeGb.finalUrl) !== hostOf(activeBr.finalUrl))}
+                    {compareRow(t("gbvCanonicalHtml"), activeGb.signals.canonicalHtml || "—", activeBr.signals.canonicalHtml || "—", !!activeGb.signals.canonicalHtml && !!activeBr.signals.canonicalHtml && activeGb.signals.canonicalHtml !== activeBr.signals.canonicalHtml)}
+                    {compareRow(t("gbvMetaRobots"), activeGb.signals.metaRobots || "—", activeBr.signals.metaRobots || "—", (activeGb.signals.metaRobots || "") !== (activeBr.signals.metaRobots || ""))}
+                    {compareRow(t("gbvXRobots"), activeGb.headers.xRobotsTag || "—", activeBr.headers.xRobotsTag || "—", (activeGb.headers.xRobotsTag || "") !== (activeBr.headers.xRobotsTag || ""))}
+                    {compareRow(t("gbvRowTitle"), activeGb.signals.title || "—", activeBr.signals.title || "—", (activeGb.signals.title || "") !== (activeBr.signals.title || ""))}
+                    {compareRow(t("gbvRowWords"), String(activeGb.wordCount), String(activeBr.wordCount), Math.abs(activeGb.wordCount - activeBr.wordCount) / Math.max(activeGb.wordCount, activeBr.wordCount || 1) > 0.4)}
+                    {compareRow(t("gbvRowIndexable"), activeGb.signals.indexable ? "✓" : "noindex", activeBr.signals.indexable ? "✓" : "noindex", activeGb.signals.indexable !== activeBr.signals.indexable)}
                   </tbody>
                 </table>
               </div>
@@ -148,8 +248,8 @@ export default function GooglebotViewPage() {
           )}
 
           {/* Word diff — what only the bot / only the browser sees */}
-          {gb && br && (gb.bodyText || br.bodyText) && (() => {
-            const d = wordDiff(gb.bodyText, br.bodyText);
+          {activeGb && activeBr && (activeGb.bodyText || activeBr.bodyText) && (() => {
+            const d = wordDiff(activeGb.bodyText, activeBr.bodyText);
             const hasWords = d.onlyA.length > 0 || d.onlyB.length > 0;
             const hashDiffers = res.diff.flags.some(f => f.includes("Контент") || f.toLowerCase().includes("content"));
             if (!hasWords && !hashDiffers) return null;
@@ -291,6 +391,23 @@ export default function GooglebotViewPage() {
                 <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", display: "flex", alignItems: "center", gap: "6px" }}>
                   <CheckCircle2 size={14} color="#4285F4" /> {t("gbvGscUnavailable")} <Link href="/settings" style={{ color: "var(--color-accent-blue)" }}>{t("gbvGscConnect")}</Link>
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* Wayback Snapshot */}
+          {res.wayback && (
+            <div className={card} style={{ borderColor: "var(--color-border)", background: "var(--color-bg)" }}>
+              <div className="tool-section-label" style={{ marginBottom: "6px" }}>{t("gbvWaybackTitle")}</div>
+              {res.wayback.available && res.wayback.url ? (
+                <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>
+                  {t("gbvWaybackView")}{" "}
+                  <a href={res.wayback.url} target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-blue)", textDecoration: "underline", fontWeight: 600 }}>
+                    {res.wayback.timestamp ? `${res.wayback.timestamp.slice(0, 4)}-${res.wayback.timestamp.slice(4, 6)}-${res.wayback.timestamp.slice(6, 8)} ${res.wayback.timestamp.slice(8, 10)}:${res.wayback.timestamp.slice(10, 12)}` : "Wayback Machine"}
+                  </a>
+                </div>
+              ) : (
+                <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>{t("gbvWaybackNone")}</div>
               )}
             </div>
           )}

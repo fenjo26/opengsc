@@ -36,6 +36,12 @@ export default function TaskDetailPage() {
 
   useEffect(() => { setItem(getHistoryItem(id) || null); }, [id]);
 
+  useEffect(() => {
+    if (item && item.type === "googlebot") {
+      router.push(`/seo-tools/googlebot?historyId=${item.id}`);
+    }
+  }, [item, router]);
+
   const isOutline = item?.type === "outline";
   const isText = item?.type === "text";
   const isAnalysis = item?.type === "analysis";
@@ -94,6 +100,7 @@ export default function TaskDetailPage() {
     </div>
   );
 
+  if (item.type === "googlebot") return <div style={{ padding: "40px", textAlign: "center", color: "var(--color-text-secondary)" }}><Loader2 size={20} className="spin" /></div>;
   if (item.type === "text") return <SeoTextDetail item={item} />;
   if (item.type === "landing") return <SeoLandingDetail item={item} />;
   if (item.type === "cluster") return <SeoClusterDetail item={item} />;

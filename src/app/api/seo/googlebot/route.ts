@@ -7,8 +7,8 @@ import dns from "dns/promises";
 import net from "net";
 
 // POST /api/seo/googlebot
-// body: { url: string, desktop?: boolean, referer?: boolean }
-// → { url, views, diff, gsc?: {...} | null, ownSite?: { id, url } | null }
+// body: { url: string, desktop?: boolean, referer?: boolean, firecrawlKey?: string, wayback?: boolean }
+// → { url, views, diff, renderedDiff?, wayback?: { available, url?, timestamp? } | null, gsc?: {...} | null, ownSite?: { id, url } | null }
 
 function isPrivateIp(ip: string): boolean {
   if (net.isIPv4(ip)) {
@@ -138,7 +138,12 @@ export async function POST(req: Request) {
   const guard = await assertPublicUrl(url);
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: 400 });
 
-  const result = await analyzeUrl(url, { desktop: !!body.desktop, referer: !!body.referer });
+  const result = await analyzeUrl(url, {
+    desktop: !!body.desktop,
+    referer: !!body.referer,
+    firecrawlKey: typeof body.firecrawlKey === "string" ? body.firecrawlKey : undefined,
+    wayback: !!body.wayback,
+  });
   const { ownSite, gsc } = await inspectOwnSite(userId, url).catch(() => ({ ownSite: null, gsc: null }));
 
   return NextResponse.json({ ...result, ownSite, gsc });

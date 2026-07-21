@@ -2127,5 +2127,18 @@
   "gbvDiffTitle": "What differs between bot and browser",
   "gbvOnlyBot": "Only Googlebot sees these words",
   "gbvOnlyBrowser": "Only the browser sees these words",
-  "gbvDiffNoneWords": "No visible-word differences — the difference is in markup/formatting only."
+  "gbvDiffNoneWords": "No visible-word differences — the difference is in markup/formatting only.",
+  "gbvCrossTitle": "Double-check with the real Google",
+  "gbvCrossNote": "Our tool spoofs the Googlebot User-Agent from our own IP. To confirm whether a difference is real cloaking, open the URL in Google's own tools — they fetch as the real Googlebot from a Google IP and show you the exact HTML and a screenshot Google actually got. If those match the browser view, it's not index-level cloaking.",
+  "gbvOpenRRT": "Rich Results Test",
+  "gbvOpenPSI": "PageSpeed Insights",
+  "seoBadgeGooglebot": "Googlebot View",
+  "seoHistFilterGooglebot": "Googlebot",
+  "gbvOptFirecrawl": "JS-render via Firecrawl (JS-cloaking)",
+  "gbvOptWayback": "Check Wayback Machine",
+  "gbvWaybackTitle": "Wayback Machine Snapshot",
+  "gbvWaybackNone": "No snapshots found in Wayback Machine.",
+  "gbvWaybackView": "View snapshot from",
+  "gbvFirecrawlExplain": "Firecrawl JS-rendering uses a headless browser to execute JavaScript. This lets you compare the rendered DOM under the Googlebot User-Agent against a standard browser, exposing cloaking or redirects that happen in client-side scripts (which static fetching misses). Requires a Firecrawl API key in settings.",
+  "gbvFirecrawlMissingKey": "Firecrawl API key is missing. Please configure it in Settings -> API Keys."
 }

@@ -2127,5 +2127,18 @@
   "gbvDiffTitle": "Чем отличается вид для бота и браузера",
   "gbvOnlyBot": "Эти слова видит только Googlebot",
   "gbvOnlyBrowser": "Эти слова видит только браузер",
-  "gbvDiffNoneWords": "Различий по видимым словам нет — отличие только в разметке/форматировании."
+  "gbvDiffNoneWords": "Различий по видимым словам нет — отличие только в разметке/форматировании.",
+  "gbvCrossTitle": "Перепроверь настоящим Google",
+  "gbvCrossNote": "Наш инструмент подделывает визитку Googlebot, но ходит с нашего IP. Чтобы понять, настоящая ли это клоака, открой URL в собственных тулзах Google — они заходят как реальный Googlebot с гугловского IP и показывают точный HTML и скриншот того, что получил именно Google. Если они совпадают с видом для браузера — это не клоака на уровне индекса.",
+  "gbvOpenRRT": "Rich Results Test",
+  "gbvOpenPSI": "PageSpeed Insights",
+  "seoBadgeGooglebot": "Взгляд Googlebot",
+  "seoHistFilterGooglebot": "Googlebot",
+  "gbvOptFirecrawl": "JS-рендер через Firecrawl (JS-клоака)",
+  "gbvOptWayback": "Проверить Wayback Machine",
+  "gbvWaybackTitle": "Снимок в Wayback Machine",
+  "gbvWaybackNone": "Снимков в Wayback Machine не найдено.",
+  "gbvWaybackView": "Посмотреть снимок от",
+  "gbvFirecrawlExplain": "JS-рендеринг Firecrawl запускает безголовый браузер с исполнением скриптов. Это позволяет сравнить отрендеренный DOM под Googlebot-UA и под браузером, выявляя клоаку и редиректы, которые настраивают через клиентский JavaScript (обычный фетч этого не видит). Требуется API-ключ Firecrawl в настройках.",
+  "gbvFirecrawlMissingKey": "Отсутствует API-ключ Firecrawl. Настройте его в Настройки -> API-ключи."
 }
