@@ -36,9 +36,21 @@ export default function DigestPage() {
   const [ai, setAi] = useState(false);
   const [preview, setPreview] = useState("");      // markdown (for history items)
   const [data, setData] = useState<DigestData | null>(null); // structured (rich view)
+  const [aiText, setAiText] = useState<string | null>(null); // AI summary paragraph
   const [engines, setEngines] = useState<{ bing: boolean; yandex: boolean }>({ bing: false, yandex: false });
   const [busy, setBusy] = useState<"" | "preview" | "send" | "save">("");
   const [msg, setMsg] = useState("");
+
+  // True if the user has configured at least one AI provider key (browser-side).
+  const hasAiKey = () => {
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith("aiKey_") && (localStorage.getItem(k) || "").trim().length > 4) return true;
+      }
+      return (localStorage.getItem("aiApiKey") || "").trim().length > 4;
+    } catch { return false; }
+  };
 
   const reload = async () => {
     try {
@@ -48,7 +60,8 @@ export default function DigestPage() {
       setHistory(d.digests || []);
       setSettings(d.settings || null);
       setEngines(d.engines || { bing: false, yandex: false });
-      if (d.settings) { setTag(d.settings.tag ?? ""); setDays(d.settings.days ?? 7); setAi(!!d.settings.ai); }
+      // AI summary defaults ON when any AI key is configured (user can still turn it off).
+      if (d.settings) { setTag(d.settings.tag ?? ""); setDays(d.settings.days ?? 7); setAi(!!d.settings.ai || hasAiKey()); }
     } catch {}
   };
   useEffect(() => { reload(); }, []);
@@ -60,8 +73,8 @@ export default function DigestPage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, tag, days, ai, lang: language }),
       }).then(r => r.json());
-      if (d.data) { setData(d.data); setPreview(""); }
-      else if (d.content) { setPreview(d.content); setData(null); }
+      if (d.data) { setData(d.data); setAiText(d.ai || null); setPreview(""); }
+      else if (d.content) { setPreview(d.content); setData(null); setAiText(null); }
       if (action === "send") {
         setMsg(d.sent ? t("digestSentOk") : t("digestSentFail"));
         reload();
@@ -70,13 +83,13 @@ export default function DigestPage() {
     setBusy("");
   };
 
-  // Lazy-load one engine's live rows for the DigestView tab (current tag/period).
+  // Lazy-load one engine's rich portfolio (per-site clicks/impr/position + period-over-period
+  // change) for the DigestView tab. Reuses the cached engine portfolio, so it's instant after
+  // the dashboard built it, and gives the same gainers/losers/attention sections as Google.
+  const daysToPeriodKey = (dn: number) => dn >= 365 || dn === 0 ? "12m" : dn >= 180 ? "6m" : dn >= 90 ? "3m" : dn >= 28 ? "28d" : dn >= 14 ? "14d" : "7d";
   const fetchEngine = async (engine: "bing" | "yandex") => {
-    const d = await fetch("/api/digest", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "engine", engine, tag, days }),
-    }).then(r => r.json());
-    return { rows: d.rows || [], totals: d.totals || { clicks: 0, impr: 0, sites: 0 } };
+    const d = await fetch(`/api/gsc/portfolio-engine?engine=${engine}&period=${daysToPeriodKey(days)}`).then(r => r.json());
+    return { sites: d.sites || [] };
   };
 
   const saveSchedule = async (patch: any) => {
@@ -200,6 +213,14 @@ export default function DigestPage() {
 
       {/* Status message */}
       {msg && <div style={{ fontSize: "12px", fontWeight: 600, color: msg === t("digestSentOk") ? "#34c759" : "#f87171", textAlign: "center" }}>{msg}</div>}
+
+      {/* AI summary paragraph (when enabled) */}
+      {data && aiText && (
+        <div style={{ ...card, border: "1px solid rgba(139,92,246,0.35)", background: "rgba(139,92,246,0.06)" }}>
+          <div dangerouslySetInnerHTML={{ __html: markdownToHtml(aiText.replace(/^\*(.+)\*$/gm, "**$1**")) }}
+            style={{ fontSize: "13px", lineHeight: 1.7, color: "var(--color-text-primary)" }} />
+        </div>
+      )}
 
       {/* Rich preview (freshly built) */}
       {data && <DigestView data={data} engines={engines} fetchEngine={fetchEngine} />}

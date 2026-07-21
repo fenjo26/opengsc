@@ -190,12 +190,14 @@ export async function GET(req: Request) {
       } catch { /* skip this key */ }
     }));
 
-    // Low concurrency + empty-retry to stay under Bing's throttle (one traffic call per site;
-    // GetRankAndTrafficStats already carries AvgImpressionPosition, so no extra query call).
+    // Low concurrency + empty-retry to stay under Bing's throttle. Per site: traffic stats for
+    // the daily series; then — only when the site actually has traffic — one query-stats call
+    // for the impression-weighted avg position (Bing's daily AvgImpressionPosition is often 0,
+    // so the reliable position comes from queries, exactly like the per-site engine view).
     const res = await pool(targets, 3, async ({ url, key }) => {
       const dom = clean(url);
-      const trafficUrl = `https://ssl.bing.com/webmaster/api.svc/json/GetRankAndTrafficStats?siteUrl=${encodeURIComponent(`https://${dom}/`)}&apikey=${encodeURIComponent(key)}`;
-      const j = await fetchNonEmpty(trafficUrl, {}, x => !((x?.d ?? []).length));
+      const api = (method: string) => `https://ssl.bing.com/webmaster/api.svc/json/${method}?siteUrl=${encodeURIComponent(`https://${dom}/`)}&apikey=${encodeURIComponent(key)}`;
+      const j = await fetchNonEmpty(api("GetRankAndTrafficStats"), {}, x => !((x?.d ?? []).length));
       const rows: any[] = j?.d ?? [];
       const daily: Daily[] = rows.map(x => {
         const clicks = Number(x.Clicks) || 0, impressions = Number(x.Impressions) || 0;
@@ -203,7 +205,15 @@ export async function GET(req: Request) {
         return { date: parseBingDate(x.Date), clicks, impressions, ctr: impressions ? clicks / impressions : 0, position: posv > 0 ? posv : 0 };
       }).sort((a, b) => a.date.localeCompare(b.date));
       const { curr, prev } = splitWindows(daily, start, curEnd, prevStart, prevEnd);
-      return buildPayload(makeSite(url), curr, prev, days);
+      const payload = buildPayload(makeSite(url), curr, prev, days);
+      // Avg position from query stats (weighted by impressions) when the series lacks it.
+      if (payload.hasData && payload.summary && !payload.summary.position.value) {
+        const qj = await fetchNonEmpty(api("GetQueryStats"), {}, x => !((x?.d ?? []).length));
+        let ws = 0, wi = 0;
+        for (const q of (qj?.d ?? [])) { const p = Number(q.AvgImpressionPosition ?? q.AvgClickPosition ?? 0); const im = Number(q.Impressions) || 0; if (p > 0 && im > 0) { ws += p * im; wi += im; } }
+        if (wi > 0) payload.summary.position.value = +(ws / wi).toFixed(1);
+      }
+      return payload;
     });
     const sites = await mergeSticky(userId, engine, period, res.filter(Boolean));
     await writeCache(userId, engine, period, sites);

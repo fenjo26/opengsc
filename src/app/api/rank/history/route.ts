@@ -34,8 +34,9 @@ export async function GET(req: Request) {
     select: { checkedAt: true, position: true, url: true, error: true },
   });
 
-  // GSC daily series for this exact query
-  const accounts = await getUserGoogleAccounts(userId);
+  // GSC daily series for this exact query. For a guest (share link) there's no session user,
+  // so use the site owner's Google accounts.
+  const accounts = await getUserGoogleAccounts(userId ?? kw.site.userId);
   const gscRows = await queryGsc(accounts, kw.site.siteId, {
     startDate: isoDaysAgo(days),
     endDate: isoDaysAgo(2),

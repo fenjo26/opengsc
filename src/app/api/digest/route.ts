@@ -87,9 +87,10 @@ export async function POST(req: Request) {
     const data = await buildDigestData(userId, tag, days, lang, { engineCap: action === "send" ? 25 : 0 });
     const content = renderDigestMarkdown(data);
     let full = content;
+    let aiText: string | null = null;
     if (ai) {
-      const summary = await aiSummary(userId, content, lang);
-      if (summary) full = `${content}\n\n${summary}`;
+      aiText = await aiSummary(userId, content, lang);
+      if (aiText) full = `${content}\n\n${aiText}`;
     }
     let sent = false;
     if (action === "send") {
@@ -97,9 +98,9 @@ export async function POST(req: Request) {
       try {
         await prisma.digest.create({ data: { userId, tag, days, content: full, sentTo: sent ? "telegram" : null } });
       } catch { /* not migrated */ }
-      if (!sent) return NextResponse.json({ content: full, data, sent, error: "telegram_not_connected" });
+      if (!sent) return NextResponse.json({ content: full, data, ai: aiText, sent, error: "telegram_not_connected" });
     }
-    return NextResponse.json({ content: full, data, sent });
+    return NextResponse.json({ content: full, data, ai: aiText, sent });
   }
 
   if (action === "settings") {

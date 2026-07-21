@@ -4,7 +4,7 @@
 // between tools, but this page is the roomy entry point (tabs were getting too narrow).
 
 import Link from "next/link";
-import { FileText, Search, ScrollText, History, PenLine, Quote, Globe, LayoutTemplate, Link2, Boxes, SlidersHorizontal } from "lucide-react";
+import { FileText, Search, ScrollText, History, PenLine, Quote, Globe, LayoutTemplate, Link2, Boxes, SlidersHorizontal, Bot } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 const TILES = [
@@ -13,6 +13,7 @@ const TILES = [
   { href: "/seo-tools/landing", key: "seoTabLanding", desc: "seoTileLanding", icon: LayoutTemplate, color: "#ff9f0a" },
   { href: "/seo-tools/text", key: "seoTabText", desc: "seoTileText", icon: PenLine, color: "#34c759" },
   { href: "/seo-tools/analysis", key: "seoTabAnalysis", desc: "seoTileAnalysis", icon: Search, color: "#10A37F" },
+  { href: "/seo-tools/googlebot", key: "seoTabGooglebot", desc: "seoTileGooglebot", icon: Bot, color: "#4285F4" },
   { href: "/seo-tools/geo", key: "geoTabGeo", desc: "seoTileGeo", icon: Globe, color: "#5e5ce6" },
   { href: "/seo-tools/citations", key: "seoTabCitations", desc: "seoTileCitations", icon: Quote, color: "#ff375f" },
   { href: "/seo-tools/links", key: "seoTabLinks", desc: "seoTileLinks", icon: Link2, color: "#64d2ff" },

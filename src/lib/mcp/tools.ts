@@ -633,7 +633,9 @@ export const MCP_TOOLS: McpTool[] = [
       const rawPath = dbUrl.replace(/^file:/, "").split("?")[0];
       const path = await import("path");
       const dbPath = path.isAbsolute(rawPath) ? rawPath : path.resolve(process.cwd(), rawPath);
-      const { default: Database } = await import("better-sqlite3");
+      // better-sqlite3 ships no bundled types (@types not installed).
+      // @ts-ignore -- no declaration file for better-sqlite3
+      const { default: Database } = (await import("better-sqlite3")) as any;
       const db = new Database(dbPath, { readonly: true, fileMustExist: true });
       let rows: any[];
       try {

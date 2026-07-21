@@ -11,8 +11,10 @@ import { ChevronDown, ChevronUp, Download, Loader2 } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import type { DigestData } from "@/lib/digest";
 
-type EngineRow = { name: string; clicks: number; impr: number };
-type EnginePayload = { rows: EngineRow[]; totals: { clicks: number; impr: number; sites: number } };
+// The engine tab now reuses the full engine portfolio (per-site summary with period-over-period
+// change), so it can show the same gainers/losers/attention sections as Google.
+type EnginePayload = { sites: any[] };
+const cleanUrl = (u: string) => String(u || "").replace(/^https?:\/\//, "").replace(/^sc-domain:/, "").replace(/\/.*$/, "");
 
 const fmt = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1_000 ? `${(n / 1_000).toFixed(1)}k` : String(Math.round(n)));
 const sign = (n: number) => (n > 0 ? `+${n}` : `${n}`);
@@ -72,7 +74,7 @@ export default function DigestView({ data, engines, fetchEngine }: {
     if (engineData[e] && engineData[e] !== "loading") return;
     setEngineData(d => ({ ...d, [e]: "loading" }));
     try { const payload = await fetchEngine(e); setEngineData(d => ({ ...d, [e]: payload })); }
-    catch { setEngineData(d => ({ ...d, [e]: { rows: [], totals: { clicks: 0, impr: 0, sites: 0 } } })); }
+    catch { setEngineData(d => ({ ...d, [e]: { sites: [] } })); }
   };
 
   const P = data.portfolio;
@@ -231,33 +233,83 @@ function EngineTab({ payload, name }: { payload: EnginePayload | "loading" | und
   if (payload === "loading" || payload === undefined) {
     return <div style={{ ...card, padding: "32px", textAlign: "center", color: "var(--color-text-secondary)", fontSize: "13px" }}><Loader2 size={16} className="spin" /> {t("digestEngineLoading")}</div>;
   }
-  if (!payload.rows.length) {
+  const sites = payload.sites || [];
+  const rows = sites.map((s: any) => ({
+    name: cleanUrl(s.url),
+    clicks: s.summary?.clicks?.value ?? 0,
+    impr: s.summary?.impressions?.value ?? 0,
+    cChg: s.summary?.clicks?.change ?? 0,
+    pos: s.summary?.position?.value ?? 0,
+    hasData: !!s.hasData,
+  }));
+  const withData = rows.filter(r => r.hasData);
+  if (!withData.length) {
     return <div style={{ ...card, padding: "28px", textAlign: "center", color: "var(--color-text-secondary)", fontSize: "13px" }}>{t("digestEngineEmpty")}</div>;
   }
-  const rows = [...payload.rows].sort((a, b) => b.clicks - a.clicks || b.impr - a.impr);
+  const totClicks = rows.reduce((a, r) => a + r.clicks, 0);
+  const totImpr = rows.reduce((a, r) => a + r.impr, 0);
+  const gainers = rows.filter(r => r.cChg > 0 && r.clicks > 0).sort((a, b) => b.cChg - a.cChg).slice(0, 50);
+  const losers = rows.filter(r => r.cChg < 0).sort((a, b) => a.cChg - b.cChg).slice(0, 50);
+  const attention = rows.filter(r => r.cChg <= -30 && r.clicks >= 0).sort((a, b) => a.cChg - b.cChg).slice(0, 50);
+  const allSorted = [...rows].sort((a, b) => b.clicks - a.clicks || b.impr - a.impr);
+
   return (
     <>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px" }}>
         <div style={{ ...card, padding: "14px 16px" }}>
-          <div style={{ fontSize: "22px", fontWeight: 800, color: "var(--color-text-primary)" }}>{fmt(payload.totals.clicks)}</div>
+          <div style={{ fontSize: "22px", fontWeight: 800, color: "var(--color-text-primary)" }}>{fmt(totClicks)}</div>
           <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{t("clicks")}</div>
         </div>
         <div style={{ ...card, padding: "14px 16px" }}>
-          <div style={{ fontSize: "22px", fontWeight: 800, color: "var(--color-text-primary)" }}>{fmt(payload.totals.impr)}</div>
+          <div style={{ fontSize: "22px", fontWeight: 800, color: "var(--color-text-primary)" }}>{fmt(totImpr)}</div>
           <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{t("impressions")}</div>
         </div>
         <div style={{ ...card, padding: "14px 16px" }}>
-          <div style={{ fontSize: "22px", fontWeight: 800, color: "var(--color-text-primary)" }}>{payload.totals.sites}</div>
+          <div style={{ fontSize: "22px", fontWeight: 800, color: "var(--color-text-primary)" }}>{withData.length}</div>
           <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{t("digestSitesWord")}</div>
         </div>
       </div>
-      <Section title={name} count={rows.length} initial={15}
-        csv={() => downloadCsv(`digest-${name}.csv`, [t("digestColSite"), t("digestColClicks"), t("digestColImpr")], rows.map(r => [r.name, r.clicks, r.impr]))}>
-        {limit => rows.slice(0, limit).map((r, i) => (
+
+      <Section title={t("digestSecGainers")} count={gainers.length}
+        csv={() => downloadCsv(`${name}-gainers.csv`, [t("digestColSite"), t("digestColClicks"), "%"], gainers.map(r => [r.name, r.clicks, `${sign(r.cChg)}%`]))}>
+        {limit => gainers.slice(0, limit).map((r, i) => (
+          <tr key={i} style={{ borderTop: "1px solid var(--color-border)" }}>
+            <td style={{ padding: "6px 14px", color: "var(--color-text-primary)" }}>🟢 {r.name}</td>
+            <td style={{ ...td, fontWeight: 600, color: "var(--color-text-primary)" }}>{fmt(r.clicks)}</td>
+            <td style={td}><Delta n={r.cChg} /></td>
+          </tr>
+        ))}
+      </Section>
+
+      <Section title={t("digestSecLosers")} count={losers.length}
+        csv={() => downloadCsv(`${name}-losers.csv`, [t("digestColSite"), t("digestColClicks"), "%"], losers.map(r => [r.name, r.clicks, `${sign(r.cChg)}%`]))}>
+        {limit => losers.slice(0, limit).map((r, i) => (
+          <tr key={i} style={{ borderTop: "1px solid var(--color-border)" }}>
+            <td style={{ padding: "6px 14px", color: "var(--color-text-primary)" }}>🔴 {r.name}</td>
+            <td style={{ ...td, fontWeight: 600, color: "var(--color-text-primary)" }}>{fmt(r.clicks)}</td>
+            <td style={td}><Delta n={r.cChg} /></td>
+          </tr>
+        ))}
+      </Section>
+
+      <Section title={t("digestSecAttention")} count={attention.length}
+        csv={() => downloadCsv(`${name}-attention.csv`, [t("digestColSite"), t("digestColDrop")], attention.map(r => [r.name, `${r.cChg}%`]))}>
+        {limit => attention.slice(0, limit).map((r, i) => (
+          <tr key={i} style={{ borderTop: "1px solid var(--color-border)" }}>
+            <td style={{ padding: "6px 14px", color: "var(--color-text-primary)" }}>🚨 {r.name}</td>
+            <td style={{ ...td, color: "#EF4444", fontWeight: 600 }}>{r.cChg}%</td>
+          </tr>
+        ))}
+      </Section>
+
+      <Section title={name} count={allSorted.length} initial={15}
+        csv={() => downloadCsv(`${name}-sites.csv`, [t("digestColSite"), t("digestColClicks"), t("digestColImpr"), t("digestColPos")], allSorted.map(r => [r.name, r.clicks, r.impr, r.pos || ""]))}>
+        {limit => allSorted.slice(0, limit).map((r, i) => (
           <tr key={i} style={{ borderTop: "1px solid var(--color-border)" }}>
             <td style={{ padding: "6px 14px", color: "var(--color-text-primary)" }}>{r.name}</td>
             <td style={{ ...td, fontWeight: 600, color: "var(--color-text-primary)" }}>{fmt(r.clicks)}</td>
             <td style={td}>{fmt(r.impr)}</td>
+            <td style={{ ...td, color: r.pos ? "#F59E0B" : "var(--color-text-secondary)" }}>{r.pos ? r.pos.toFixed(1) : "—"}</td>
           </tr>
         ))}
       </Section>

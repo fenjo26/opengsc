@@ -1,0 +1,346 @@
+// Googlebot View — core logic for the SEO Tools module.
+//
+// Goal: "see" a page the way Google's crawler sees it and surface differences between what
+// is served to Googlebot vs a normal browser — i.e. cloaking, hidden redirects, PBN tricks.
+//
+// Honest technical model (see docs/GOOGLEBOT-VIEW-SPEC.md): we CANNOT source requests from
+// Google's IP ranges (those belong to Google). What we do — and what every external tool does —
+// is spoof the Googlebot User-Agent and diff the responses. This catches UA-based cloaking
+// (the common kind). IP-based cloaking is invisible to any external tool.
+//
+// No third-party HTML deps — pure regex extraction, same convention as scrape.ts.
+
+import { createHash } from "crypto";
+
+// ─── User agents ──────────────────────────────────────────────────────────────
+export const UA = {
+  // Googlebot Smartphone — Google's primary crawler since mobile-first indexing.
+  gbMobile:
+    "Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+  gbDesktop:
+    "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; Googlebot/2.1; +http://www.google.com/bot.html",
+  chrome:
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+} as const;
+
+export type UaKey = keyof typeof UA;
+
+const MAX_HOPS = 20;
+const FETCH_TIMEOUT = 15000;
+const MAX_BODY = 2_000_000; // 2 MB cap when reading body
+
+// ─── Types ──────────────────────────────────────────────────────────────────
+export interface Hop {
+  url: string;
+  status: number;
+  location?: string; // resolved Location target (http redirect) or JS/meta target
+  redirectType?: "http" | "meta-refresh" | "js";
+  setCookie?: boolean;
+}
+
+export interface SeoSignals {
+  canonicalHtml?: string; // <link rel="canonical">
+  metaRobots?: string; // <meta name="robots">
+  hreflang: { lang: string; href: string }[];
+  title: string;
+  metaDescription?: string;
+  h1?: string;
+  jsRedirects: string[]; // meta-refresh / window.location targets found in HTML
+  indexable: boolean;
+  indexableReasons: string[];
+}
+
+export interface ViewResult {
+  ua: UaKey;
+  ok: boolean;
+  blocked?: boolean; // 403/429 — site rejects a fake bot
+  hops: Hop[];
+  finalUrl: string;
+  finalStatus: number;
+  headers: {
+    xRobotsTag?: string;
+    canonicalHeader?: string; // rel=canonical from Link header
+    contentType?: string;
+    vary?: string;
+    cacheControl?: string;
+    server?: string;
+  };
+  signals: SeoSignals;
+  bodyHash: string;
+  wordCount: number;
+  error?: string;
+}
+
+export interface CloakingDiff {
+  verdict: "clean" | "suspicious" | "cloaking";
+  score: number;
+  flags: string[];
+}
+
+export interface AnalyzeResult {
+  url: string;
+  views: ViewResult[];
+  diff: CloakingDiff;
+}
+
+// ─── HTML helpers (mirror scrape.ts) ─────────────────────────────────────────
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)));
+}
+
+function stripTags(html: string): string {
+  return decodeEntities(
+    html
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
+}
+
+function attr(tag: string, name: string): string | undefined {
+  const m = tag.match(new RegExp(`${name}\\s*=\\s*["']([^"']*)["']`, "i"));
+  return m ? decodeEntities(m[1].trim()) : undefined;
+}
+
+function resolveUrl(base: string, href: string): string {
+  try {
+    return new URL(href, base).toString();
+  } catch {
+    return href;
+  }
+}
+
+// ─── HTML signal extraction ──────────────────────────────────────────────────
+export function parseSeoSignals(url: string, html: string): SeoSignals {
+  const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  const title = titleMatch ? stripTags(titleMatch[1]) : "";
+
+  const descTag = html.match(/<meta[^>]+name=["']description["'][^>]*>/i)?.[0];
+  const metaDescription = descTag ? attr(descTag, "content") : undefined;
+
+  const robotsTag = html.match(/<meta[^>]+name=["']robots["'][^>]*>/i)?.[0];
+  const metaRobots = robotsTag ? attr(robotsTag, "content") : undefined;
+
+  // canonical: <link rel="canonical" href="...">
+  let canonicalHtml: string | undefined;
+  const linkTags = html.match(/<link\b[^>]*>/gi) || [];
+  const hreflang: { lang: string; href: string }[] = [];
+  for (const tag of linkTags) {
+    const rel = (attr(tag, "rel") || "").toLowerCase();
+    const href = attr(tag, "href");
+    if (!href) continue;
+    if (rel === "canonical" && !canonicalHtml) canonicalHtml = resolveUrl(url, href);
+    if (rel === "alternate") {
+      const lang = attr(tag, "hreflang");
+      if (lang) hreflang.push({ lang, href: resolveUrl(url, href) });
+    }
+  }
+
+  const h1Match = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  const h1 = h1Match ? stripTags(h1Match[1]) : undefined;
+
+  // Client-side redirects
+  const jsRedirects: string[] = [];
+  const metaRefresh = html.match(/<meta[^>]+http-equiv=["']refresh["'][^>]*>/i)?.[0];
+  if (metaRefresh) {
+    const content = attr(metaRefresh, "content") || "";
+    const urlPart = content.match(/url\s*=\s*(.+)$/i)?.[1]?.trim().replace(/^["']|["']$/g, "");
+    if (urlPart) jsRedirects.push(resolveUrl(url, urlPart));
+  }
+  const jsLoc = [...html.matchAll(/(?:window\.location(?:\.href)?|location\.href|location\.replace\s*\()\s*=?\s*["']([^"']+)["']/gi)];
+  for (const m of jsLoc) jsRedirects.push(resolveUrl(url, m[1]));
+
+  const bodyText = stripTags(html);
+  const wordCount = bodyText ? bodyText.split(/\s+/).filter(Boolean).length : 0;
+
+  // Indexability
+  const indexableReasons: string[] = [];
+  if (metaRobots && /noindex/i.test(metaRobots)) indexableReasons.push(`meta robots: ${metaRobots}`);
+  const indexable = indexableReasons.length === 0;
+
+  return { canonicalHtml, metaRobots, hreflang, title, metaDescription, h1, jsRedirects, indexable, indexableReasons };
+}
+
+// Parse rel=canonical out of a Link: header (RFC 8288)
+function canonicalFromLinkHeader(link?: string | null): string | undefined {
+  if (!link) return undefined;
+  for (const part of link.split(",")) {
+    if (/rel\s*=\s*"?canonical"?/i.test(part)) {
+      const m = part.match(/<([^>]+)>/);
+      if (m) return m[1].trim();
+    }
+  }
+  return undefined;
+}
+
+// ─── Redirect chain follower ─────────────────────────────────────────────────
+// Manual follow (redirect: "manual") so we record every hop and which UA triggered it.
+export async function followChain(startUrl: string, ua: UaKey, opts?: { referer?: boolean }): Promise<ViewResult> {
+  const hops: Hop[] = [];
+  let current = startUrl;
+  let lastRes: Response | null = null;
+  let html = "";
+
+  try {
+    for (let i = 0; i < MAX_HOPS; i++) {
+      const headers: Record<string, string> = {
+        "User-Agent": UA[ua],
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+      };
+      if (opts?.referer) headers["Referer"] = "https://www.google.com/";
+
+      const res = await fetch(current, {
+        headers,
+        redirect: "manual",
+        signal: AbortSignal.timeout(FETCH_TIMEOUT),
+      });
+      lastRes = res;
+      const setCookie = res.headers.has("set-cookie");
+
+      // HTTP redirect
+      if (res.status >= 300 && res.status < 400 && res.headers.get("location")) {
+        const loc = resolveUrl(current, res.headers.get("location")!);
+        hops.push({ url: current, status: res.status, location: loc, redirectType: "http", setCookie });
+        if (hops.some((h, idx) => idx < hops.length - 1 && h.url === loc)) {
+          // loop guard
+          hops.push({ url: loc, status: 0, redirectType: "http", location: "loop_detected" });
+          break;
+        }
+        current = loc;
+        continue;
+      }
+
+      // Terminal response — read body (capped), look for client-side redirect
+      const ct = res.headers.get("content-type") || "";
+      if (/text\/html|application\/xhtml/i.test(ct) && res.body) {
+        const reader = res.body.getReader();
+        const chunks: Uint8Array[] = [];
+        let size = 0;
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) { chunks.push(value); size += value.length; }
+          if (size >= MAX_BODY) { try { await reader.cancel(); } catch {} break; }
+        }
+        html = Buffer.concat(chunks.map(c => Buffer.from(c))).toString("utf8");
+      } else {
+        html = "";
+      }
+
+      const signals = parseSeoSignals(current, html);
+
+      // Client-side redirect → record as a hop and stop (we don't chase JS here)
+      if (signals.jsRedirects.length && res.status === 200) {
+        const target = signals.jsRedirects[0];
+        const type = /<meta[^>]+http-equiv=["']refresh["']/i.test(html) ? "meta-refresh" : "js";
+        hops.push({ url: current, status: res.status, location: target, redirectType: type, setCookie });
+      } else {
+        hops.push({ url: current, status: res.status, setCookie });
+      }
+
+      const bodyText = stripTags(html);
+      const wordCount = bodyText ? bodyText.split(/\s+/).filter(Boolean).length : 0;
+
+      return {
+        ua,
+        ok: res.ok,
+        blocked: res.status === 403 || res.status === 429,
+        hops,
+        finalUrl: current,
+        finalStatus: res.status,
+        headers: {
+          xRobotsTag: res.headers.get("x-robots-tag") || undefined,
+          canonicalHeader: canonicalFromLinkHeader(res.headers.get("link")),
+          contentType: ct || undefined,
+          vary: res.headers.get("vary") || undefined,
+          cacheControl: res.headers.get("cache-control") || undefined,
+          server: res.headers.get("server") || undefined,
+        },
+        signals: {
+          ...signals,
+          indexable: signals.indexable && !/noindex|none/i.test(res.headers.get("x-robots-tag") || ""),
+          indexableReasons: [
+            ...signals.indexableReasons,
+            ...(/noindex|none/i.test(res.headers.get("x-robots-tag") || "") ? [`X-Robots-Tag: ${res.headers.get("x-robots-tag")}`] : []),
+          ],
+        },
+        bodyHash: createHash("sha1").update(bodyText).digest("hex"),
+        wordCount,
+      };
+    }
+
+    // Ran out of hops
+    return blankView(ua, current, lastRes?.status ?? 0, hops, "too_many_redirects");
+  } catch (e: any) {
+    return blankView(ua, current, 0, hops, e?.name === "TimeoutError" ? "timeout" : String(e?.message ?? e));
+  }
+}
+
+function blankView(ua: UaKey, url: string, status: number, hops: Hop[], error: string): ViewResult {
+  return {
+    ua, ok: false, hops, finalUrl: url, finalStatus: status,
+    headers: {},
+    signals: { hreflang: [], title: "", jsRedirects: [], indexable: false, indexableReasons: [error] },
+    bodyHash: "", wordCount: 0, error,
+  };
+}
+
+// ─── Cloaking diff (Googlebot vs browser) ────────────────────────────────────
+export function diffViews(gb: ViewResult, browser: ViewResult): CloakingDiff {
+  let score = 0;
+  const flags: string[] = [];
+  const add = (pts: number, flag: string) => { score += pts; flags.push(flag); };
+
+  const gbHost = safeHost(gb.finalUrl);
+  const brHost = safeHost(browser.finalUrl);
+
+  if (gb.ok && browser.ok) {
+    if (gbHost && brHost && gbHost !== brHost) add(50, "Разные финальные хосты — редирект только для одного User-Agent");
+    if (gb.finalStatus !== browser.finalStatus) add(40, `Разный код ответа: Googlebot ${gb.finalStatus} vs браузер ${browser.finalStatus}`);
+    const gbCanon = gb.signals.canonicalHtml, brCanon = browser.signals.canonicalHtml;
+    if (gbCanon && brCanon && gbCanon !== brCanon) add(30, "Подмена canonical между ботом и браузером");
+    if (gb.signals.indexable !== browser.signals.indexable) add(30, "Различие индексируемости (noindex для одного из UA)");
+    const wc1 = gb.wordCount, wc2 = browser.wordCount;
+    if (wc1 && wc2 && Math.abs(wc1 - wc2) / Math.max(wc1, wc2) > 0.4) add(25, `Существенно разный объём контента: ${wc1} vs ${wc2} слов`);
+    if (gb.bodyHash && browser.bodyHash && gb.bodyHash !== browser.bodyHash && gb.finalStatus === browser.finalStatus && gbHost === brHost) add(15, "Контент страницы отличается при одинаковом URL и статусе");
+    const gbJs = gb.signals.jsRedirects.length > 0, brJs = browser.signals.jsRedirects.length > 0;
+    if (gbJs !== brJs) add(25, "JS-редирект присутствует только для одного User-Agent");
+  }
+
+  if (gb.blocked && browser.ok) add(20, "Сайт блокирует поддельного Googlebot (вероятно, reverse-DNS проверка)");
+
+  const verdict = score >= 50 ? "cloaking" : score >= 20 ? "suspicious" : "clean";
+  return { verdict, score: Math.min(score, 100), flags };
+}
+
+function safeHost(u: string): string {
+  try { return new URL(u).host.toLowerCase(); } catch { return ""; }
+}
+
+// ─── Orchestrator ────────────────────────────────────────────────────────────
+export async function analyzeUrl(url: string, opts?: { desktop?: boolean; referer?: boolean }): Promise<AnalyzeResult> {
+  const views: ViewResult[] = [];
+  const gbMobile = await followChain(url, "gbMobile");
+  const chrome = await followChain(url, "chrome");
+  views.push(gbMobile, chrome);
+  if (opts?.desktop) views.push(await followChain(url, "gbDesktop"));
+  if (opts?.referer) {
+    const gbRef = await followChain(url, "gbMobile", { referer: true });
+    gbRef.ua = "gbMobile";
+    views.push(gbRef);
+  }
+
+  const diff = diffViews(gbMobile, chrome);
+  return { url, views, diff };
+}
