@@ -3,8 +3,17 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { promisify } from "util";
 import { exec as execCb } from "child_process";
+import { readFileSync } from "fs";
+import { join } from "path";
 
 const exec = promisify(execCb);
+
+// Human-friendly semantic version from package.json (e.g. "1.0.0"). Bumped manually per
+// release; shown in the UI alongside the git commit (which drives update detection).
+function pkgVersion(): string {
+  try { return JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8")).version || ""; }
+  catch { return ""; }
+}
 
 // GET /api/system/version
 // Compares the locally-checked-out git commit with the latest commit on origin/main
@@ -30,7 +39,7 @@ export async function GET() {
   const local = await localCommit();
   if (!local) {
     // Not a git checkout (e.g. Docker image) — self-update from UI isn't possible.
-    return NextResponse.json({ isGit: false, updateAvailable: false });
+    return NextResponse.json({ isGit: false, updateAvailable: false, version: pkgVersion() });
   }
 
   try {
@@ -42,7 +51,7 @@ export async function GET() {
     const remote = String(latest.sha ?? "");
 
     if (!remote || remote === local) {
-      return NextResponse.json({ isGit: true, local: local.slice(0, 7), remote: remote.slice(0, 7), behind: 0, updateAvailable: false });
+      return NextResponse.json({ isGit: true, version: pkgVersion(), local: local.slice(0, 7), remote: remote.slice(0, 7), behind: 0, updateAvailable: false });
     }
 
     // How far behind + changelog (commit subjects between local and remote)
@@ -68,6 +77,7 @@ export async function GET() {
 
     return NextResponse.json({
       isGit: true,
+      version: pkgVersion(),
       local: local.slice(0, 7),
       remote: remote.slice(0, 7),
       behind,

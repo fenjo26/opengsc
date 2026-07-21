@@ -29,7 +29,7 @@ function MenuItem({ icon, label, onClick }: { icon: string; label: string; onCli
 // repo. Confirms at a glance that update-detection is wired up (independent of pm2's version col).
 function VersionInfo() {
   const { t } = useLanguage();
-  const [info, setInfo] = useState<null | { isGit?: boolean; updateAvailable?: boolean; local?: string; behind?: number }>(null);
+  const [info, setInfo] = useState<null | { isGit?: boolean; updateAvailable?: boolean; local?: string; behind?: number; version?: string }>(null);
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     let cancelled = false;
@@ -41,6 +41,7 @@ function VersionInfo() {
   }, []);
 
   const commit = info?.local ? String(info.local).slice(0, 7) : "";
+  const version = info?.version ? `v${info.version}` : "";
   let status = t("versionChecking");
   let color = "var(--color-text-secondary)";
   if (loaded) {
@@ -51,7 +52,8 @@ function VersionInfo() {
   return (
     <div style={{ padding: "8px 16px", fontSize: "11px", color: "var(--color-text-secondary)", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
       <span style={{ fontWeight: 600 }}>{t("versionCurrent")}</span>
-      {commit && <code style={{ color: "var(--color-text-primary)" }}>{commit}</code>}
+      {version && <span style={{ color: "var(--color-text-primary)", fontWeight: 700 }}>{version}</span>}
+      {commit && <code style={{ color: "var(--color-text-secondary)", opacity: 0.7 }}>{commit}</code>}
       <span style={{ flex: 1 }} />
       <span style={{ color, fontWeight: 600 }}>{status}</span>
     </div>
