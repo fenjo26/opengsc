@@ -46,6 +46,23 @@ async function fetchRetry(url: string, init: RequestInit = {}, tries = 3, timeou
   return null;
 }
 
+// Fetch + parse JSON, retrying when the response is 200 OK but the extracted payload is EMPTY.
+// Bing/Yandex throttle heavy batch pulls by returning a valid-but-empty body (no error), which
+// plain retry-on-error never catches — this is what silently blanked some sites.
+async function fetchNonEmpty(url: string, init: RequestInit, isEmpty: (j: any) => boolean, tries = 4): Promise<any | null> {
+  for (let i = 0; i < tries; i++) {
+    const r = await fetchRetry(url, init, 2);
+    if (r && r.ok) {
+      const j = await r.json().catch(() => null);
+      if (j && !isEmpty(j)) return j;
+    } else if (r && r.status < 500 && r.status !== 429) {
+      return null; // 4xx (bad key/site) — genuinely nothing to get
+    }
+    if (i < tries - 1) await new Promise(res => setTimeout(res, 700 * (i + 1)));
+  }
+  return null;
+}
+
 async function pool<T, R>(items: T[], n: number, fn: (t: T) => Promise<R>): Promise<(R | undefined)[]> {
   const out: (R | undefined)[] = new Array(items.length);
   let i = 0;
@@ -173,34 +190,20 @@ export async function GET(req: Request) {
       } catch { /* skip this key */ }
     }));
 
-    const res = await pool(targets, 6, async ({ url, key }) => {
+    // Low concurrency + empty-retry to stay under Bing's throttle (one traffic call per site;
+    // GetRankAndTrafficStats already carries AvgImpressionPosition, so no extra query call).
+    const res = await pool(targets, 3, async ({ url, key }) => {
       const dom = clean(url);
-      const api = (method: string) => `https://ssl.bing.com/webmaster/api.svc/json/${method}?siteUrl=${encodeURIComponent(`https://${dom}/`)}&apikey=${encodeURIComponent(key)}`;
-      // Traffic gives the daily series; query stats give a reliable avg position (the daily
-      // stats often omit it), impression-weighted like the per-site engine view.
-      const [tr, qs] = await Promise.all([
-        fetchRetry(api("GetRankAndTrafficStats")),
-        fetchRetry(api("GetQueryStats")),
-      ]);
-      if (!tr || !tr.ok) return { ...makeSite(url), data: [], summary: null, hasData: false };
-      const rows: any[] = (await tr.json())?.d ?? [];
+      const trafficUrl = `https://ssl.bing.com/webmaster/api.svc/json/GetRankAndTrafficStats?siteUrl=${encodeURIComponent(`https://${dom}/`)}&apikey=${encodeURIComponent(key)}`;
+      const j = await fetchNonEmpty(trafficUrl, {}, x => !((x?.d ?? []).length));
+      const rows: any[] = j?.d ?? [];
       const daily: Daily[] = rows.map(x => {
         const clicks = Number(x.Clicks) || 0, impressions = Number(x.Impressions) || 0;
         const posv = Number(x.AvgImpressionPosition ?? x.AvgClickPosition ?? 0);
         return { date: parseBingDate(x.Date), clicks, impressions, ctr: impressions ? clicks / impressions : 0, position: posv > 0 ? posv : 0 };
       }).sort((a, b) => a.date.localeCompare(b.date));
       const { curr, prev } = splitWindows(daily, start, curEnd, prevStart, prevEnd);
-      const payload = buildPayload(makeSite(url), curr, prev, days);
-      // Fallback avg position from query stats when the daily series carried none.
-      if (payload.summary && !payload.summary.position.value && qs && qs.ok) {
-        try {
-          const qd: any[] = (await qs.json())?.d ?? [];
-          let ws = 0, wi = 0;
-          for (const q of qd) { const p = Number(q.AvgImpressionPosition ?? q.AvgClickPosition ?? 0); const im = Number(q.Impressions) || 0; if (p > 0 && im > 0) { ws += p * im; wi += im; } }
-          if (wi > 0) payload.summary.position.value = +(ws / wi).toFixed(1);
-        } catch { /* ignore */ }
-      }
-      return payload;
+      return buildPayload(makeSite(url), curr, prev, days);
     });
     const sites = await mergeSticky(userId, engine, period, res.filter(Boolean));
     await writeCache(userId, engine, period, sites);
@@ -227,12 +230,15 @@ export async function GET(req: Request) {
     } catch { /* skip this token */ }
   }));
 
-  const res = await pool(targets, 5, async ({ url, token, uid, hostId }) => {
+  const res = await pool(targets, 3, async ({ url, token, uid, hostId }) => {
     const headers = { Authorization: `OAuth ${token}`, "Content-Type": "application/json" };
     const path = `${BASE}/user/${uid}/hosts/${encodeURIComponent(hostId)}/search-queries/all/history/?query_indicator=TOTAL_SHOWS&query_indicator=TOTAL_CLICKS&query_indicator=AVG_SHOW_POSITION&date_from=${prevStart}&date_to=${curEnd}`;
-    const r = await fetchRetry(path, { headers });
-    if (!r || !r.ok) return { ...makeSite(url), data: [], summary: null, hasData: false };
-    const ind = (await r.json())?.indicators ?? {};
+    const j = await fetchNonEmpty(path, { headers }, x => {
+      const i = x?.indicators ?? {};
+      return !((i.TOTAL_SHOWS ?? []).length || (i.TOTAL_CLICKS ?? []).length);
+    });
+    if (!j) return { ...makeSite(url), data: [], summary: null, hasData: false };
+    const ind = j.indicators ?? {};
     const byDate = new Map<string, Daily>();
     const get = (d: string) => byDate.get(d) ?? { date: d, clicks: 0, impressions: 0, ctr: 0, position: 0 };
     for (const p of ind.TOTAL_SHOWS ?? []) { const d = String(p.date).slice(0, 10); byDate.set(d, { ...get(d), impressions: Math.round(p.value ?? 0) }); }
