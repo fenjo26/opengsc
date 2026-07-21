@@ -7,7 +7,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Loader2, AlertTriangle, Bot, Monitor, ShieldCheck, ShieldAlert, ShieldX, ArrowRight, Globe, CheckCircle2 } from "lucide-react";
+import { Loader2, AlertTriangle, Bot, Monitor, ShieldCheck, ShieldAlert, ShieldX, ArrowRight, Globe, CheckCircle2, ExternalLink } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 const card = "panel";
@@ -16,7 +16,7 @@ const btnPurple: React.CSSProperties = { display: "inline-flex", alignItems: "ce
 
 type Hop = { url: string; status: number; location?: string; redirectType?: string; setCookie?: boolean };
 type Signals = { canonicalHtml?: string; metaRobots?: string; hreflang: { lang: string; href: string }[]; title: string; metaDescription?: string; h1?: string; jsRedirects: string[]; indexable: boolean; indexableReasons: string[] };
-type View = { ua: string; ok: boolean; blocked?: boolean; hops: Hop[]; finalUrl: string; finalStatus: number; headers: Record<string, string | undefined>; signals: Signals; wordCount: number; error?: string };
+type View = { ua: string; ok: boolean; blocked?: boolean; hops: Hop[]; finalUrl: string; finalStatus: number; headers: Record<string, string | undefined>; signals: Signals; wordCount: number; bodyText: string; htmlRaw: string; error?: string };
 type Diff = { verdict: "clean" | "suspicious" | "cloaking"; score: number; flags: string[] };
 type Gsc = { verdict?: string | null; coverageState?: string | null; indexingState?: string | null; robotsTxtState?: string | null; pageFetchState?: string | null; crawledAs?: string | null; googleCanonical?: string | null; userCanonical?: string | null; lastCrawlTime?: string | null };
 type Result = { url: string; views: View[]; diff: Diff; ownSite?: { id: string; url: string } | null; gsc?: Gsc | null };
@@ -31,10 +31,12 @@ export default function GooglebotViewPage() {
   const [running, setRunning] = useState(false);
   const [err, setErr] = useState("");
   const [res, setRes] = useState<Result | null>(null);
+  const [viewIdx, setViewIdx] = useState(0);
+  const [mode, setMode] = useState<"preview" | "text" | "html">("preview");
 
   async function run() {
     if (!url.trim()) return;
-    setRunning(true); setErr(""); setRes(null);
+    setRunning(true); setErr(""); setRes(null); setViewIdx(0); setMode("preview");
     try {
       const r = await fetch("/api/seo/googlebot", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -145,6 +147,82 @@ export default function GooglebotViewPage() {
             </div>
           )}
 
+          {/* Word diff — what only the bot / only the browser sees */}
+          {gb && br && (gb.bodyText || br.bodyText) && (() => {
+            const d = wordDiff(gb.bodyText, br.bodyText);
+            const hasWords = d.onlyA.length > 0 || d.onlyB.length > 0;
+            const hashDiffers = res.diff.flags.some(f => f.includes("Контент") || f.toLowerCase().includes("content"));
+            if (!hasWords && !hashDiffers) return null;
+            return (
+              <div className={card}>
+                <div className="tool-section-label" style={{ marginBottom: "10px" }}>{t("gbvDiffTitle")}</div>
+                {hasWords ? (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px,1fr))", gap: "12px" }}>
+                    <div>
+                      <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--color-accent-green)", marginBottom: "6px", display: "flex", alignItems: "center", gap: "6px" }}><Bot size={13} /> {t("gbvOnlyBot")}</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                        {d.onlyA.length ? d.onlyA.map((w, i) => <span key={i} style={{ fontSize: "12px", padding: "2px 8px", borderRadius: "5px", background: "rgba(52,199,89,0.12)", border: "1px solid rgba(52,199,89,0.3)", color: "var(--color-text-primary)" }}>{w}</span>) : <span style={{ fontSize: "12px", color: "var(--color-text-tertiary)" }}>—</span>}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--color-accent-red)", marginBottom: "6px", display: "flex", alignItems: "center", gap: "6px" }}><Monitor size={13} /> {t("gbvOnlyBrowser")}</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                        {d.onlyB.length ? d.onlyB.map((w, i) => <span key={i} style={{ fontSize: "12px", padding: "2px 8px", borderRadius: "5px", background: "rgba(255,69,58,0.12)", border: "1px solid rgba(255,69,58,0.3)", color: "var(--color-text-primary)" }}>{w}</span>) : <span style={{ fontSize: "12px", color: "var(--color-text-tertiary)" }}>—</span>}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>{t("gbvDiffNoneWords")}</div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Content viewer */}
+          {res.views.some(v => v.htmlRaw || v.bodyText) && (() => {
+            const sel = res.views[Math.min(viewIdx, res.views.length - 1)];
+            return (
+              <div className={card}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "10px" }}>
+                  <div className="tool-section-label" style={{ margin: 0 }}>{t("gbvContent")}</div>
+                  <span style={{ fontSize: "11px", color: "var(--color-text-tertiary)" }}>{t("gbvViewLabel")}</span>
+                  <div style={{ display: "flex", border: "1px solid var(--color-border)", borderRadius: "8px", overflow: "hidden" }}>
+                    {res.views.map((v, i) => {
+                      const dupReferer = i > 0 && v.ua === "gbMobile" && res.views[0].ua === "gbMobile";
+                      const label = (UA_LABEL[v.ua] || v.ua) + (dupReferer ? " · Referer" : "");
+                      return (
+                        <button key={i} onClick={() => setViewIdx(i)} style={{ padding: "6px 11px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "none", background: viewIdx === i ? "var(--color-text-primary)" : "var(--color-bg)", color: viewIdx === i ? "var(--color-bg)" : "var(--color-text-secondary)", whiteSpace: "nowrap" }}>{label}</button>
+                      );
+                    })}
+                  </div>
+                  <div style={{ display: "flex", border: "1px solid var(--color-border)", borderRadius: "8px", overflow: "hidden", marginLeft: "auto" }}>
+                    {(["preview", "text", "html"] as const).map(m => (
+                      <button key={m} onClick={() => setMode(m)} style={{ padding: "6px 11px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "none", background: mode === m ? "var(--color-accent-purple)" : "var(--color-bg)", color: mode === m ? "#fff" : "var(--color-text-secondary)" }}>{m === "preview" ? t("gbvTabPreview") : m === "text" ? t("gbvTabText") : t("gbvTabHtml")}</button>
+                    ))}
+                  </div>
+                  <button onClick={() => openInTab(sel)} disabled={!sel.htmlRaw} style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "6px 11px", borderRadius: "8px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-secondary)", fontSize: "11px", fontWeight: 600, cursor: sel.htmlRaw ? "pointer" : "default", opacity: sel.htmlRaw ? 1 : 0.5 }}>
+                    <ExternalLink size={12} /> {t("gbvOpenTab")}
+                  </button>
+                </div>
+
+                {!sel.htmlRaw && !sel.bodyText ? (
+                  <div style={{ fontSize: "12px", color: "var(--color-text-tertiary)" }}>{t("gbvNoContent")}</div>
+                ) : mode === "preview" ? (
+                  sel.htmlRaw ? (
+                    <>
+                      <iframe title="preview" sandbox="" srcDoc={srcdocFor(sel)} style={{ width: "100%", height: "520px", border: "1px solid var(--color-border)", borderRadius: "8px", background: "#fff" }} />
+                      <div style={{ fontSize: "10px", color: "var(--color-text-tertiary)", marginTop: "6px", lineHeight: 1.4 }}>{t("gbvPreviewNote")}</div>
+                    </>
+                  ) : <div style={{ fontSize: "12px", color: "var(--color-text-tertiary)" }}>{t("gbvNoContent")}</div>
+                ) : mode === "text" ? (
+                  <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: "12px", lineHeight: 1.6, color: "var(--color-text-primary)", maxHeight: "520px", overflow: "auto", margin: 0, padding: "12px", background: "var(--color-bg)", borderRadius: "8px", border: "1px solid var(--color-border)" }}>{sel.bodyText || "—"}</pre>
+                ) : (
+                  <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-all", fontSize: "11px", lineHeight: 1.5, fontFamily: "ui-monospace, monospace", color: "var(--color-text-secondary)", maxHeight: "520px", overflow: "auto", margin: 0, padding: "12px", background: "var(--color-bg)", borderRadius: "8px", border: "1px solid var(--color-border)" }}>{sel.htmlRaw || "—"}</pre>
+                )}
+              </div>
+            );
+          })()}
+
           {/* Redirect chains */}
           <div className={card}>
             <div className="tool-section-label" style={{ marginBottom: "10px" }}>{t("gbvRedirectChain")}</div>
@@ -239,6 +317,37 @@ function gscRow(label: string, value?: string | null) {
       <div style={{ color: "var(--color-text-primary)", wordBreak: "break-all", marginTop: "2px" }}>{value || "—"}</div>
     </div>
   );
+}
+
+// Build an iframe-ready HTML doc: inject <base> so relative CSS/images resolve against the
+// live site. Scripts are neutralised by the iframe sandbox="" — we render the served markup.
+function srcdocFor(v: View): string {
+  const base = `<base href="${v.finalUrl}">`;
+  const h = v.htmlRaw || "";
+  if (/<head[^>]*>/i.test(h)) return h.replace(/<head[^>]*>/i, m => m + base);
+  return base + h;
+}
+
+function openInTab(v: View) {
+  if (!v.htmlRaw) return;
+  const blob = new Blob([srcdocFor(v)], { type: "text/html" });
+  window.open(URL.createObjectURL(blob), "_blank", "noopener");
+}
+
+// Multiset word diff: words present more times in A than B (and vice-versa). Case-insensitive
+// keys, original-case display. Small texts → trivially fast.
+function wordDiff(aText: string, bText: string): { onlyA: string[]; onlyB: string[] } {
+  const tok = (s: string) => (s.match(/[\p{L}\p{N}][\p{L}\p{N}'-]*/gu) || []);
+  const ms = (words: string[]) => {
+    const m = new Map<string, { c: number; disp: string }>();
+    for (const w of words) { const k = w.toLowerCase(); const e = m.get(k); if (e) e.c++; else m.set(k, { c: 1, disp: w }); }
+    return m;
+  };
+  const A = ms(tok(aText)), B = ms(tok(bText));
+  const onlyA: string[] = [], onlyB: string[] = [];
+  for (const [k, e] of A) { const d = e.c - (B.get(k)?.c || 0); for (let i = 0; i < d; i++) onlyA.push(e.disp); }
+  for (const [k, e] of B) { const d = e.c - (A.get(k)?.c || 0); for (let i = 0; i < d; i++) onlyB.push(e.disp); }
+  return { onlyA: onlyA.slice(0, 200), onlyB: onlyB.slice(0, 200) };
 }
 
 function hostOf(u: string): string { try { return new URL(u).host; } catch { return u; } }

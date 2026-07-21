@@ -2115,5 +2115,17 @@
   "gbvLastCrawl": "Последний обход",
   "gbvCanonicalMismatch": "Google выбрал canonical, отличный от заявленного тобой.",
   "gbvGscUnavailable": "URL Inspection недоступен — подключи Google-аккаунт с доступом к GSC.",
-  "gbvGscConnect": "Настройки"
+  "gbvGscConnect": "Настройки",
+  "gbvContent": "Просмотр контента",
+  "gbvViewLabel": "Взгляд:",
+  "gbvTabPreview": "Превью",
+  "gbvTabText": "Текст",
+  "gbvTabHtml": "HTML-исходник",
+  "gbvOpenTab": "Открыть в новой вкладке",
+  "gbvPreviewNote": "Отрисовано из того же HTML, который получил этот User-Agent. Скрипты отключены — показан отданный сервером разметочный код, а не результат работы JS страницы.",
+  "gbvNoContent": "Для этого взгляда нет HTML-контента.",
+  "gbvDiffTitle": "Чем отличается вид для бота и браузера",
+  "gbvOnlyBot": "Эти слова видит только Googlebot",
+  "gbvOnlyBrowser": "Эти слова видит только браузер",
+  "gbvDiffNoneWords": "Различий по видимым словам нет — отличие только в разметке/форматировании."
 }

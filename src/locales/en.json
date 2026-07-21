@@ -2115,5 +2115,17 @@
   "gbvLastCrawl": "Last crawl",
   "gbvCanonicalMismatch": "Google chose a different canonical than you declared.",
   "gbvGscUnavailable": "URL Inspection unavailable — connect a Google account with GSC access.",
-  "gbvGscConnect": "Settings"
+  "gbvGscConnect": "Settings",
+  "gbvContent": "Content viewer",
+  "gbvViewLabel": "View:",
+  "gbvTabPreview": "Preview",
+  "gbvTabText": "Text",
+  "gbvTabHtml": "HTML source",
+  "gbvOpenTab": "Open in new tab",
+  "gbvPreviewNote": "Rendered from the exact HTML this User-Agent received. Scripts are disabled, so it shows the served markup — not a re-run of the page's JS.",
+  "gbvNoContent": "No HTML content for this view.",
+  "gbvDiffTitle": "What differs between bot and browser",
+  "gbvOnlyBot": "Only Googlebot sees these words",
+  "gbvOnlyBrowser": "Only the browser sees these words",
+  "gbvDiffNoneWords": "No visible-word differences — the difference is in markup/formatting only."
 }

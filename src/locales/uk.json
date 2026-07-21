@@ -2115,5 +2115,17 @@
   "gbvLastCrawl": "Останній обхід",
   "gbvCanonicalMismatch": "Google обрав canonical, відмінний від заявленого тобою.",
   "gbvGscUnavailable": "URL Inspection недоступний — підключи Google-акаунт із доступом до GSC.",
-  "gbvGscConnect": "Налаштування"
+  "gbvGscConnect": "Налаштування",
+  "gbvContent": "Перегляд контенту",
+  "gbvViewLabel": "Погляд:",
+  "gbvTabPreview": "Превʼю",
+  "gbvTabText": "Текст",
+  "gbvTabHtml": "HTML-джерело",
+  "gbvOpenTab": "Відкрити в новій вкладці",
+  "gbvPreviewNote": "Відрендерено з того ж HTML, який отримав цей User-Agent. Скрипти вимкнено — показано відданий сервером код розмітки, а не результат роботи JS сторінки.",
+  "gbvNoContent": "Для цього погляду немає HTML-контенту.",
+  "gbvDiffTitle": "Чим відрізняється вигляд для бота і браузера",
+  "gbvOnlyBot": "Ці слова бачить лише Googlebot",
+  "gbvOnlyBrowser": "Ці слова бачить лише браузер",
+  "gbvDiffNoneWords": "Відмінностей за видимими словами немає — різниця лише в розмітці/форматуванні."
 }

@@ -28,6 +28,8 @@ export type UaKey = keyof typeof UA;
 const MAX_HOPS = 20;
 const FETCH_TIMEOUT = 15000;
 const MAX_BODY = 2_000_000; // 2 MB cap when reading body
+const MAX_HTML_RETURN = 500_000; // cap raw HTML sent back to the client
+const MAX_TEXT_RETURN = 40_000; // cap extracted text sent back to the client
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 export interface Hop {
@@ -68,6 +70,8 @@ export interface ViewResult {
   signals: SeoSignals;
   bodyHash: string;
   wordCount: number;
+  bodyText: string; // extracted visible text (capped) — for the content viewer / word diff
+  htmlRaw: string; // raw HTML as delivered (capped) — for the rendered preview / source view
   error?: string;
 }
 
@@ -277,6 +281,8 @@ export async function followChain(startUrl: string, ua: UaKey, opts?: { referer?
         },
         bodyHash: createHash("sha1").update(bodyText).digest("hex"),
         wordCount,
+        bodyText: bodyText.slice(0, MAX_TEXT_RETURN),
+        htmlRaw: html.slice(0, MAX_HTML_RETURN),
       };
     }
 
@@ -292,7 +298,7 @@ function blankView(ua: UaKey, url: string, status: number, hops: Hop[], error: s
     ua, ok: false, hops, finalUrl: url, finalStatus: status,
     headers: {},
     signals: { hreflang: [], title: "", jsRedirects: [], indexable: false, indexableReasons: [error] },
-    bodyHash: "", wordCount: 0, error,
+    bodyHash: "", wordCount: 0, bodyText: "", htmlRaw: "", error,
   };
 }
 
