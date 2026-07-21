@@ -247,28 +247,36 @@ export default function GooglebotViewPage() {
             </div>
           )}
 
-          {/* Word diff — what only the bot / only the browser sees */}
+          {/* Content diff — lines only the bot / only the browser sees */}
           {activeGb && activeBr && (activeGb.bodyText || activeBr.bodyText) && (() => {
-            const d = wordDiff(activeGb.bodyText, activeBr.bodyText);
-            const hasWords = d.onlyA.length > 0 || d.onlyB.length > 0;
+            const d = lineDiff(activeGb.bodyText, activeBr.bodyText);
+            const hasLines = d.onlyA.length > 0 || d.onlyB.length > 0;
             const hashDiffers = res.diff.flags.some(f => f.includes("Контент") || f.toLowerCase().includes("content"));
-            if (!hasWords && !hashDiffers) return null;
+            if (!hasLines && !hashDiffers) return null;
             return (
               <div className={card}>
                 <div className="tool-section-label" style={{ marginBottom: "10px" }}>{t("gbvDiffTitle")}</div>
-                {hasWords ? (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px,1fr))", gap: "12px" }}>
+                {hasLines ? (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px,1fr))", gap: "16px" }}>
                     <div>
-                      <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--color-accent-green)", marginBottom: "6px", display: "flex", alignItems: "center", gap: "6px" }}><Bot size={13} /> {t("gbvOnlyBot")}</div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
-                        {d.onlyA.length ? d.onlyA.map((w, i) => <span key={i} style={{ fontSize: "12px", padding: "2px 8px", borderRadius: "5px", background: "rgba(52,199,89,0.12)", border: "1px solid rgba(52,199,89,0.3)", color: "var(--color-text-primary)" }}>{w}</span>) : <span style={{ fontSize: "12px", color: "var(--color-text-tertiary)" }}>—</span>}
-                      </div>
+                      <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--color-accent-green)", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}><Bot size={13} /> {t("gbvOnlyBot")}</div>
+                      {d.onlyA.length ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                          {d.onlyA.map((line, i) => (
+                            <div key={i} style={{ fontSize: "12px", padding: "6px 10px", borderRadius: "6px", background: "rgba(52,199,89,0.08)", borderLeft: "3px solid rgba(52,199,89,0.6)", color: "var(--color-text-primary)", lineHeight: 1.5, wordBreak: "break-word" }}>{line}</div>
+                          ))}
+                        </div>
+                      ) : <span style={{ fontSize: "12px", color: "var(--color-text-tertiary)" }}>—</span>}
                     </div>
                     <div>
-                      <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--color-accent-red)", marginBottom: "6px", display: "flex", alignItems: "center", gap: "6px" }}><Monitor size={13} /> {t("gbvOnlyBrowser")}</div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
-                        {d.onlyB.length ? d.onlyB.map((w, i) => <span key={i} style={{ fontSize: "12px", padding: "2px 8px", borderRadius: "5px", background: "rgba(255,69,58,0.12)", border: "1px solid rgba(255,69,58,0.3)", color: "var(--color-text-primary)" }}>{w}</span>) : <span style={{ fontSize: "12px", color: "var(--color-text-tertiary)" }}>—</span>}
-                      </div>
+                      <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--color-accent-red)", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}><Monitor size={13} /> {t("gbvOnlyBrowser")}</div>
+                      {d.onlyB.length ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                          {d.onlyB.map((line, i) => (
+                            <div key={i} style={{ fontSize: "12px", padding: "6px 10px", borderRadius: "6px", background: "rgba(255,69,58,0.08)", borderLeft: "3px solid rgba(255,69,58,0.6)", color: "var(--color-text-primary)", lineHeight: 1.5, wordBreak: "break-word" }}>{line}</div>
+                          ))}
+                        </div>
+                      ) : <span style={{ fontSize: "12px", color: "var(--color-text-tertiary)" }}>—</span>}
                     </div>
                   </div>
                 ) : (
@@ -451,20 +459,41 @@ function openInTab(v: View) {
   window.open(URL.createObjectURL(blob), "_blank", "noopener");
 }
 
-// Multiset word diff: words present more times in A than B (and vice-versa). Case-insensitive
-// keys, original-case display. Small texts → trivially fast.
-function wordDiff(aText: string, bText: string): { onlyA: string[]; onlyB: string[] } {
-  const tok = (s: string) => (s.match(/[\p{L}\p{N}][\p{L}\p{N}'-]*/gu) || []);
-  const ms = (words: string[]) => {
+// Line-level diff: split visible text into meaningful lines/sentences, find lines present only
+// in one view. Normalises whitespace so trivial formatting differences don't trigger false flags.
+// Preserves original-case display. Capped at 50 lines per side.
+function lineDiff(aText: string, bText: string): { onlyA: string[]; onlyB: string[] } {
+  // Split into non-empty trimmed lines; collapse internal whitespace for matching.
+  const toLines = (s: string): string[] =>
+    s.split(/\n+/).map(l => l.trim()).filter(l => l.length > 0);
+  const norm = (l: string) => l.replace(/\s+/g, " ").toLowerCase();
+
+  const aLines = toLines(aText);
+  const bLines = toLines(bText);
+
+  // Build multiset of normalised lines for each side
+  const ms = (lines: string[]) => {
     const m = new Map<string, { c: number; disp: string }>();
-    for (const w of words) { const k = w.toLowerCase(); const e = m.get(k); if (e) e.c++; else m.set(k, { c: 1, disp: w }); }
+    for (const l of lines) {
+      const k = norm(l);
+      const e = m.get(k);
+      if (e) e.c++;
+      else m.set(k, { c: 1, disp: l });
+    }
     return m;
   };
-  const A = ms(tok(aText)), B = ms(tok(bText));
+
+  const A = ms(aLines), B = ms(bLines);
   const onlyA: string[] = [], onlyB: string[] = [];
-  for (const [k, e] of A) { const d = e.c - (B.get(k)?.c || 0); for (let i = 0; i < d; i++) onlyA.push(e.disp); }
-  for (const [k, e] of B) { const d = e.c - (A.get(k)?.c || 0); for (let i = 0; i < d; i++) onlyB.push(e.disp); }
-  return { onlyA: onlyA.slice(0, 200), onlyB: onlyB.slice(0, 200) };
+  for (const [k, e] of A) {
+    const d = e.c - (B.get(k)?.c || 0);
+    for (let i = 0; i < d; i++) onlyA.push(e.disp);
+  }
+  for (const [k, e] of B) {
+    const d = e.c - (A.get(k)?.c || 0);
+    for (let i = 0; i < d; i++) onlyB.push(e.disp);
+  }
+  return { onlyA: onlyA.slice(0, 50), onlyB: onlyB.slice(0, 50) };
 }
 
 function hostOf(u: string): string { try { return new URL(u).host; } catch { return u; } }
