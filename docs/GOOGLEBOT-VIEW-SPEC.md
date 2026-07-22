@@ -245,3 +245,30 @@ body: {
 - Регистрация + локали — мелкие точечные правки.
 
 Ориентир для Фазы 1 (MVP) — 1 рабочий день.
+
+---
+
+## 10. Rich Results — взгляд настоящего Googlebot (обход IP-клоаки)
+
+**Проблема.** UA-спуф (`followChain`) и рендер через Firecrawl ходят с дата-центрового IP. Продвинутые клоакеры (гемблинг, PBN) отдают «версию для Googlebot» только на **реальный IP Google** (проверка reverse-DNS). Такую IP-клоаку не видит ни один внешний фетчер.
+
+**Единственный способ** увидеть эту версию — прогнать URL через собственный инструмент Google (**Rich Results Test**), который краулит как настоящий Googlebot с IP Google. Официального API нет (Mobile-Friendly Test API отключён Google в конце 2024), поэтому автоматизируем веб-инструмент headless-браузером.
+
+Реализация: `src/lib/seo/richResults.ts` (Playwright) + `POST /api/seo/googlebot/rich-results` + кнопка/вставка в UI. Возвращает `ViewResult` с `ua: "gbRichResults"` — авторитетный взгляд Googlebot; из него бар сигналов подсвечивает off-domain canonical (напр. `d2eplantparlour.com`).
+
+**Два режима:**
+- **Авто** — Playwright анонимно (без Google-логина) открывает Rich Results Test, сабмитит URL, ждёт результат, извлекает rendered HTML. Экспериментально: возможна CAPTCHA, DOM Google меняется → селекторы в `richResults.ts` (`TEST_BTN`/`VIEW_PAGE`/`HTML_TAB`) придётся подкручивать.
+- **Ручная вставка** (надёжный fallback) — пользователь копирует HTML из Rich Results Test → инструмент парсит его как взгляд Googlebot. Работает всегда, без Playwright и без нарушения ToS.
+
+**Установка Playwright на сервере (для авто-режима):**
+
+```bash
+npm install                      # playwright ставится из optionalDependencies
+npx playwright install chromium  # + системные библиотеки: npx playwright install-deps
+```
+
+В Docker добавить установку `chromium` и его зависимостей в `Dockerfile`.
+
+**Опционально — залогиненная сессия** (выше лимиты, реже CAPTCHA): экспортировать `storageState` залогиненного в Google браузера в JSON и указать путь в env `GOOGLE_RICH_RESULTS_STORAGE_STATE`. **Важно про безопасность:** этот файл = полная сессия Google-аккаунта; храни его как секрет, по умолчанию режим анонимный и куки не нужны.
+
+**Юридично.** Автоматизированный доступ к инструменту Google — серая зона по его ToS. Ручная вставка таких вопросов не создаёт. Авто-режим — на усмотрение и риск владельца проекта.

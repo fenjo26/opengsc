@@ -23,6 +23,9 @@
     "react-dom": "19.2.4",
     "recharts": "^3.8.1"
   },
+  "optionalDependencies": {
+    "playwright": "^1.49.0"
+  },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^2.4.6",

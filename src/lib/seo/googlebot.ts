@@ -80,7 +80,7 @@ export interface ViewResult {
 }
 
 export interface CloakingDiff {
-  verdict: "clean" | "suspicious" | "cloaking";
+  verdict: "clean" | "suspicious" | "cloaking" | "unknown";
   score: number;
   flags: string[];
 }
@@ -487,6 +487,18 @@ export async function analyzeUrl(url: string, opts?: { desktop?: boolean; refere
   const antiBot: AntiBotInfo | null = rawProvider
     ? { blocked: true, provider: rawProvider, bypassed: !!gbRenderView?.ok }
     : null;
+
+  // Honesty guard: if the direct Googlebot fetch was blocked by an anti-bot wall and nothing we
+  // COULD reach showed a difference, we must not report "clean" — we simply never saw the real
+  // Googlebot response. This is exactly the IP-gated cloaking case (doorway served only to real
+  // Google IPs): undetectable by any external fetch, so mark it inconclusive and point to Google's
+  // own tools (Rich Results Test) which crawl as the real Googlebot.
+  if (antiBot?.blocked && diff.verdict === "clean") {
+    diff.verdict = "unknown";
+    diff.flags.unshift(
+      "Прямой Googlebot-фетч заблокирован анти-бот защитой — подтвердить или опровергнуть клоаку отсюда нельзя. Такие сайты часто отдают «версию для Googlebot» только на реальный IP Google (IP-клоака), которую не видит ни один внешний фетчер. Проверь через Rich Results Test — он краулит как настоящий Googlebot с IP Google.",
+    );
+  }
 
   return { url, views, diff, renderedDiff, wayback, antiBot };
 }

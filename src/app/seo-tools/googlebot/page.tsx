@@ -7,7 +7,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Loader2, AlertTriangle, Bot, Monitor, ShieldCheck, ShieldAlert, ShieldX, ArrowRight, Globe, CheckCircle2, ExternalLink } from "lucide-react";
+import { Loader2, AlertTriangle, Bot, Monitor, ShieldCheck, ShieldAlert, ShieldX, ArrowRight, Globe, CheckCircle2, ExternalLink, HelpCircle } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { addHistory, getHistoryItem } from "@/lib/seo/history";
 import { getFirecrawlKey } from "@/lib/seo/keys";
@@ -31,6 +31,7 @@ const UA_LABEL: Record<string, string> = {
   chrome: "Browser",
   gbRender: "Googlebot (JS-render)",
   browserRender: "Browser (JS-render)",
+  gbRichResults: "Googlebot (Rich Results)",
 };
 
 function hostOfSafe(u?: string): string { try { return u ? new URL(u).host.toLowerCase() : ""; } catch { return ""; } }
@@ -48,6 +49,11 @@ export default function GooglebotViewPage() {
   const [res, setRes] = useState<Result | null>(null);
   const [viewIdx, setViewIdx] = useState(0);
   const [mode, setMode] = useState<"preview" | "text" | "html">("preview");
+  const [richLoading, setRichLoading] = useState(false);
+  const [richErr, setRichErr] = useState("");
+  const [richMsg, setRichMsg] = useState("");
+  const [showPaste, setShowPaste] = useState(false);
+  const [pasteHtml, setPasteHtml] = useState("");
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -106,10 +112,46 @@ export default function GooglebotViewPage() {
     setRunning(false);
   }
 
+  function mergeRichView(view: View) {
+    setRes(prev => {
+      if (!prev) return prev;
+      const views = [...prev.views.filter(v => v.ua !== "gbRichResults"), view];
+      setViewIdx(views.length - 1);
+      setMode(view.screenshot ? "preview" : "html");
+      return { ...prev, views };
+    });
+  }
+
+  async function fetchRich(html?: string) {
+    if (!res) return;
+    setRichLoading(true); setRichErr(""); setRichMsg("");
+    try {
+      const r = await fetch("/api/seo/googlebot/rich-results", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: res.url, html }),
+      });
+      const d = await r.json();
+      if (d.ok && d.view) {
+        mergeRichView(d.view);
+        setRichMsg(t("gbvRichLoaded"));
+        setShowPaste(false); setPasteHtml("");
+      } else {
+        const e = d.error === "captcha" ? t("gbvRichErrCaptcha")
+          : d.error === "playwright_not_installed" ? t("gbvRichErrNoPlaywright")
+          : d.error === "not_html" ? t("gbvRichErrGeneric")
+          : t("gbvRichErrGeneric");
+        setRichErr(e);
+        if (!html) setShowPaste(true);
+      }
+    } catch { setRichErr(t("gbvRichErrGeneric")); setShowPaste(true); }
+    setRichLoading(false);
+  }
+
   const gb = res?.views.find(v => v.ua === "gbMobile");
   const br = res?.views.find(v => v.ua === "chrome");
   const gbRender = res?.views.find(v => v.ua === "gbRender");
   const brRender = res?.views.find(v => v.ua === "browserRender");
+  const richView = res?.views.find(v => v.ua === "gbRichResults");
 
   // When the raw fetch was blocked by an anti-bot wall but a render got through, show the
   // rendered (real) content by default so the user sees the cloak instead of the challenge page.
@@ -120,11 +162,14 @@ export default function GooglebotViewPage() {
   const hasJsRender = !!gbRender && !!brRender;
   const activeGb = compareMode === "js" && gbRender ? gbRender : gb;
   const activeBr = compareMode === "js" && brRender ? brRender : br;
+  // The Rich Results view is the authoritative "real Googlebot" — prefer it for SEO signals.
+  const authGb = richView ?? activeGb;
 
   const verdictUi = {
     clean: { icon: ShieldCheck, color: "var(--color-accent-green)", bg: "rgba(52,199,89,0.08)", bd: "rgba(52,199,89,0.35)", label: t("gbvVerdictClean") },
     suspicious: { icon: ShieldAlert, color: "var(--color-accent-orange)", bg: "rgba(255,159,10,0.08)", bd: "rgba(255,159,10,0.35)", label: t("gbvVerdictSuspicious") },
     cloaking: { icon: ShieldX, color: "var(--color-accent-red)", bg: "rgba(255,69,58,0.08)", bd: "rgba(255,69,58,0.4)", label: t("gbvVerdictCloaking") },
+    unknown: { icon: HelpCircle, color: "var(--color-text-secondary)", bg: "var(--color-bg)", bd: "var(--color-border)", label: t("gbvVerdictUnknown") },
   } as const;
 
   return (
@@ -179,25 +224,45 @@ export default function GooglebotViewPage() {
         <>
           {/* Anti-bot wall callout */}
           {res.antiBot?.blocked && (
-            res.antiBot.bypassed ? (
-              <div className={card} style={{ borderColor: "rgba(52,199,89,0.35)", background: "rgba(52,199,89,0.06)", display: "flex", gap: "10px", alignItems: "center", fontSize: "13px", color: "var(--color-text-secondary)" }}>
-                <CheckCircle2 size={18} color="var(--color-accent-green)" /> {t("gbvBlockedBypassed")}
+            <div className={card} style={{ borderColor: "rgba(255,159,10,0.4)", background: "rgba(255,159,10,0.07)" }}>
+              <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "6px" }}>
+                <ShieldAlert size={18} color="var(--color-accent-orange)" />
+                <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-accent-orange)" }}>{t("gbvBlockedTitle")}</span>
               </div>
-            ) : (
-              <div className={card} style={{ borderColor: "rgba(255,159,10,0.4)", background: "rgba(255,159,10,0.07)" }}>
-                <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "6px" }}>
-                  <ShieldAlert size={18} color="var(--color-accent-orange)" />
-                  <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-accent-orange)" }}>{t("gbvBlockedTitle")}</span>
-                </div>
-                <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>{t("gbvBlockedHint")}</div>
-              </div>
-            )
+              <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>{res.antiBot.bypassed ? t("gbvBlockedBypassed") : t("gbvBlockedHint")}</div>
+              <a href={`https://search.google.com/test/rich-results?url=${encodeURIComponent(res.url)}`} target="_blank" rel="noreferrer"
+                style={{ display: "inline-flex", alignItems: "center", gap: "6px", marginTop: "10px", padding: "8px 13px", borderRadius: "8px", border: "1px solid rgba(66,133,244,0.5)", background: "var(--color-bg)", color: "#4285F4", fontSize: "12px", fontWeight: 700, textDecoration: "none" }}>
+                <ExternalLink size={13} /> {t("gbvBlockedRRT")}
+              </a>
+            </div>
           )}
 
+          {/* Rich Results — the real Googlebot view (auto via Playwright, or manual paste) */}
+          <div className={card} style={{ borderColor: "rgba(66,133,244,0.3)", background: "rgba(66,133,244,0.04)" }}>
+            <div className="tool-section-label" style={{ marginBottom: "6px", display: "flex", alignItems: "center", gap: "7px" }}>
+              <Globe size={14} color="#4285F4" /> {t("gbvRichTitle")}
+            </div>
+            <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.6, marginBottom: "10px" }}>{t("gbvRichNote")}</div>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+              <button onClick={() => fetchRich()} disabled={richLoading} style={{ ...btnPurple, opacity: richLoading ? 0.6 : 1 }}>
+                {richLoading ? <Loader2 size={15} className="spin" /> : <Bot size={15} />} {t("gbvRichAutoBtn")}
+              </button>
+              <button onClick={() => setShowPaste(v => !v)} style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "10px 14px", borderRadius: "9px", border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-secondary)", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>{t("gbvRichPasteToggle")}</button>
+              {richMsg && <span style={{ fontSize: "12px", color: "var(--color-accent-green)" }}>{richMsg}</span>}
+            </div>
+            {richErr && <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-accent-orange)" }}>{richErr}</div>}
+            {showPaste && (
+              <div style={{ marginTop: "10px" }}>
+                <textarea className={inputStyle} style={{ width: "100%", minHeight: "90px", resize: "vertical", fontFamily: "ui-monospace, monospace", fontSize: "11px" }} value={pasteHtml} onChange={e => setPasteHtml(e.target.value)} placeholder={t("gbvRichPastePh")} />
+                <button onClick={() => fetchRich(pasteHtml)} disabled={richLoading || pasteHtml.trim().length < 40} style={{ ...btnPurple, marginTop: "8px", opacity: (richLoading || pasteHtml.trim().length < 40) ? 0.6 : 1 }}>{t("gbvRichPasteBtn")}</button>
+              </div>
+            )}
+          </div>
+
           {/* Signals bar — fetched URL / lang / HTML canonical / hreflang */}
-          {activeGb && (() => {
-            const s = activeGb.signals;
-            const pageHost = hostOfSafe(activeGb.finalUrl);
+          {authGb && (() => {
+            const s = authGb.signals;
+            const pageHost = hostOfSafe(authGb.finalUrl);
             const canonHost = hostOfSafe(s.canonicalHtml);
             const offDomain = !!canonHost && !!pageHost && canonHost !== pageHost;
             const chip = (bd: string, bg: string): React.CSSProperties => ({ display: "inline-flex", alignItems: "center", gap: "7px", padding: "7px 11px", borderRadius: "9px", border: `1px solid ${bd}`, background: bg, fontSize: "12px", color: "var(--color-text-primary)" });
@@ -222,9 +287,9 @@ export default function GooglebotViewPage() {
           })()}
 
           {/* Off-domain canonical warning — authority funneling / PBN */}
-          {activeGb && (() => {
-            const s = activeGb.signals;
-            const pageHost = hostOfSafe(activeGb.finalUrl);
+          {authGb && (() => {
+            const s = authGb.signals;
+            const pageHost = hostOfSafe(authGb.finalUrl);
             const canonHost = hostOfSafe(s.canonicalHtml);
             if (!canonHost || !pageHost || canonHost === pageHost) return null;
             return (

@@ -2143,7 +2143,7 @@
   "gbvFirecrawlMissingKey": "Firecrawl API key is missing. Please configure it in Settings -> API Keys.",
   "gbvBlockedTitle": "Blocked by anti-bot protection (Cloudflare)",
   "gbvBlockedHint": "The site is behind an anti-bot wall, so a plain fetch only sees the \"Just a moment…\" challenge — not the real page. Enable \"JS-render via Firecrawl\" above (and add a Firecrawl key in Settings) to render through a real headless browser as Googlebot and reveal the cloaked content.",
-  "gbvBlockedBypassed": "Anti-bot wall bypassed via Firecrawl render — the Googlebot version is shown below.",
+  "gbvBlockedBypassed": "Cloudflare passed via render — but this is the version served to a regular browser / non-Google IP. IP-based cloakers serve the real \"Googlebot version\" only to Google's own IPs. To see that, use Rich Results Test below (it crawls as the real Googlebot).",
   "gbvScreenshot": "Screenshot",
   "gbvCanonOffDomain": "The HTML canonical points to a DIFFERENT domain than the page itself — a classic authority-funnelling / PBN signal (the page tells Google the \"real\" version lives elsewhere):",
   "seoTabRewrite": "Rewrite",
@@ -2172,5 +2172,17 @@
   "rwCopied": "Copied",
   "rwErrNoContent": "Couldn't read any content from that source.",
   "rwErrGen": "Rewrite failed — check your AI key and try again.",
-  "cdmRewrite": "Rewrite"
+  "cdmRewrite": "Rewrite",
+  "gbvVerdictUnknown": "Couldn't verify — site is behind anti-bot / IP protection",
+  "gbvBlockedRRT": "See the real Googlebot version",
+  "gbvRichTitle": "Real Googlebot view (Rich Results)",
+  "gbvRichNote": "Pull how the REAL Googlebot (from a Google IP) renders this URL — the only way to expose IP-based cloaking. Automated via Google's Rich Results Test (experimental, may hit CAPTCHA). If it fails, paste the HTML manually.",
+  "gbvRichAutoBtn": "Fetch via Rich Results (auto)",
+  "gbvRichPasteToggle": "or paste HTML manually",
+  "gbvRichPastePh": "Paste the HTML from Rich Results Test → View tested page → HTML",
+  "gbvRichPasteBtn": "Analyze pasted HTML",
+  "gbvRichLoaded": "Real Googlebot view loaded — see it in the content viewer and signals bar below.",
+  "gbvRichErrCaptcha": "Google showed a CAPTCHA. Use the manual paste path below.",
+  "gbvRichErrNoPlaywright": "Playwright is not installed on the server. Use the manual paste path, or install Playwright (see docs).",
+  "gbvRichErrGeneric": "Couldn't fetch automatically. Use the manual paste path below."
 }

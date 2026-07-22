@@ -2143,7 +2143,7 @@
   "gbvFirecrawlMissingKey": "Отсутствует API-ключ Firecrawl. Настройте его в Настройки -> API-ключи.",
   "gbvBlockedTitle": "Заблокировано анти-бот защитой (Cloudflare)",
   "gbvBlockedHint": "Сайт стоит за анти-бот стеной, поэтому обычный fetch видит только заглушку «Just a moment…», а не реальную страницу. Включи выше «JS-рендер через Firecrawl» (и добавь ключ Firecrawl в Настройках) — рендер через настоящий headless-браузер под видом Googlebot пробьёт защиту и покажет заклоаченный контент.",
-  "gbvBlockedBypassed": "Анти-бот стена пробита через Firecrawl-рендер — версия для Googlebot показана ниже.",
+  "gbvBlockedBypassed": "Cloudflare пройден рендером — но это версия для обычного браузера / не-Google IP. IP-клоакеры отдают настоящую «версию для Googlebot» только на IP самого Google. Чтобы увидеть её, используй Rich Results Test ниже (он краулит как настоящий Googlebot).",
   "gbvScreenshot": "Скриншот",
   "gbvCanonOffDomain": "HTML canonical указывает на ДРУГОЙ домен, а не на саму страницу — классический признак увода веса / PBN (страница говорит Google, что «настоящая» версия живёт на другом домене):",
   "seoTabRewrite": "Рерайт",
@@ -2172,5 +2172,17 @@
   "rwCopied": "Скопировано",
   "rwErrNoContent": "Не удалось прочитать контент из источника.",
   "rwErrGen": "Рерайт не удался — проверьте AI-ключ и попробуйте снова.",
-  "cdmRewrite": "Рерайт"
+  "cdmRewrite": "Рерайт",
+  "gbvVerdictUnknown": "Не удалось проверить — сайт под анти-бот / IP-защитой",
+  "gbvBlockedRRT": "Увидеть настоящую версию для Googlebot",
+  "gbvRichTitle": "Взгляд настоящего Googlebot (Rich Results)",
+  "gbvRichNote": "Забрать то, как этот URL рендерит НАСТОЯЩИЙ Googlebot (с IP Google) — единственный способ вскрыть IP-клоаку. Автоматизируется через Rich Results Test Google (экспериментально, возможна CAPTCHA). Если не вышло — вставь HTML вручную.",
+  "gbvRichAutoBtn": "Забрать через Rich Results (авто)",
+  "gbvRichPasteToggle": "или вставить HTML вручную",
+  "gbvRichPastePh": "Вставь HTML из Rich Results Test → Посмотреть проверенную страницу → HTML",
+  "gbvRichPasteBtn": "Разобрать вставленный HTML",
+  "gbvRichLoaded": "Взгляд настоящего Googlebot загружен — смотри в просмотрщике контента и баре сигналов ниже.",
+  "gbvRichErrCaptcha": "Google показал CAPTCHA. Используй ручную вставку ниже.",
+  "gbvRichErrNoPlaywright": "Playwright не установлен на сервере. Используй ручную вставку или установи Playwright (см. доки).",
+  "gbvRichErrGeneric": "Не удалось забрать автоматически. Используй ручную вставку ниже."
 }
