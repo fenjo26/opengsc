@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { FileText, Search, ScrollText, Sparkles, History, PenLine, Quote, Globe, LayoutTemplate, SlidersHorizontal, Link2, LayoutGrid, Boxes, Bot } from "lucide-react";
+import { FileText, Search, ScrollText, Sparkles, History, PenLine, Quote, Globe, LayoutTemplate, SlidersHorizontal, Link2, LayoutGrid, Boxes, Bot, RefreshCw } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 const TABS = [
@@ -11,6 +11,7 @@ const TABS = [
   { href: "/seo-tools/outline", key: "seoTabOutline" as const, icon: FileText },
   { href: "/seo-tools/landing", key: "seoTabLanding" as const, icon: LayoutTemplate },
   { href: "/seo-tools/text", key: "seoTabText" as const, icon: PenLine },
+  { href: "/seo-tools/rewrite", key: "seoTabRewrite" as const, icon: RefreshCw },
   { href: "/seo-tools/analysis", key: "seoTabAnalysis" as const, icon: Search },
   { href: "/seo-tools/googlebot", key: "seoTabGooglebot" as const, icon: Bot },
   { href: "/seo-tools/citations", key: "seoTabCitations" as const, icon: Quote },

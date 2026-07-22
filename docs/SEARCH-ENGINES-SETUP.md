@@ -12,6 +12,15 @@ Where things live in the app:
   per engine: clicks, impressions, CTR, weighted average position, traffic chart, top
   queries (+ top pages and index/crawl stats for Bing, SQI and site diagnostics for Yandex).
   The **Sync** button refreshes Google data *and* every connected engine at once.
+- **Main dashboard → engine tabs** (Google · Bing · Yandex) — the *whole portfolio* per
+  engine: Bing/Yandex enumerate **their own** verified sites (across every connected account),
+  with the same KPI cards, per-site sparkline cards, sorting, search, tags and CSV as Google.
+  Results are cached server-side, so a tab opens instantly after the first build; **Sync**
+  (or the tab's own refresh) rebuilds live with retries so no site is dropped under throttling.
+- **Digest → engine tabs** — the portfolio digest splits per engine (gainers/losers,
+  attention, per-site totals), reusing the cached engine portfolio.
+- **Site-search badge** on each site card follows the active engine tab: **G** → Google,
+  **b** → Bing, **Я** → Yandex (`site:domain` search).
 - **Site page → Indexing tab → Search engines panel** — actions: submit sitemap to
   Bing/Yandex, send URLs for Yandex recrawl, push URLs via IndexNow.
 

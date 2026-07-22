@@ -40,7 +40,7 @@ mid-job would otherwise leave a phantom row "processing" forever.
 
 ## 2. Data model
 
-`prisma/schema.prisma` groups into six areas:
+`prisma/schema.prisma` groups into these areas:
 
 | Area | Models |
 |---|---|
@@ -51,6 +51,7 @@ mid-job would otherwise leave a phantom row "processing" forever.
 | Indexer | `IndexerDomain`, `IndexerLog`, `IndexerQueue`, `IndexerDictionary` |
 | SEO Tools | `SeoJob`, `SeoHistory`, `GeoAudit`, `RagSlot`, `RagCasino` |
 | Site Audit | `SiteAudit`, `SiteAuditPage` (built-in crawler) |
+| Search engines | `EnginePortfolioCache` (cached live Bing/Yandex portfolio per `userId`+`engine`+`period`) |
 | Notifications | `AlertEvent` (fired alerts, dedupe), `Digest` (digest history) |
 
 Notably, **the SEO Tools module treats the browser as its working store, with the server as a
@@ -181,7 +182,53 @@ search trace and citations out of the response — the "ground truth" is literal
 already searched and cited, which is the whole point: it's measuring AI-search visibility, not
 simulating it.
 
-## 4. The Indexer's cloaking mechanism
+### 3.5 Content Rewriter (`src/lib/seo/rewrite.ts`)
+
+A lightweight, stateless tool (`/seo-tools/rewrite` → `POST /api/seo/rewrite`) that rewrites pasted
+text — or a **URL** (fetched through the existing `scrapeMany` scraper) — into *N* unique variants
+via `fetchLLM`, so it inherits the whole multi-provider abstraction (§3.3) and the user's own keys.
+Variants are generated with a small concurrency pool and a "make this variant distinct" nudge in the
+prompt. Two ideas are borrowed from `affiliate.fm/ai-content-rewriter` but re-implemented on our own
+stack (no OpenAI-only dependency): **`maskAIPatterns()`** strips common machine tells (em/en-dashes,
+"furthermore"/"moreover", "it is important to note", unicode bullets…) via a regex table, and
+**`uniquenessPct()`** scores each variant as `1 − word-trigram Jaccard similarity` against the source.
+It writes nothing to the database — results are returned inline and copied/downloaded client-side. The
+Content Decay map deep-links each decaying page here with `?url=` prefilled.
+
+## 4. Search engines (Google · Bing · Yandex)
+
+Google is the primary, locally-synced source (`DailyMetric`). Bing and Yandex are **live**: their
+credentials live browser-side (`seoKey_bing*` / `seoKey_yandex*`, backed up to `User.seoSettings`),
+and are resolved server-side by `src/lib/engineKeysServer.ts` — a mirror of the client
+`resolveEngineKey` that honours per-site account selection. That server resolver is what lets a
+**guest share link** and the headless **digest**/**portfolio** endpoints reach an engine without the
+owner's localStorage.
+
+Two rendering surfaces:
+
+- **Per-site view** (`src/components/EngineView.tsx`) — swaps the GSC chart for a live Bing/Yandex
+  view of one site: clicks/impressions/CTR/position with GSC-style toggles + a previous-period dashed
+  comparison, sortable+paginated query/page tables with CSV, and engine-specific extras (Bing index &
+  crawl stats; Yandex SQI + localized site diagnostics). Fetches through `/api/indexing/{bing,yandex}`,
+  which accept either the owner's key or a `shareToken`+`siteId` (guest).
+- **Portfolio view** (`/api/gsc/portfolio-engine`) — enumerates the engine's **own** verified sites
+  (Bing `GetUserSites`, Yandex hosts list) across every configured account, then builds the *same*
+  per-site payload shape as `/api/gsc/portfolio` (daily series + normalized sparkline + summary with
+  deltas). This powers both the **main dashboard engine tabs** and the **digest engine tabs**.
+
+Reliability & performance of the portfolio path:
+
+- **Server-side cache** — the computed snapshot is stored in `EnginePortfolioCache`
+  (`userId`+`engine`+`period`, raw-SQL upsert so it degrades gracefully pre-migration). Normal loads
+  serve the cache instantly; `?refresh=1` (Sync / the tab's Refresh) rebuilds from the live APIs.
+- **Throttle handling** — engines return HTTP 200 with an *empty* body under heavy batch load, which
+  plain error-retry never catches. `fetchNonEmpty()` retries on an empty-but-OK payload, concurrency is
+  kept low (3), and Bing avoids a second call per site by taking avg position from `GetQueryStats` only
+  when the traffic series lacks it.
+- **Sticky merge** — on rebuild, any site that still comes back empty falls back to its last-known-good
+  value from the previous snapshot, so a one-off failure never blanks a card that had data.
+
+## 5. The Indexer's cloaking mechanism
 
 The deployable script (generated in four flavors — dynamic PHP, static PHP wrapper, an Astro SSR
 middleware, or an Nginx routing config — from `src/app/indexer/settings/page.tsx`) implements a
@@ -211,7 +258,7 @@ in as internal links) are purely data feeding the next content-generation pass o
 they don't call any external service, they just shape what the script's word-mashing logic links
 to.
 
-## 5. MCP server (`src/app/api/mcp/route.ts`)
+## 6. MCP server (`src/app/api/mcp/route.ts`)
 
 OpenGSC speaks MCP (Model Context Protocol) over the **Streamable HTTP** transport in
 stateless mode: every JSON-RPC message arrives as a POST and is answered with a plain JSON
@@ -238,7 +285,7 @@ object to `MCP_TOOLS` (name, description, JSON schema, handler); `tools/list` an
 `tools/call` pick it up automatically. Ready-made agent skills that orchestrate these tools
 ship in `.agents/skills/`.
 
-## 6. Site Audit crawler (`src/lib/audit/crawler.ts`)
+## 7. Site Audit crawler (`src/lib/audit/crawler.ts`)
 
 A deliberately dependency-free technical audit: plain `fetch` + regex extraction, no headless
 browser — the audited signals (status codes, titles/meta, H1s, canonicals, `noindex`, link
@@ -254,7 +301,7 @@ row and calls `runAudit()` without awaiting; the client polls `GET /api/audit?si
 rows stuck `running` for >30 min are auto-failed on the next list read. One running audit per
 site is enforced at start.
 
-## 7. Notifications (alerts + digests)
+## 8. Notifications (alerts + digests)
 
 Delivery is the user's **own Telegram bot** (`src/lib/notify.ts`): BotFather token +
 auto-detected chat id stored on `User` (raw-SQL convention), messages sent straight to the
@@ -279,7 +326,7 @@ Delivery channels: the Telegram bot and/or a **Slack Incoming Webhook** (`sendSl
 `notify.ts`, with Telegram-style Markdown converted to Slack's `mrkdwn`); `notifyUser()`
 fans out to every configured channel.
 
-## 8. Shared dashboards
+## 9. Shared dashboards
 
 A site can expose a **read-only guest link**: `Site.shareToken` (+ `shareEnabled`) is a
 random token generated from the site's Settings tab; the public page
@@ -289,7 +336,7 @@ down, and `verifyAuthOrShare()` (`src/lib/authShare.ts`) lets GSC data routes ac
 the token invalidates old links instantly. Share pages render outside the app shell (no
 TopBar) via the `AUTH_PATHS` exclusion in `DashboardShell`.
 
-## 9. Extending the project
+## 10. Extending the project
 
 - **Add an LLM provider**: extend the `if/else if` chain in `fetchLLMOnce()`
   (`src/lib/llm.ts`) with the new provider's request/response shape, plus a matching branch in

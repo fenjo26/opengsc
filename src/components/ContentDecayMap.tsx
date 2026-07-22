@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
+import Link from "next/link";
+import { RefreshCw } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { ScatterChart, Scatter, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { withShare, isGuestView } from "@/lib/shareParam";
@@ -138,6 +140,13 @@ function DecayingPagesTable({ rows }: { rows: DecayRow[] }) {
                 <span style={{ fontSize: "10px", color: "var(--color-text-secondary)", background: "rgba(255,255,255,0.06)", padding: "2px 6px", borderRadius: "4px", flexShrink: 0 }} title={row.siteName}>
                   {row.siteName}
                 </span>
+              )}
+              {!isGuestView() && (
+                <Link href={`/seo-tools/rewrite?url=${encodeURIComponent(row.url)}`} title={t("cdmRewrite")}
+                  onClick={e => e.stopPropagation()}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "4px", flexShrink: 0, padding: "2px 7px", borderRadius: "6px", border: "1px solid var(--color-border)", color: "#34c759", fontSize: "10px", fontWeight: 700, textDecoration: "none" }}>
+                  <RefreshCw size={11} /> {t("cdmRewrite")}
+                </Link>
               )}
             </div>
 

@@ -8,6 +8,7 @@
 
 Self-hosted on your own VPS. No subscriptions, no seat limits, no third party touching your data.
 
+[![Version 1.0](https://img.shields.io/badge/version-1.0-brightgreen)](https://github.com/fenjo26/opengsc/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue?logo=typescript)](https://www.typescriptlang.org/)
@@ -91,10 +92,11 @@ On top of that dashboard, OpenGSC ships two things most GSC tools don't: a full 
 ### Unified GSC Dashboard
 
 - **One dashboard, every account** — every site from every connected Google account, on one screen, with a sparkline traffic chart per site.
+- **Google · Bing · Yandex portfolio dashboards** — switch the entire dashboard between search engines with one click. Google reads from your local store; **Bing** and **Yandex** pull live from their Webmaster APIs across every connected account — showing *their own* verified sites (not just the Google list), the same KPI cards, per-site sparkline cards, sorting, search, tags, and CSV. Live engine results are cached server-side, so a tab opens instantly after the first build; the **Sync** button refreshes all three engines at once.
 - **Fast period controls** — inline 7d / 28d / 3m / 6m / 12m / 16m buttons, plus Previous-period, Year-over-Year, or a fully custom range comparison.
 - **Clicks / Impressions / CTR / Position** shown as labeled toggles, with an aggregate summary across every visible site that recalculates instantly when you filter by tag.
 - **Tags, favorites, sorting, hiding** — organize hundreds of sites, remember your last sort order between sessions, pin the important projects, hide the dead ones.
-- **Quick Google site search** — next to each site name, a small 'G' badge link opens a Google search for `site:domain.com` in a new tab for instant manual indexing checks.
+- **Quick engine site search** — next to each site name, a small badge opens a `site:domain.com` search in a new tab for instant manual indexing checks; it follows the active tab (**G** → Google, **b** → Bing, **Я** → Yandex).
 - **Portfolio SEO Analytics** — view aggregated Striking Distance keywords, Cannibalization, and Content Decay reports across your entire site network on the main dashboard.
 - **Privacy Blur** — one click blurs every account name, email, domain, and metric — safe to screen-share or screenshot.
 - **Ahrefs DR badges** — every site card (and the site detail header) shows the domain's Domain Rating, pulled from Ahrefs' free public endpoint and cached server-side for 7 days. No API key needed. *Domain Rating by [Ahrefs](https://ahrefs.com/).*
@@ -151,7 +153,7 @@ A free technical audit with **zero external APIs**: OpenGSC crawls your site fro
 Bring your own Telegram bot (one-time @BotFather setup, token pasted in **Settings → Notifications**) and OpenGSC pushes what matters straight to your chat — free, no third-party service:
 
 - **Alerts** (checked hourly, each event fires once): a tracked keyword fell N+ positions, a site's clicks dropped X%+ week-over-week, an SSL certificate is about to expire, a site audit came back with a low health score. Thresholds are configurable per rule.
-- **Digests** (the **Digest** tab): a Markdown summary over all sites *or one tag* — so a site network you care about gets its own report: per-site traffic vs the previous period, winner/loser queries, rank movements, and an optional AI-written conclusion (uses your own AI key). Preview on screen, send on demand, or schedule daily/weekly delivery.
+- **Digests** (the **Digest** tab): a portfolio report over all sites *or one tag* — so a site network you care about gets its own summary. The on-screen view is **rich and full** (explicit date range, portfolio KPIs, biggest gainers/losers by site, rising/falling queries, *all* striking-distance queries, sites needing attention, rank movements — each section with "show all" and CSV), while **Telegram receives a shorter capped summary** (4 000-char safe). **Google / Bing / Yandex tabs** split the report per engine (engine tabs reuse the cached engine portfolio). An optional **AI conclusion** (your own AI key) is written on top and is **on by default when any AI key is configured**. Preview on screen, send on demand, or schedule daily/weekly delivery.
 - A **Slack Incoming Webhook** can be connected alongside (or instead of) Telegram — alerts and digests go to every configured channel.
 
 ### Shared Dashboards — Read-Only Guest Links
@@ -220,6 +222,20 @@ Optional: a **Casino RAG** toggle grounds igaming-niche outlines (slots, casino 
 Takes any outline from History and writes the complete article as a background job (close the tab, come back later). Long outlines are written in small chunks (3–5 sections per model call, run in parallel) rather than one giant prompt — this keeps prose quality consistent instead of degrading into bullet-point sludge halfway through a 3,000-word article. Supports tone/persona, an editorial Policy, a table of contents, and three source-grounding modes: off, facts-only (real numbers, no competitor names/links), or cited (real numbers with inline source links, rate-limited to one link per 1-2 paragraphs).
 
 A **volume guard** keeps the final word count within your target (±15%): expand thin drafts, iteratively trim bloated ones — and it runs as the *very last* step, after fact-checking, so a fact-correction pass can never silently re-inflate an article that was already trimmed to length. Failures surface a real reason (e.g. a provider's content-policy rejection) instead of a bare "generation failed."
+</details>
+
+<details open>
+<summary><b>Content Rewriter</b> — refresh & de-duplicate pages into unique variants</summary>
+<br/>
+
+Paste text or a **page URL** (auto-scraped) and get **N unique variants** (1–5) that keep the exact meaning, facts, numbers, entities, and links while rewording everything — same format in, same format out (HTML→HTML, Markdown→Markdown). Each variant shows a **uniqueness score** (word-trigram similarity vs. the source) and a word count, with copy / download. Optional target **language** and **tone**, and a **"mask AI patterns"** toggle that strips common machine tells (em-dashes, "furthermore", "it is important to note", unicode bullets…) for a more natural, human read. Runs on **your own** multi-provider AI (Anthropic / OpenAI / Kimi / …). Wired into **Content Decay**: every decaying page has a one-click **Rewrite** action that opens the tool with its URL prefilled — spot a page losing traffic, refresh it in seconds. Built for large affiliate networks where duplicate content across sites is a real risk.
+</details>
+
+<details open>
+<summary><b>Googlebot View</b> — cloaking & PBN inspector for competitors</summary>
+<br/>
+
+"See" any page the way Google's crawler does and catch what a normal browser visit hides. The tool fetches the same URL with several **User-Agents** (Googlebot smartphone, Googlebot desktop, a real browser, optionally Googlebot + SERP `Referer`), manually walks each **redirect chain** hop-by-hop, and **diffs** the responses to flag **cloaking, hidden redirects, and PBN schemes** — with a clear verdict banner (*clean / suspicious / cloaking*) and a comparison table of final status, final URL, canonical (HTML vs `X-Robots-Tag`), meta robots, hreflang, JS redirects (`meta refresh` / `window.location`), content volume, and indexability. For your **own** GSC-verified sites it adds a **True Google View** — Google's real verdict via the URL Inspection API (`googleCanonical` vs `userCanonical`, robots state, last crawl) — plus an optional Wayback snapshot. Honest technical model: it compares User-Agents (nobody can send requests "from Google's IPs"). Spec: [`docs/GOOGLEBOT-VIEW-SPEC.md`](docs/GOOGLEBOT-VIEW-SPEC.md).
 </details>
 
 <details open>
@@ -601,7 +617,8 @@ docs/
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — how the app is built: the background job system, the multi-pass SEO generation pipeline, the multi-provider LLM abstraction, the MCP server, the audit crawler, the indexer's cloaking/verification mechanism, and the full data model.
 - **[docs/GA4-SETUP.md](docs/GA4-SETUP.md)** — connecting Google Analytics 4, step by step.
 - **[docs/MCP-SETUP.md](docs/MCP-SETUP.md)** — connecting AI agents (Claude Code, Claude Desktop, Cursor, Codex) to your instance.
-- **[docs/SEARCH-ENGINES-SETUP.md](docs/SEARCH-ENGINES-SETUP.md)** — Bing Webmaster, Yandex.Webmaster and IndexNow: getting the keys/tokens and what data each engine provides.
+- **[docs/SEARCH-ENGINES-SETUP.md](docs/SEARCH-ENGINES-SETUP.md)** — Bing Webmaster, Yandex.Webmaster and IndexNow: getting the keys/tokens and what data each engine provides (site + portfolio dashboards, digests, and the site-search badge).
+- **[docs/GOOGLEBOT-VIEW-SPEC.md](docs/GOOGLEBOT-VIEW-SPEC.md)** — the Googlebot View cloaking/PBN inspector: how the multi-UA fetch, redirect-chain walk, and cloaking diff work.
 - **[docs/DOCKER-SETUP.md](docs/DOCKER-SETUP.md)** — running OpenGSC with Docker instead of the VPS installer.
 - **[docs/INDEXER-SETUP.md](docs/INDEXER-SETUP.md)** — deploying and operating the private indexer network.
 

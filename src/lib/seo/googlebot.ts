@@ -42,6 +42,7 @@ export interface Hop {
 
 export interface SeoSignals {
   canonicalHtml?: string; // <link rel="canonical">
+  htmlLang?: string; // <html lang="...">
   metaRobots?: string; // <meta name="robots">
   hreflang: { lang: string; href: string }[];
   title: string;
@@ -73,6 +74,8 @@ export interface ViewResult {
   wordCount: number;
   bodyText: string; // extracted visible text (capped) — for the content viewer / word diff
   htmlRaw: string; // raw HTML as delivered (capped) — for the rendered preview / source view
+  screenshot?: string; // Firecrawl screenshot URL (rendered views only) — visual "how it looks"
+  antiBot?: string; // "cloudflare" | "captcha" | ... — an anti-bot wall was hit, content is not the real page
   error?: string;
 }
 
@@ -88,12 +91,33 @@ export interface WaybackSnapshot {
   timestamp?: string; // YYYYMMDDhhmmss
 }
 
+export interface AntiBotInfo {
+  blocked: boolean; // the raw fetch hit an anti-bot wall (Cloudflare challenge, captcha…)
+  provider?: string; // "cloudflare" | "captcha" | ...
+  bypassed: boolean; // did a Firecrawl render get past it and retrieve real content?
+}
+
 export interface AnalyzeResult {
   url: string;
   views: ViewResult[];
   diff: CloakingDiff;
   renderedDiff?: CloakingDiff; // separate verdict for the JS-rendered views
   wayback?: WaybackSnapshot | null;
+  antiBot?: AntiBotInfo | null;
+}
+
+// Detect an anti-bot interstitial (Cloudflare "Just a moment…", captcha, etc.). When this fires,
+// the fetched HTML is NOT the real page — it's a challenge wall — so a plain fetch can't see the
+// cloaked content. The way past it is a headless render (Firecrawl) that solves/renders the wall.
+export function detectAntiBot(status: number, html: string, server?: string | null): string | undefined {
+  const s = (server || "").toLowerCase();
+  const h = (html || "").slice(0, 6000).toLowerCase();
+  const cfSignals = s.includes("cloudflare") || h.includes("__cf_chl") || h.includes("cf-chl") || h.includes("challenge-platform") || h.includes("cf-browser-verification");
+  const challengeText = h.includes("just a moment") || h.includes("enable javascript and cookies") || h.includes("checking your browser") || h.includes("attention required") || h.includes("verify you are human");
+  if ((cfSignals || status === 403 || status === 503) && challengeText) return "cloudflare";
+  if (h.includes("hcaptcha") || h.includes("g-recaptcha") || h.includes("recaptcha/api")) return "captcha";
+  if (status === 403 && (h.includes("access denied") || h.includes("you have been blocked"))) return "access_denied";
+  return undefined;
 }
 
 // ─── HTML helpers (mirror scrape.ts) ─────────────────────────────────────────
@@ -161,6 +185,9 @@ export function parseSeoSignals(url: string, html: string): SeoSignals {
   const h1Match = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
   const h1 = h1Match ? stripTags(h1Match[1]) : undefined;
 
+  const htmlTag = html.match(/<html\b[^>]*>/i)?.[0];
+  const htmlLang = htmlTag ? attr(htmlTag, "lang") : undefined;
+
   // Client-side redirects
   const jsRedirects: string[] = [];
   const metaRefresh = html.match(/<meta[^>]+http-equiv=["']refresh["'][^>]*>/i)?.[0];
@@ -180,7 +207,7 @@ export function parseSeoSignals(url: string, html: string): SeoSignals {
   if (metaRobots && /noindex/i.test(metaRobots)) indexableReasons.push(`meta robots: ${metaRobots}`);
   const indexable = indexableReasons.length === 0;
 
-  return { canonicalHtml, metaRobots, hreflang, title, metaDescription, h1, jsRedirects, indexable, indexableReasons };
+  return { canonicalHtml, htmlLang, metaRobots, hreflang, title, metaDescription, h1, jsRedirects, indexable, indexableReasons };
 }
 
 // Parse rel=canonical out of a Link: header (RFC 8288)
@@ -264,11 +291,13 @@ export async function followChain(startUrl: string, ua: UaKey, opts?: { referer?
 
       const bodyText = stripTags(html);
       const wordCount = bodyText ? bodyText.split(/\s+/).filter(Boolean).length : 0;
+      const antiBot = detectAntiBot(res.status, html, res.headers.get("server"));
 
       return {
         ua,
-        ok: res.ok,
-        blocked: res.status === 403 || res.status === 429,
+        ok: res.ok && !antiBot,
+        blocked: res.status === 403 || res.status === 429 || !!antiBot,
+        antiBot,
         hops,
         finalUrl: current,
         finalStatus: res.status,
@@ -355,23 +384,36 @@ export async function renderWithFirecrawl(url: string, uaKey: UaKey, label: stri
       headers: { Authorization: `Bearer ${firecrawlKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         url,
-        formats: ["html"],
+        // rawHtml = markup the server actually delivered (reveals server-side UA cloaking, e.g. a
+        // static SEO article served only to Googlebot). html = post-render DOM. screenshot = visual.
+        formats: ["rawHtml", "html", "screenshot"],
         onlyMainContent: false,
         mobile: uaKey === "gbMobile",
         headers: { "User-Agent": UA[uaKey] },
-        waitFor: 2500,
+        // "auto" starts cheap and escalates to a stealth residential proxy when it detects an
+        // anti-bot wall (Cloudflare) — this is what lets us past "Just a moment…".
+        proxy: "auto",
+        waitFor: 3500,
+        blockAds: true,
+        timeout: 55000,
       }),
-      signal: AbortSignal.timeout(45000),
+      signal: AbortSignal.timeout(70000),
     });
     if (!res.ok) throw new Error(`firecrawl ${res.status}`);
     const data = await res.json();
-    const html: string = data?.data?.html ?? "";
-    if (!html) throw new Error("empty_render");
+    // Prefer the served rawHtml (best for catching server-side cloaking); fall back to rendered html.
+    const rawHtml: string = data?.data?.rawHtml ?? "";
+    const renderedHtml: string = data?.data?.html ?? "";
+    const html = rawHtml || renderedHtml;
+    const screenshot: string | undefined = data?.data?.screenshot || undefined;
+    if (!html && !screenshot) throw new Error("empty_render");
     const signals = parseSeoSignals(url, html);
     const bodyText = stripTags(html);
     const wordCount = bodyText ? bodyText.split(/\s+/).filter(Boolean).length : 0;
+    const antiBot = detectAntiBot(200, html);
     return {
-      ua: label, ok: true, rendered: true,
+      ua: label, ok: !antiBot && !!html, rendered: true,
+      blocked: !!antiBot, antiBot,
       hops: [{ url, status: 200 }],
       finalUrl: url, finalStatus: 200,
       headers: {},
@@ -380,6 +422,7 @@ export async function renderWithFirecrawl(url: string, uaKey: UaKey, label: stri
       wordCount,
       bodyText: bodyText.slice(0, MAX_TEXT_RETURN),
       htmlRaw: html.slice(0, MAX_HTML_RETURN),
+      screenshot,
     };
   } catch (e: any) {
     const v = blankView(label, url, 0, [], e?.message ?? "render_failed");
@@ -438,5 +481,12 @@ export async function analyzeUrl(url: string, opts?: { desktop?: boolean; refere
 
   const wayback = opts?.wayback ? await getWayback(url) : null;
 
-  return { url, views, diff, renderedDiff, wayback };
+  // Anti-bot summary: did the raw fetch hit a wall, and did a render get past it?
+  const rawProvider = gbMobile.antiBot || chrome.antiBot;
+  const gbRenderView = views.find(v => v.ua === "gbRender");
+  const antiBot: AntiBotInfo | null = rawProvider
+    ? { blocked: true, provider: rawProvider, bypassed: !!gbRenderView?.ok }
+    : null;
+
+  return { url, views, diff, renderedDiff, wayback, antiBot };
 }

@@ -17,19 +17,23 @@ const inputStyle = "tool-input";
 const btnPurple: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: "7px", padding: "10px 16px", borderRadius: "9px", border: "none", background: "var(--color-accent-purple)", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer" };
 
 type Hop = { url: string; status: number; location?: string; redirectType?: string; setCookie?: boolean };
-type Signals = { canonicalHtml?: string; metaRobots?: string; hreflang: { lang: string; href: string }[]; title: string; metaDescription?: string; h1?: string; jsRedirects: string[]; indexable: boolean; indexableReasons: string[] };
-type View = { ua: string; ok: boolean; blocked?: boolean; hops: Hop[]; finalUrl: string; finalStatus: number; headers: Record<string, string | undefined>; signals: Signals; wordCount: number; bodyText: string; htmlRaw: string; error?: string };
+type Signals = { canonicalHtml?: string; htmlLang?: string; metaRobots?: string; hreflang: { lang: string; href: string }[]; title: string; metaDescription?: string; h1?: string; jsRedirects: string[]; indexable: boolean; indexableReasons: string[] };
+type View = { ua: string; ok: boolean; rendered?: boolean; blocked?: boolean; antiBot?: string; hops: Hop[]; finalUrl: string; finalStatus: number; headers: Record<string, string | undefined>; signals: Signals; wordCount: number; bodyText: string; htmlRaw: string; screenshot?: string; error?: string };
 type Diff = { verdict: "clean" | "suspicious" | "cloaking"; score: number; flags: string[] };
 type Gsc = { verdict?: string | null; coverageState?: string | null; indexingState?: string | null; robotsTxtState?: string | null; pageFetchState?: string | null; crawledAs?: string | null; googleCanonical?: string | null; userCanonical?: string | null; lastCrawlTime?: string | null };
-type Result = { url: string; views: View[]; diff: Diff; ownSite?: { id: string; url: string } | null; gsc?: Gsc | null; wayback?: { available: boolean; url?: string; timestamp?: string } | null };
+type AntiBot = { blocked: boolean; provider?: string; bypassed: boolean };
+type Result = { url: string; views: View[]; diff: Diff; ownSite?: { id: string; url: string } | null; gsc?: Gsc | null; wayback?: { available: boolean; url?: string; timestamp?: string } | null; antiBot?: AntiBot | null };
 
 const UA_LABEL: Record<string, string> = {
   gbMobile: "Googlebot (mobile)",
   gbDesktop: "Googlebot (desktop)",
+  gbReferer: "Googlebot (Referer)",
   chrome: "Browser",
   gbRender: "Googlebot (JS-render)",
   browserRender: "Browser (JS-render)",
 };
+
+function hostOfSafe(u?: string): string { try { return u ? new URL(u).host.toLowerCase() : ""; } catch { return ""; } }
 
 export default function GooglebotViewPage() {
   const { t } = useLanguage();
@@ -107,6 +111,12 @@ export default function GooglebotViewPage() {
   const gbRender = res?.views.find(v => v.ua === "gbRender");
   const brRender = res?.views.find(v => v.ua === "browserRender");
 
+  // When the raw fetch was blocked by an anti-bot wall but a render got through, show the
+  // rendered (real) content by default so the user sees the cloak instead of the challenge page.
+  useEffect(() => {
+    if (res?.antiBot?.blocked && res.antiBot.bypassed) setCompareMode("js");
+  }, [res]);
+
   const hasJsRender = !!gbRender && !!brRender;
   const activeGb = compareMode === "js" && gbRender ? gbRender : gb;
   const activeBr = compareMode === "js" && brRender ? brRender : br;
@@ -167,6 +177,64 @@ export default function GooglebotViewPage() {
 
       {res && (
         <>
+          {/* Anti-bot wall callout */}
+          {res.antiBot?.blocked && (
+            res.antiBot.bypassed ? (
+              <div className={card} style={{ borderColor: "rgba(52,199,89,0.35)", background: "rgba(52,199,89,0.06)", display: "flex", gap: "10px", alignItems: "center", fontSize: "13px", color: "var(--color-text-secondary)" }}>
+                <CheckCircle2 size={18} color="var(--color-accent-green)" /> {t("gbvBlockedBypassed")}
+              </div>
+            ) : (
+              <div className={card} style={{ borderColor: "rgba(255,159,10,0.4)", background: "rgba(255,159,10,0.07)" }}>
+                <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "6px" }}>
+                  <ShieldAlert size={18} color="var(--color-accent-orange)" />
+                  <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-accent-orange)" }}>{t("gbvBlockedTitle")}</span>
+                </div>
+                <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>{t("gbvBlockedHint")}</div>
+              </div>
+            )
+          )}
+
+          {/* Signals bar — fetched URL / lang / HTML canonical / hreflang */}
+          {activeGb && (() => {
+            const s = activeGb.signals;
+            const pageHost = hostOfSafe(activeGb.finalUrl);
+            const canonHost = hostOfSafe(s.canonicalHtml);
+            const offDomain = !!canonHost && !!pageHost && canonHost !== pageHost;
+            const chip = (bd: string, bg: string): React.CSSProperties => ({ display: "inline-flex", alignItems: "center", gap: "7px", padding: "7px 11px", borderRadius: "9px", border: `1px solid ${bd}`, background: bg, fontSize: "12px", color: "var(--color-text-primary)" });
+            const lbl: React.CSSProperties = { fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.03em", color: "var(--color-text-tertiary)", fontWeight: 700 };
+            return (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                <span style={chip("var(--color-border)", "var(--color-card)")}><span style={lbl}>URL</span> {pageHost || "—"}</span>
+                {s.htmlLang && <span style={chip("var(--color-border)", "var(--color-card)")}><span style={lbl}>html lang</span> {s.htmlLang}</span>}
+                <span style={chip(offDomain ? "rgba(255,69,58,0.5)" : "var(--color-border)", offDomain ? "rgba(255,69,58,0.08)" : "var(--color-card)")}>
+                  <span style={lbl}>HTML canonical</span>
+                  <span style={{ color: offDomain ? "var(--color-accent-red)" : "var(--color-text-primary)", fontWeight: offDomain ? 700 : 400 }}>{canonHost || "—"}</span>
+                  {offDomain && <AlertTriangle size={13} color="var(--color-accent-red)" />}
+                </span>
+                {s.hreflang.length > 0 && (
+                  <span style={chip("var(--color-border)", "var(--color-card)")}>
+                    <span style={lbl}>hreflang</span>
+                    {s.hreflang.slice(0, 8).map((h, i) => <span key={i} style={{ padding: "1px 6px", borderRadius: "5px", background: "var(--color-bg)", border: "1px solid var(--color-border)", fontSize: "11px" }}>{h.lang}</span>)}
+                  </span>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Off-domain canonical warning — authority funneling / PBN */}
+          {activeGb && (() => {
+            const s = activeGb.signals;
+            const pageHost = hostOfSafe(activeGb.finalUrl);
+            const canonHost = hostOfSafe(s.canonicalHtml);
+            if (!canonHost || !pageHost || canonHost === pageHost) return null;
+            return (
+              <div className={card} style={{ borderColor: "rgba(255,69,58,0.35)", background: "rgba(255,69,58,0.06)", display: "flex", gap: "10px", alignItems: "flex-start", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+                <AlertTriangle size={16} color="var(--color-accent-red)" style={{ flexShrink: 0, marginTop: "1px" }} />
+                <span>{t("gbvCanonOffDomain")} <b style={{ color: "var(--color-accent-red)" }}>{canonHost}</b> ≠ {pageHost}</span>
+              </div>
+            );
+          })()}
+
           {/* Verdict */}
           {(() => {
             const v = verdictUi[res.diff.verdict];
@@ -316,7 +384,13 @@ export default function GooglebotViewPage() {
                 {!sel.htmlRaw && !sel.bodyText ? (
                   <div style={{ fontSize: "12px", color: "var(--color-text-tertiary)" }}>{t("gbvNoContent")}</div>
                 ) : mode === "preview" ? (
-                  sel.htmlRaw ? (
+                  sel.screenshot ? (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={sel.screenshot} alt={t("gbvScreenshot")} style={{ width: "100%", borderRadius: "8px", border: "1px solid var(--color-border)", background: "#fff", display: "block" }} />
+                      <div style={{ fontSize: "10px", color: "var(--color-text-tertiary)", marginTop: "6px", lineHeight: 1.4 }}>{t("gbvScreenshot")} · {UA_LABEL[sel.ua] || sel.ua}</div>
+                    </>
+                  ) : sel.htmlRaw ? (
                     <>
                       <iframe title="preview" sandbox="" srcDoc={srcdocFor(sel)} style={{ width: "100%", height: "520px", border: "1px solid var(--color-border)", borderRadius: "8px", background: "#fff" }} />
                       <div style={{ fontSize: "10px", color: "var(--color-text-tertiary)", marginTop: "6px", lineHeight: 1.4 }}>{t("gbvPreviewNote")}</div>
