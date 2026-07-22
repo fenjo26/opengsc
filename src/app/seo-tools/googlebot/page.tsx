@@ -137,6 +137,7 @@ export default function GooglebotViewPage() {
         setShowPaste(false); setPasteHtml("");
       } else {
         const e = d.error === "captcha" ? t("gbvRichErrCaptcha")
+          : d.error === "cloudflare_block" ? t("gbvRichErrCloudflare")
           : d.error === "playwright_not_installed" ? t("gbvRichErrNoPlaywright")
           : d.error === "not_html" ? t("gbvRichErrGeneric")
           : t("gbvRichErrGeneric");

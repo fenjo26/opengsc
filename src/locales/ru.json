@@ -2176,13 +2176,14 @@
   "gbvVerdictUnknown": "Не удалось проверить — сайт под анти-бот / IP-защитой",
   "gbvBlockedRRT": "Увидеть настоящую версию для Googlebot",
   "gbvRichTitle": "Взгляд настоящего Googlebot (Rich Results)",
-  "gbvRichNote": "Забрать то, как этот URL рендерит НАСТОЯЩИЙ Googlebot (с IP Google) — единственный способ вскрыть IP-клоаку. Автоматизируется через Rich Results Test Google (экспериментально, возможна CAPTCHA). Если не вышло — вставь HTML вручную.",
+  "gbvRichNote": "Забрать то, как этот URL видит НАСТОЯЩИЙ Googlebot. Авто-режим открывает страницу в реальном headless-браузере с Googlebot User-Agent, зашитым на каждый запрос (проходит Cloudflare и сохраняет личность Googlebot до origin). Жёсткие Cloudflare-сайты обычно требуют резидентный прокси (env GOOGLEBOT_PROXY на сервере). Если авто не вышло — вставь HTML из Rich Results Test вручную, это работает всегда.",
   "gbvRichAutoBtn": "Забрать через Rich Results (авто)",
   "gbvRichPasteToggle": "или вставить HTML вручную",
   "gbvRichPastePh": "Вставь HTML из Rich Results Test → Посмотреть проверенную страницу → HTML",
   "gbvRichPasteBtn": "Разобрать вставленный HTML",
   "gbvRichLoaded": "Взгляд настоящего Googlebot загружен — смотри в просмотрщике контента и баре сигналов ниже.",
   "gbvRichErrCaptcha": "Google показал CAPTCHA. Используй ручную вставку ниже.",
-  "gbvRichErrNoPlaywright": "Playwright не установлен на сервере. Используй ручную вставку или установи Playwright (см. доки).",
-  "gbvRichErrGeneric": "Не удалось забрать автоматически. Используй ручную вставку ниже."
+  "gbvRichErrNoPlaywright": "Playwright не установлен на сервере. Установи его (см. доки) или используй ручную вставку ниже.",
+  "gbvRichErrGeneric": "Не удалось забрать автоматически. Используй ручную вставку ниже.",
+  "gbvRichErrCloudflare": "Cloudflare заблокировал авто-браузер (нужен резидентный прокси — задай GOOGLEBOT_PROXY, либо вставь HTML вручную ниже)."
 }

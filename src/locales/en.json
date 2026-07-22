@@ -2176,13 +2176,14 @@
   "gbvVerdictUnknown": "Couldn't verify — site is behind anti-bot / IP protection",
   "gbvBlockedRRT": "See the real Googlebot version",
   "gbvRichTitle": "Real Googlebot view (Rich Results)",
-  "gbvRichNote": "Pull how the REAL Googlebot (from a Google IP) renders this URL — the only way to expose IP-based cloaking. Automated via Google's Rich Results Test (experimental, may hit CAPTCHA). If it fails, paste the HTML manually.",
+  "gbvRichNote": "Fetch how the REAL Googlebot sees this URL. Auto mode opens the page in a real headless browser with the Googlebot User-Agent forced on every request (passes Cloudflare, keeps the Googlebot identity to the origin). Tough Cloudflare sites usually need a residential proxy (set GOOGLEBOT_PROXY on the server). If auto fails, paste the HTML from Rich Results Test manually — that always works.",
   "gbvRichAutoBtn": "Fetch via Rich Results (auto)",
   "gbvRichPasteToggle": "or paste HTML manually",
   "gbvRichPastePh": "Paste the HTML from Rich Results Test → View tested page → HTML",
   "gbvRichPasteBtn": "Analyze pasted HTML",
   "gbvRichLoaded": "Real Googlebot view loaded — see it in the content viewer and signals bar below.",
   "gbvRichErrCaptcha": "Google showed a CAPTCHA. Use the manual paste path below.",
-  "gbvRichErrNoPlaywright": "Playwright is not installed on the server. Use the manual paste path, or install Playwright (see docs).",
-  "gbvRichErrGeneric": "Couldn't fetch automatically. Use the manual paste path below."
+  "gbvRichErrNoPlaywright": "Playwright is not installed on the server. Install it (see docs) or use the manual paste path below.",
+  "gbvRichErrGeneric": "Couldn't fetch automatically. Use the manual paste path below.",
+  "gbvRichErrCloudflare": "Cloudflare blocked the automated browser (needs a residential proxy — set GOOGLEBOT_PROXY, or use the manual paste below)."
 }

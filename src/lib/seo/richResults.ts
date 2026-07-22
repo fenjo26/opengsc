@@ -23,6 +23,83 @@ export interface RichResultsFetch {
   error?: string;
 }
 
+// Googlebot User-Agents (kept here so this module is standalone).
+const GB_UA_MOBILE = "Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
+const GB_UA_DESKTOP = "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; Googlebot/2.1; +http://www.google.com/bot.html";
+
+// Parse GOOGLEBOT_PROXY env ("http://user:pass@host:port") into Playwright's proxy shape.
+function proxyFromEnv(): { server: string; username?: string; password?: string } | undefined {
+  const raw = process.env.GOOGLEBOT_PROXY;
+  if (!raw) return undefined;
+  try {
+    const u = new URL(raw);
+    const server = `${u.protocol}//${u.host}`;
+    return u.username ? { server, username: decodeURIComponent(u.username), password: decodeURIComponent(u.password) } : { server };
+  } catch { return undefined; }
+}
+
+// ── Direct "browser as Googlebot" fetch ──────────────────────────────────────
+// The robust way to see the Googlebot-cloaked version of a Cloudflare-protected page:
+//   1) a REAL headless browser (so Cloudflare's JS challenge solves), plus
+//   2) the Googlebot User-Agent forced at the CDP layer so it persists across the challenge AND
+//      the final origin request (setting it only on the first request isn't enough — that's why a
+//      naive headless render returns the user-facing page), plus
+//   3) optionally a residential proxy (GOOGLEBOT_PROXY) so the IP isn't a flagged datacenter one.
+// If the origin cloaks by User-Agent, this returns the doorway. If it cloaks strictly by Google IP,
+// this returns the user page (undetectable without Google's own crawler) — then use Rich Results.
+export async function fetchAsGooglebotBrowser(url: string, opts?: { mobile?: boolean; timeoutMs?: number }): Promise<RichResultsFetch> {
+  let chromium: any;
+  try {
+    const spec = "playwright";
+    const mod: any = await import(spec);
+    chromium = mod.chromium;
+    if (!chromium) throw new Error("no chromium");
+  } catch {
+    return { ok: false, error: "playwright_not_installed" };
+  }
+
+  const ua = opts?.mobile === false ? GB_UA_DESKTOP : GB_UA_MOBILE;
+  const timeout = opts?.timeoutMs ?? 60_000;
+  const proxy = proxyFromEnv();
+  let browser: any;
+  try {
+    browser = await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-blink-features=AutomationControlled"], ...(proxy ? { proxy } : {}) });
+    const context = await browser.newContext({ userAgent: ua, locale: "en-US" });
+    const page = await context.newPage();
+
+    // Force the UA on EVERY request of the session (challenge + origin), via CDP.
+    try { const cdp = await context.newCDPSession(page); await cdp.send("Network.setUserAgentOverride", { userAgent: ua }); } catch {}
+
+    // Capture the final top-level document HTML the origin actually served.
+    let docHtml = "";
+    page.on("response", async (r: any) => {
+      try {
+        if (r.request().resourceType() === "document") {
+          const body = await r.text();
+          if (body && /<html|<!doctype/i.test(body) && !/just a moment|enable javascript and cookies/i.test(body.slice(0, 800))) docHtml = body;
+        }
+      } catch {}
+    });
+
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 }).catch(() => {});
+    // Give Cloudflare time to solve and redirect to the real page.
+    try { await page.waitForFunction(() => !/just a moment/i.test(document.title), { timeout: Math.min(timeout, 25_000) }); } catch {}
+    await page.waitForTimeout(1500);
+
+    const dom = await page.content().catch(() => "");
+    await browser.close();
+
+    const finalHtml = docHtml || dom;
+    if (!finalHtml || /just a moment|enable javascript and cookies|challenge-platform/i.test(finalHtml.slice(0, 1200))) {
+      return { ok: false, error: "cloudflare_block" };
+    }
+    return { ok: true, html: finalHtml };
+  } catch (e: any) {
+    try { await browser?.close(); } catch {}
+    return { ok: false, error: String(e?.message ?? e) };
+  }
+}
+
 const RRT_URL = "https://search.google.com/test/rich-results";
 
 // Text labels the tool uses across locales for the buttons we click. Add more as needed.

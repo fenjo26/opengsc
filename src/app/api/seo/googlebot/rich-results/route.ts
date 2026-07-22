@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { parseSeoSignals } from "@/lib/seo/googlebot";
-import { fetchRichResultsHtml } from "@/lib/seo/richResults";
-import fs from "fs";
+import { fetchAsGooglebotBrowser } from "@/lib/seo/richResults";
 
 // POST /api/seo/googlebot/rich-results
 // body: { url: string, html?: string }
@@ -44,13 +43,6 @@ function buildView(url: string, html: string, screenshot?: string) {
   };
 }
 
-// Optional logged-in Google session (for higher limits). Path set via env; anonymous by default.
-function loadStorageState(): any | undefined {
-  const p = process.env.GOOGLE_RICH_RESULTS_STORAGE_STATE;
-  if (!p) return undefined;
-  try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch { return undefined; }
-}
-
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   if (!(session?.user as any)?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -70,10 +62,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, view: buildView(url, pasted) });
   }
 
-  // Automated path — Playwright drives the Rich Results Test.
-  const res = await fetchRichResultsHtml(url, { storageState: loadStorageState() });
+  // Automated path — real headless browser hitting the target directly with Googlebot UA forced
+  // at the CDP layer (persists through Cloudflare), optional residential proxy via GOOGLEBOT_PROXY.
+  const res = await fetchAsGooglebotBrowser(url, { mobile: true });
   if (!res.ok || !res.html) {
-    return NextResponse.json({ ok: false, error: res.error || "failed", screenshot: res.screenshot }, { status: 200 });
+    return NextResponse.json({ ok: false, error: res.error || "failed" }, { status: 200 });
   }
   return NextResponse.json({ ok: true, view: buildView(url, res.html, res.screenshot) });
 }
