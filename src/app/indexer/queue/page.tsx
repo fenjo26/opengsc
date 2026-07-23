@@ -23,7 +23,7 @@ export default function IndexerQueuePage() {
   const { t } = useLanguage();
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [domains, setDomains] = useState<DomainOpt[]>([]);
-  const [domainId, setDomainId] = useState("");
+  const [domainId, setDomainId] = useState("all");
   const [urlsInput, setUrlsInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -36,7 +36,6 @@ export default function IndexerQueuePage() {
       if (res.ok) {
         const d = await res.json();
         setDomains(d);
-        if (d.length > 0) setDomainId(d[0].id);
       }
     } catch (e) {
       console.error(e);
@@ -65,12 +64,8 @@ export default function IndexerQueuePage() {
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!domainId) {
-      setStatusMsg({ type: "error", text: "Please select a domain." });
-      return;
-    }
     if (!urlsInput.trim()) {
-      setStatusMsg({ type: "error", text: "Please enter at least one URL." });
+      setStatusMsg({ type: "error", text: t("indexerQueueEnterUrl") });
       return;
     }
 
@@ -89,7 +84,13 @@ export default function IndexerQueuePage() {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        setStatusMsg({ type: "success", text: `Successfully queued ${data.count} URLs for indexing.` });
+        const domainInfo = domainId === "all"
+          ? ` → distributed across ${data.domainsUsed} doorway domains`
+          : "";
+        const sitemapInfo = data.totalUrls && data.totalUrls !== data.count
+          ? ` (${data.totalUrls} total, ${data.totalUrls - data.count} duplicates skipped)`
+          : "";
+        setStatusMsg({ type: "success", text: `✓ Queued ${data.count} URLs${sitemapInfo}${domainInfo}` });
         setUrlsInput("");
         fetchQueue();
       } else {
@@ -152,10 +153,10 @@ export default function IndexerQueuePage() {
         gap: "16px"
       }}>
         <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>
-          Queue URLs for Indexing
+          {t("indexerQueueTitle")}
         </h3>
         <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: 0 }}>
-          Submit pages you want search engine crawlers to visit. Pings will be recorded on the next crawl.
+          {t("indexerQueueDesc")}
         </p>
 
         {statusMsg && (
@@ -179,7 +180,7 @@ export default function IndexerQueuePage() {
           {/* Select Domain */}
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
             <label style={{ fontSize: "12px", color: "var(--color-text-secondary)", fontWeight: 600 }}>
-              Target Domain
+              {t("indexerQueueDistMode")}
             </label>
             <select
               value={domainId}
@@ -195,25 +196,22 @@ export default function IndexerQueuePage() {
                 width: "100%"
               }}
             >
-              {domains.length === 0 ? (
-                <option value="">No domains added — add one first</option>
-              ) : (
-                domains.map(d => (
-                  <option key={d.id} value={d.id}>{d.domain}</option>
-                ))
-              )}
+              <option value="all">{t("indexerQueueAllDomains")}</option>
+              {domains.map(d => (
+                <option key={d.id} value={d.id}>{d.domain}</option>
+              ))}
             </select>
           </div>
 
           {/* URLs input */}
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
             <label style={{ fontSize: "12px", color: "var(--color-text-secondary)", fontWeight: 600 }}>
-              URLs to Index (one per line)
+              {t("indexerQueueUrlsLabel")}
             </label>
             <textarea
               value={urlsInput}
               onChange={e => setUrlsInput(e.target.value)}
-              placeholder="best-deals-shop.net/deals/promo&#10;best-deals-shop.net/product-99213.html&#10;deals.best-deals-shop.net/index"
+              placeholder={"https://my-site.com/page-1\nhttps://my-site.com/page-2\nhttps://my-site.com/sitemap.xml"}
               rows={8}
               style={{
                 background: "var(--color-bg)",
@@ -227,6 +225,9 @@ export default function IndexerQueuePage() {
                 resize: "vertical"
               }}
             />
+            <span style={{ fontSize: "11px", color: "var(--color-text-tertiary)" }}>
+              {t("indexerQueueSitemapHint")}
+            </span>
           </div>
 
           <button
@@ -255,12 +256,12 @@ export default function IndexerQueuePage() {
             {submitting ? (
               <>
                 <RefreshCw size={14} className="animate-spin" />
-                Adding to Queue...
+                {t("indexerQueueProcessing")}
               </>
             ) : (
               <>
                 <Plus size={14} />
-                Add to Indexer Queue
+                {t("indexerQueueAddBtn")}
               </>
             )}
           </button>
