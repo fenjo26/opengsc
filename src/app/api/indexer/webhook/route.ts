@@ -8,6 +8,20 @@ function getBotType(ua: string): string {
   if (l.includes("bingbot") || l.includes("bingpreview")) return "bing";
   if (l.includes("yandexbot") || l.includes("yandexmobilebot")) return "yandex";
   if (l.includes("mail.ru") || l.includes("mailru")) return "mailru";
+  // AI crawlers & LLM training/answer bots — checked before the generic "bot" catch-all
+  // since many of these contain the substring "bot" (ClaudeBot, GPTBot, Applebot-Extended…).
+  if (
+    l.includes("gptbot") || l.includes("oai-searchbot") || l.includes("chatgpt-user") ||
+    l.includes("claudebot") || l.includes("claude-user") || l.includes("anthropic-ai") ||
+    l.includes("perplexitybot") || l.includes("perplexity-user") ||
+    l.includes("deepseekbot") || l.includes("deepseek") ||
+    l.includes("bytespider") || l.includes("google-extended") ||
+    l.includes("applebot-extended") || l.includes("ccbot") ||
+    l.includes("meta-externalagent") || l.includes("meta-externalfetcher") ||
+    l.includes("cohere-ai") || l.includes("cohere-training") ||
+    l.includes("amazonbot") || l.includes("youbot") || l.includes("diffbot") ||
+    l.includes("imagesift") || l.includes("timpibot") || l.includes("omgili")
+  ) return "ai";
   if (l.includes("bot") || l.includes("crawler") || l.includes("spider")) return "other";
   return "redirect"; // Human user redirected
 }

@@ -36,17 +36,18 @@ export async function GET(req: Request) {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    let google = 0, yandex = 0, bing = 0, mailru = 0, other = 0, redirects = 0;
+    let google = 0, yandex = 0, bing = 0, mailru = 0, ai = 0, other = 0, redirects = 0;
 
     const byDomain = domains.map(d => {
-      let gCount = 0, yCount = 0, bCount = 0, mCount = 0, oCount = 0, rCount = 0;
-      
+      let gCount = 0, yCount = 0, bCount = 0, mCount = 0, aiCount = 0, oCount = 0, rCount = 0;
+
       d.logs.forEach(log => {
         if (log.timestamp >= thirtyDaysAgo) {
           if (log.botType === "google") gCount++;
           else if (log.botType === "yandex") yCount++;
           else if (log.botType === "bing") bCount++;
           else if (log.botType === "mailru") mCount++;
+          else if (log.botType === "ai") aiCount++;
           else if (log.botType === "other") oCount++;
           else if (log.botType === "redirect") rCount++;
         }
@@ -56,10 +57,11 @@ export async function GET(req: Request) {
       yandex += yCount;
       bing += bCount;
       mailru += mCount;
+      ai += aiCount;
       other += oCount;
       redirects += rCount;
 
-      const totalBots = gCount + yCount + bCount + mCount + oCount;
+      const totalBots = gCount + yCount + bCount + mCount + aiCount + oCount;
       const googleShare = totalBots > 0 ? Math.round((gCount / totalBots) * 100) : 0;
 
       return {
@@ -67,6 +69,7 @@ export async function GET(req: Request) {
         domain: d.domain,
         status: d.status,
         google: gCount,
+        ai: aiCount,
         totalBots,
         googleShare,
         pagesCount: d.pagesCount,
@@ -88,6 +91,7 @@ export async function GET(req: Request) {
         yandex304: number;
         bing: number;
         mailru: number;
+        ai: number;
         other: number;
         total: number;
         redirects: number;
@@ -107,6 +111,7 @@ export async function GET(req: Request) {
         yandex304: 0,
         bing: 0,
         mailru: 0,
+        ai: 0,
         other: 0,
         total: 0,
         redirects: 0,
@@ -138,6 +143,9 @@ export async function GET(req: Request) {
           } else if (log.botType === "mailru") {
             stats.mailru++;
             stats.total++;
+          } else if (log.botType === "ai") {
+            stats.ai++;
+            stats.total++;
           } else if (log.botType === "other") {
             stats.other++;
             stats.total++;
@@ -151,7 +159,7 @@ export async function GET(req: Request) {
     const daily = Object.values(dailyMap).sort((a, b) => b.date.localeCompare(a.date));
 
     return NextResponse.json({
-      summary: { google, yandex, bing, mailru, other, redirects },
+      summary: { google, yandex, bing, mailru, ai, other, redirects },
       byDomain,
       daily,
     });

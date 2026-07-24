@@ -11,6 +11,7 @@ interface StatsData {
     yandex: number;
     bing: number;
     mailru: number;
+    ai: number;
     other: number;
     redirects: number;
   };
@@ -19,6 +20,7 @@ interface StatsData {
     domain: string;
     status: string;
     google: number;
+    ai: number;
     totalBots: number;
     googleShare: number;
     pagesCount: number;
@@ -32,6 +34,7 @@ interface StatsData {
     yandex304: number;
     bing: number;
     mailru: number;
+    ai: number;
     other: number;
     total: number;
     redirects: number;
@@ -57,6 +60,7 @@ export default function IndexerStatsPage() {
     yandex: true,
     bing: true,
     mailru: true,
+    ai: true,
     other: true,
     redirects: true,
   });
@@ -100,7 +104,7 @@ export default function IndexerStatsPage() {
   const exportDailyToCSV = () => {
     if (!data?.daily) return;
     
-    const headers = ["Date", "Google", "Google 304", "Yandex", "Yandex 304", "Bing", "Mail.ru", "Other", "Total", "Redirects"];
+    const headers = ["Date", "Google", "Google 304", "Yandex", "Yandex 304", "Bing", "Mail.ru", "AI", "Other", "Total", "Redirects"];
     const rows = data.daily.map(row => [
       row.date,
       row.google,
@@ -109,6 +113,7 @@ export default function IndexerStatsPage() {
       row.yandex304,
       row.bing,
       row.mailru || 0,
+      row.ai || 0,
       row.other,
       row.total,
       row.redirects
@@ -127,7 +132,7 @@ export default function IndexerStatsPage() {
   };
 
   const chartData = data?.daily ? [...data.daily].reverse() : [];
-  const hasData = data && (data.summary.google > 0 || data.summary.other > 0 || data.byDomain.length > 0);
+  const hasData = data && (data.summary.google > 0 || data.summary.ai > 0 || data.summary.other > 0 || data.byDomain.length > 0);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
@@ -177,6 +182,7 @@ export default function IndexerStatsPage() {
           { key: "yandex", label: "Yandex", val: data?.summary.yandex ?? 0, color: "var(--color-accent-red)", bg: "rgba(255,69,58,0.08)" },
           { key: "bing", label: "Bing", val: data?.summary.bing ?? 0, color: "var(--color-accent-orange)", bg: "rgba(255,159,10,0.08)" },
           { key: "mailru", label: "Mail.ru", val: data?.summary.mailru ?? 0, color: "var(--color-text-secondary)", bg: "rgba(142,142,147,0.08)" },
+          { key: "ai", label: "AI Bots", val: data?.summary.ai ?? 0, color: "var(--color-accent-purple)", bg: "rgba(191,90,242,0.08)" },
           { key: "other", label: "Other Bots", val: data?.summary.other ?? 0, color: "var(--color-text-primary)", bg: "rgba(255,255,255,0.06)" },
           { key: "redirects", label: "Redirects", val: data?.summary.redirects ?? 0, color: "var(--color-accent-green)", bg: "rgba(52,199,89,0.08)", highlight: true }
         ].map((c) => {
@@ -312,6 +318,10 @@ export default function IndexerStatsPage() {
                       <stop offset="5%" stopColor="var(--color-text-secondary)" stopOpacity={0.1}/>
                       <stop offset="95%" stopColor="var(--color-text-secondary)" stopOpacity={0.01}/>
                     </linearGradient>
+                    <linearGradient id="colorAi" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--color-accent-purple)" stopOpacity={0.18}/>
+                      <stop offset="95%" stopColor="var(--color-accent-purple)" stopOpacity={0.01}/>
+                    </linearGradient>
                     <linearGradient id="colorOther" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="var(--color-text-primary)" stopOpacity={0.1}/>
                       <stop offset="95%" stopColor="var(--color-text-primary)" stopOpacity={0.01}/>
@@ -385,6 +395,17 @@ export default function IndexerStatsPage() {
                       fill="url(#colorMailru)"
                     />
                   )}
+                  {visibleSeries.ai && (
+                    <Area
+                      type="monotone"
+                      name="AI Bots"
+                      dataKey="ai"
+                      stroke="var(--color-accent-purple)"
+                      strokeWidth={2}
+                      fillOpacity={1}
+                      fill="url(#colorAi)"
+                    />
+                  )}
                   {visibleSeries.other && (
                     <Area
                       type="monotone"
@@ -414,9 +435,9 @@ export default function IndexerStatsPage() {
 
           <div style={{
             display: "grid",
-            gridTemplateColumns: isLarge ? "1.2fr 1fr" : "1fr",
+            gridTemplateColumns: isLarge ? "minmax(0, 1fr) minmax(0, 1.45fr)" : "1fr",
             gap: "24px",
-            alignItems: "start",
+            alignItems: "stretch",
           }}>
             {/* By Domain */}
             <div style={{
@@ -443,6 +464,7 @@ export default function IndexerStatsPage() {
                       <tr style={{ borderBottom: "1px solid var(--color-border)", color: "var(--color-text-secondary)", textAlign: "left" }}>
                         <th style={{ padding: "8px 12px 12px" }}>Domain</th>
                         <th style={{ padding: "8px 12px 12px", textAlign: "right" }}>Google</th>
+                        <th style={{ padding: "8px 12px 12px", textAlign: "right", color: "var(--color-accent-purple)" }}>AI</th>
                         <th style={{ padding: "8px 12px 12px", textAlign: "right" }}>Total Bots</th>
                         <th style={{ padding: "8px 12px 12px", textAlign: "right" }}>Google Share</th>
                       </tr>
@@ -455,6 +477,9 @@ export default function IndexerStatsPage() {
                           </td>
                           <td style={{ padding: "8px 12px", textAlign: "right" }}>
                             {formatNumber(row.google)}
+                          </td>
+                          <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--color-accent-purple)", fontWeight: 600 }}>
+                            {formatNumber(row.ai || 0)}
                           </td>
                           <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 600 }}>
                             {formatNumber(row.totalBots)}
@@ -576,6 +601,7 @@ export default function IndexerStatsPage() {
                         <th style={{ padding: "8px 12px 12px", textAlign: "right", color: "var(--color-text-tertiary)", fontWeight: 500 }}>304</th>
                         <th style={{ padding: "8px 12px 12px", textAlign: "right" }}>Bing</th>
                         <th style={{ padding: "8px 12px 12px", textAlign: "right" }}>Mail.ru</th>
+                        <th style={{ padding: "8px 12px 12px", textAlign: "right", color: "var(--color-accent-purple)" }}>AI</th>
                         <th style={{ padding: "8px 12px 12px", textAlign: "right" }}>Other</th>
                         <th style={{ padding: "8px 12px 12px", textAlign: "right" }}>Total</th>
                       </tr>
@@ -603,6 +629,9 @@ export default function IndexerStatsPage() {
                           </td>
                           <td style={{ padding: "8px 12px", textAlign: "right" }}>
                             {formatNumber(row.mailru || 0)}
+                          </td>
+                          <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--color-accent-purple)", fontWeight: 600 }}>
+                            {formatNumber(row.ai || 0)}
                           </td>
                           <td style={{ padding: "8px 12px", textAlign: "right" }}>
                             {formatNumber(row.other)}
