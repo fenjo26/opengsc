@@ -116,11 +116,21 @@ export default function IndexerLogsPage() {
     return { bg: "rgba(255,69,58,0.1)", color: "#FF453A" };
   };
 
-  const getBotLabel = (type: string) => {
+  const getBotLabel = (type: string, ua?: string) => {
     if (type === "google") return { label: "Googlebot", color: "#2997ff" };
     if (type === "bing") return { label: "Bingbot", color: "#ff9f0a" };
     if (type === "yandex") return { label: "YandexBot", color: "#ff453a" };
     if (type === "mailru") return { label: "MailruBot", color: "#8e8e93" };
+
+    // AI Bots detection from User-Agent
+    const u = (ua || "").toLowerCase();
+    if (u.includes("claudebot") || u.includes("anthropic")) return { label: "ClaudeBot (AI)", color: "#af52de" };
+    if (u.includes("deepseek")) return { label: "DeepSeek (AI)", color: "#5856d6" };
+    if (u.includes("gptbot") || u.includes("chatgpt")) return { label: "GPTBot (AI)", color: "#30d158" };
+    if (u.includes("perplexity")) return { label: "Perplexity (AI)", color: "#64d2ff" };
+    if (u.includes("bytespider")) return { label: "ByteSpider (AI)", color: "#ff3b30" };
+    if (u.includes("ccbot")) return { label: "CCBot (CommonCrawl)", color: "#ffd60a" };
+
     if (type === "redirect") return { label: "Redirect", color: "#34c759" };
     return { label: "Other Bot", color: "#a1a1a6" };
   };
@@ -287,7 +297,7 @@ export default function IndexerLogsPage() {
               <tbody>
                 {logs.map((log) => {
                   const status = getStatusColor(log.statusCode);
-                  const bot = getBotLabel(log.botType);
+                  const bot = getBotLabel(log.botType, log.userAgent);
                   const path = log.url.replace(/^https?:\/\/[^/]+/, "");
                   
                   return (
