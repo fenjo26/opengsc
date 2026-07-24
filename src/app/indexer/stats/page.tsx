@@ -46,6 +46,11 @@ export default function IndexerStatsPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [isLarge, setIsLarge] = useState(false);
 
+  // Pagination state for tables
+  const [domainPage, setDomainPage] = useState(1);
+  const [dailyPage, setDailyPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
   const fetchStats = async () => {
     try {
       const res = await fetch("/api/indexer/stats");
@@ -378,45 +383,102 @@ export default function IndexerStatsPage() {
               border: "1px solid var(--color-border)",
               borderRadius: "16px",
               padding: "20px",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between"
             }}>
-              <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", margin: "0 0 16px" }}>
-                By Domain — Last 30 Days
-              </h3>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-                  <thead>
-                    <tr style={{ borderBottom: "1px solid var(--color-border)", color: "var(--color-text-secondary)", textAlign: "left" }}>
-                      <th style={{ padding: "8px 12px 12px" }}>Domain</th>
-                      <th style={{ padding: "8px 12px 12px", textAlign: "right" }}>Google</th>
-                      <th style={{ padding: "8px 12px 12px", textAlign: "right" }}>Total Bots</th>
-                      <th style={{ padding: "8px 12px 12px", textAlign: "right" }}>Google Share</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data?.byDomain.map((row, i) => (
-                      <tr key={row.id} style={{ borderBottom: "1px solid var(--color-border-soft)", height: "40px" }}>
-                        <td style={{ padding: "8px 12px", fontWeight: 600, color: "var(--color-text-primary)" }}>
-                          {row.domain}
-                        </td>
-                        <td style={{ padding: "8px 12px", textAlign: "right" }}>
-                          {formatNumber(row.google)}
-                        </td>
-                        <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 600 }}>
-                          {formatNumber(row.totalBots)}
-                        </td>
-                        <td style={{ padding: "8px 12px" }}>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "8px" }}>
-                            <span style={{ fontSize: "11px", width: "30px", textAlign: "right" }}>{row.googleShare}%</span>
-                            <div style={{ width: "60px", height: "6px", borderRadius: "3px", background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
-                              <div style={{ height: "100%", width: `${row.googleShare}%`, background: "var(--color-accent-blue)" }} />
-                            </div>
-                          </div>
-                        </td>
+              <div>
+                <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", margin: "0 0 16px" }}>
+                  By Domain — Last 30 Days
+                </h3>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                    <thead>
+                      <tr style={{ borderBottom: "1px solid var(--color-border)", color: "var(--color-text-secondary)", textAlign: "left" }}>
+                        <th style={{ padding: "8px 12px 12px" }}>Domain</th>
+                        <th style={{ padding: "8px 12px 12px", textAlign: "right" }}>Google</th>
+                        <th style={{ padding: "8px 12px 12px", textAlign: "right" }}>Total Bots</th>
+                        <th style={{ padding: "8px 12px 12px", textAlign: "right" }}>Google Share</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {data?.byDomain.slice((domainPage - 1) * ITEMS_PER_PAGE, domainPage * ITEMS_PER_PAGE).map((row) => (
+                        <tr key={row.id} style={{ borderBottom: "1px solid var(--color-border-soft)", height: "40px" }}>
+                          <td style={{ padding: "8px 12px", fontWeight: 600, color: "var(--color-text-primary)" }}>
+                            {row.domain}
+                          </td>
+                          <td style={{ padding: "8px 12px", textAlign: "right" }}>
+                            {formatNumber(row.google)}
+                          </td>
+                          <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 600 }}>
+                            {formatNumber(row.totalBots)}
+                          </td>
+                          <td style={{ padding: "8px 12px" }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "8px" }}>
+                              <span style={{ fontSize: "11px", width: "30px", textAlign: "right" }}>{row.googleShare}%</span>
+                              <div style={{ width: "60px", height: "6px", borderRadius: "3px", background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
+                                <div style={{ height: "100%", width: `${row.googleShare}%`, background: "var(--color-accent-blue)" }} />
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
+
+              {/* By Domain Pagination */}
+              {(data?.byDomain.length ?? 0) > ITEMS_PER_PAGE && (
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginTop: "16px",
+                  paddingTop: "12px",
+                  borderTop: "1px solid var(--color-border)",
+                  fontSize: "12px",
+                  color: "var(--color-text-secondary)"
+                }}>
+                  <span>
+                    Showing {((domainPage - 1) * ITEMS_PER_PAGE) + 1}-{Math.min(domainPage * ITEMS_PER_PAGE, data?.byDomain.length || 0)} of {data?.byDomain.length} domains
+                  </span>
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    <button
+                      onClick={() => setDomainPage(p => Math.max(1, p - 1))}
+                      disabled={domainPage <= 1}
+                      style={{
+                        padding: "3px 8px",
+                        borderRadius: "6px",
+                        border: "1px solid var(--color-border)",
+                        background: "var(--color-bg)",
+                        color: "var(--color-text-primary)",
+                        fontSize: "11px",
+                        cursor: domainPage <= 1 ? "not-allowed" : "pointer",
+                        opacity: domainPage <= 1 ? 0.5 : 1
+                      }}
+                    >
+                      ← Prev
+                    </button>
+                    <button
+                      onClick={() => setDomainPage(p => Math.min(Math.ceil((data?.byDomain.length || 0) / ITEMS_PER_PAGE), p + 1))}
+                      disabled={domainPage >= Math.ceil((data?.byDomain.length || 0) / ITEMS_PER_PAGE)}
+                      style={{
+                        padding: "3px 8px",
+                        borderRadius: "6px",
+                        border: "1px solid var(--color-border)",
+                        background: "var(--color-bg)",
+                        color: "var(--color-text-primary)",
+                        fontSize: "11px",
+                        cursor: domainPage >= Math.ceil((data?.byDomain.length || 0) / ITEMS_PER_PAGE) ? "not-allowed" : "pointer",
+                        opacity: domainPage >= Math.ceil((data?.byDomain.length || 0) / ITEMS_PER_PAGE) ? 0.5 : 1
+                      }}
+                    >
+                      Next →
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Daily Breakdown */}
@@ -425,84 +487,141 @@ export default function IndexerStatsPage() {
               border: "1px solid var(--color-border)",
               borderRadius: "16px",
               padding: "20px",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between"
             }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
-                <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>
-                  Daily Breakdown — Last 30 Days
-                </h3>
-                <button
-                  onClick={exportDailyToCSV}
-                  style={{
-                    padding: "4px 8px",
-                    borderRadius: "6px",
-                    border: "1px solid var(--color-border)",
-                    background: "transparent",
-                    color: "var(--color-text-secondary)",
-                    fontSize: "11px",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    transition: "all 0.15s"
-                  }}
-                  onMouseOver={e => { e.currentTarget.style.borderColor = "var(--color-accent-blue)"; e.currentTarget.style.color = "var(--color-text-primary)"; }}
-                  onMouseOut={e => { e.currentTarget.style.borderColor = "var(--color-border)"; e.currentTarget.style.color = "var(--color-text-secondary)"; }}
-                >
-                  <Download size={11} />
-                  Export CSV
-                </button>
-              </div>
-              <div style={{ overflowX: "auto", maxHeight: "350px", overflowY: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-                  <thead>
-                    <tr style={{ borderBottom: "1px solid var(--color-border)", color: "var(--color-text-secondary)", textAlign: "left", position: "sticky", top: 0, background: "var(--color-card)" }}>
-                      <th style={{ padding: "8px 12px 12px" }}>Date</th>
-                      <th style={{ padding: "8px 12px 12px", textAlign: "right" }}>Google</th>
-                      <th style={{ padding: "8px 12px 12px", textAlign: "right", color: "var(--color-text-tertiary)", fontWeight: 500 }}>304</th>
-                      <th style={{ padding: "8px 12px 12px", textAlign: "right" }}>Yandex</th>
-                      <th style={{ padding: "8px 12px 12px", textAlign: "right", color: "var(--color-text-tertiary)", fontWeight: 500 }}>304</th>
-                      <th style={{ padding: "8px 12px 12px", textAlign: "right" }}>Bing</th>
-                      <th style={{ padding: "8px 12px 12px", textAlign: "right" }}>Mail.ru</th>
-                      <th style={{ padding: "8px 12px 12px", textAlign: "right" }}>Other</th>
-                      <th style={{ padding: "8px 12px 12px", textAlign: "right" }}>Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data?.daily.map((row, i) => (
-                      <tr key={i} style={{ borderBottom: "1px solid var(--color-border-soft)", height: "36px" }}>
-                        <td style={{ padding: "8px 12px", color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>
-                          {row.date}
-                        </td>
-                        <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--color-accent-blue)", fontWeight: 600 }}>
-                          {formatNumber(row.google)}
-                        </td>
-                        <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--color-text-tertiary)" }}>
-                          {formatNumber(row.google304)}
-                        </td>
-                        <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--color-accent-red)", fontWeight: 600 }}>
-                          {formatNumber(row.yandex)}
-                        </td>
-                        <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--color-text-tertiary)" }}>
-                          {formatNumber(row.yandex304)}
-                        </td>
-                        <td style={{ padding: "8px 12px", textAlign: "right" }}>
-                          {formatNumber(row.bing)}
-                        </td>
-                        <td style={{ padding: "8px 12px", textAlign: "right" }}>
-                          {formatNumber(row.mailru || 0)}
-                        </td>
-                        <td style={{ padding: "8px 12px", textAlign: "right" }}>
-                          {formatNumber(row.other)}
-                        </td>
-                        <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 600, color: "var(--color-text-primary)" }}>
-                          {formatNumber(row.total)}
-                        </td>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+                  <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0 }}>
+                    Daily Breakdown — Last 30 Days
+                  </h3>
+                  <button
+                    onClick={exportDailyToCSV}
+                    style={{
+                      padding: "4px 8px",
+                      borderRadius: "6px",
+                      border: "1px solid var(--color-border)",
+                      background: "transparent",
+                      color: "var(--color-text-secondary)",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      transition: "all 0.15s"
+                    }}
+                    onMouseOver={e => { e.currentTarget.style.borderColor = "var(--color-accent-blue)"; e.currentTarget.style.color = "var(--color-text-primary)"; }}
+                    onMouseOut={e => { e.currentTarget.style.borderColor = "var(--color-border)"; e.currentTarget.style.color = "var(--color-text-secondary)"; }}
+                  >
+                    <Download size={11} />
+                    Export CSV
+                  </button>
+                </div>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                    <thead>
+                      <tr style={{ borderBottom: "1px solid var(--color-border)", color: "var(--color-text-secondary)", textAlign: "left" }}>
+                        <th style={{ padding: "8px 12px 12px" }}>Date</th>
+                        <th style={{ padding: "8px 12px 12px", textAlign: "right" }}>Google</th>
+                        <th style={{ padding: "8px 12px 12px", textAlign: "right", color: "var(--color-text-tertiary)", fontWeight: 500 }}>304</th>
+                        <th style={{ padding: "8px 12px 12px", textAlign: "right" }}>Yandex</th>
+                        <th style={{ padding: "8px 12px 12px", textAlign: "right", color: "var(--color-text-tertiary)", fontWeight: 500 }}>304</th>
+                        <th style={{ padding: "8px 12px 12px", textAlign: "right" }}>Bing</th>
+                        <th style={{ padding: "8px 12px 12px", textAlign: "right" }}>Mail.ru</th>
+                        <th style={{ padding: "8px 12px 12px", textAlign: "right" }}>Other</th>
+                        <th style={{ padding: "8px 12px 12px", textAlign: "right" }}>Total</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {data?.daily.slice((dailyPage - 1) * ITEMS_PER_PAGE, dailyPage * ITEMS_PER_PAGE).map((row, i) => (
+                        <tr key={i} style={{ borderBottom: "1px solid var(--color-border-soft)", height: "36px" }}>
+                          <td style={{ padding: "8px 12px", color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>
+                            {row.date}
+                          </td>
+                          <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--color-accent-blue)", fontWeight: 600 }}>
+                            {formatNumber(row.google)}
+                          </td>
+                          <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--color-text-tertiary)" }}>
+                            {formatNumber(row.google304)}
+                          </td>
+                          <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--color-accent-red)", fontWeight: 600 }}>
+                            {formatNumber(row.yandex)}
+                          </td>
+                          <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--color-text-tertiary)" }}>
+                            {formatNumber(row.yandex304)}
+                          </td>
+                          <td style={{ padding: "8px 12px", textAlign: "right" }}>
+                            {formatNumber(row.bing)}
+                          </td>
+                          <td style={{ padding: "8px 12px", textAlign: "right" }}>
+                            {formatNumber(row.mailru || 0)}
+                          </td>
+                          <td style={{ padding: "8px 12px", textAlign: "right" }}>
+                            {formatNumber(row.other)}
+                          </td>
+                          <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 600, color: "var(--color-text-primary)" }}>
+                            {formatNumber(row.total)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
+
+              {/* Daily Breakdown Pagination */}
+              {(data?.daily.length ?? 0) > ITEMS_PER_PAGE && (
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginTop: "16px",
+                  paddingTop: "12px",
+                  borderTop: "1px solid var(--color-border)",
+                  fontSize: "12px",
+                  color: "var(--color-text-secondary)"
+                }}>
+                  <span>
+                    Showing {((dailyPage - 1) * ITEMS_PER_PAGE) + 1}-{Math.min(dailyPage * ITEMS_PER_PAGE, data?.daily.length || 0)} of {data?.daily.length} days
+                  </span>
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    <button
+                      onClick={() => setDailyPage(p => Math.max(1, p - 1))}
+                      disabled={dailyPage <= 1}
+                      style={{
+                        padding: "3px 8px",
+                        borderRadius: "6px",
+                        border: "1px solid var(--color-border)",
+                        background: "var(--color-bg)",
+                        color: "var(--color-text-primary)",
+                        fontSize: "11px",
+                        cursor: dailyPage <= 1 ? "not-allowed" : "pointer",
+                        opacity: dailyPage <= 1 ? 0.5 : 1
+                      }}
+                    >
+                      ← Prev
+                    </button>
+                    <button
+                      onClick={() => setDailyPage(p => Math.min(Math.ceil((data?.daily.length || 0) / ITEMS_PER_PAGE), p + 1))}
+                      disabled={dailyPage >= Math.ceil((data?.daily.length || 0) / ITEMS_PER_PAGE)}
+                      style={{
+                        padding: "3px 8px",
+                        borderRadius: "6px",
+                        border: "1px solid var(--color-border)",
+                        background: "var(--color-bg)",
+                        color: "var(--color-text-primary)",
+                        fontSize: "11px",
+                        cursor: dailyPage >= Math.ceil((data?.daily.length || 0) / ITEMS_PER_PAGE) ? "not-allowed" : "pointer",
+                        opacity: dailyPage >= Math.ceil((data?.daily.length || 0) / ITEMS_PER_PAGE) ? 0.5 : 1
+                      }}
+                    >
+                      Next →
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </>
