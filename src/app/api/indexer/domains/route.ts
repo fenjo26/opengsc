@@ -43,7 +43,7 @@ export async function POST(req: Request) {
         domain: domain.trim().toLowerCase(),
         template: template || "ecommerce",
         moneyUrl: moneyUrl || null,
-        allowedBots: allowedBots || "google,bing,yandex",
+        allowedBots: allowedBots || "google,bing,yandex,mailru,ai",
         apiKey,
         pagesCount: 0,
         subdomainsCount: 0,

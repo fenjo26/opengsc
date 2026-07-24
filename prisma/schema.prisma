@@ -466,7 +466,7 @@ model IndexerDomain {
   apiKey          String         @default(cuid())
   template        String         @default("ecommerce")
   moneyUrl        String?
-  allowedBots     String         @default("google,bing,yandex")
+  allowedBots     String         @default("google,bing,yandex,mailru,ai")
   pagesCount      Int            @default(0)
   subdomainsCount Int            @default(0)
   

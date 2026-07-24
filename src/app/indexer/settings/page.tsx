@@ -54,6 +54,20 @@ export default function IndexerSettingsPage() {
 
   const selectedDomain = domains.find(d => d.id === selectedDomainId);
 
+  // Effective ALLOWED_BOTS emitted into the doorway script. Tokens: google,bing,yandex,mailru,ai,ai-training.
+  // The script enforces this list. Legacy domains (saved before AI existed, so no ai/ai-training token)
+  // are upgraded on the fly to keep serving search + AI answer bots, matching current behaviour.
+  const effectiveAllowedBots = (() => {
+    const raw = (selectedDomain?.allowedBots || "google,bing,yandex,mailru,ai").toLowerCase();
+    let tokens = raw.split(",").map(s => s.trim()).filter(Boolean);
+    // "cfg" marker = record saved with the new checkboxes (explicit config, respect exactly).
+    // No marker = legacy record from before AI existed -> upgrade to keep serving search + AI answer.
+    const explicit = tokens.includes("cfg");
+    tokens = tokens.filter(t => t !== "cfg");
+    if (!explicit) { const set = new Set(tokens); set.add("mailru"); set.add("ai"); tokens = Array.from(set); }
+    return tokens.join(",");
+  })();
+
   // Generate PHP Script Content Dynamically (Standard Redirect)
   const phpScriptContent = `<?php
 // ─── OpenGSC Private Indexer Doorway Script ───
@@ -63,12 +77,10 @@ export default function IndexerSettingsPage() {
 define('API_URL', '${publicUrl.replace(/\/$/, "")}/api/indexer/webhook');
 define('API_KEY', '${selectedDomain?.apiKey || "YOUR_DOMAIN_API_KEY_HERE"}');
 define('REDIRECT_TARGET', '${selectedDomain?.moneyUrl || "https://your-money-site.com"}');
-define('ALLOWED_BOTS', '${selectedDomain?.allowedBots || "google,bing,yandex,mailru,ai"}');
-define('STRICT_VERIFICATION', true); // Verify bots via Reverse & Forward DNS lookup to filter out fake User-Agents
-// GEO / AI search: "answer" bots fetch pages live and CITE them in AI answers -> real traffic.
-// "training" bots only ingest content to train future models -> no direct traffic, brand only.
-// Off by default: training-only crawlers get a 403 (no doorway, no money-site leak).
-define('SERVE_AI_TRAINING', false);
+// Tokens enforced below: google,bing,yandex,mailru,ai (AI answer/GEO), ai-training.
+// Uncheck a crawler in the panel -> its token drops here -> that bot stops being served.
+define('ALLOWED_BOTS', '${effectiveAllowedBots}');
+define('STRICT_VERIFICATION', true); // Verify search bots via Reverse & Forward DNS lookup
 
 // ─── BOT DETECTION LOGIC ───
 function get_client_ip() {
@@ -111,26 +123,40 @@ if (strpos($ua_lower, 'googlebot') !== false || strpos($ua_lower, 'google-inspec
     $is_bot = true;
     $detected_bot_type = 'mailru';
 } elseif (ua_matches_any($ua_lower, $ai_answer_bots)) {
-    // AI answer/search crawler — always served (this is the GEO traffic source)
+    // AI answer/search crawler (GEO traffic source)
     $is_bot = true;
     $detected_bot_type = 'ai';
+    $ai_kind = 'answer';
 } elseif (ua_matches_any($ua_lower, $ai_training_bots)) {
-    // AI training crawler — served only if SERVE_AI_TRAINING is on, else blocked with 403
+    // AI training crawler
+    $is_bot = true;
     $detected_bot_type = 'ai';
-    if (SERVE_AI_TRAINING) { $is_bot = true; } else { $block_ai_training = true; }
+    $ai_kind = 'training';
 } elseif (strpos($ua_lower, 'bot') !== false || strpos($ua_lower, 'crawler') !== false || strpos($ua_lower, 'spider') !== false) {
     $is_bot = true;
     $detected_bot_type = 'other';
 }
 
-// Block AI training crawlers when disabled: no doorway, no redirect to the money site
-if (!empty($block_ai_training)) {
+// ─── ENFORCE ALLOWED_BOTS (panel checkboxes) ───
+$allowed = array_map('trim', explode(',', strtolower(ALLOWED_BOTS)));
+
+// Search engines: served only if their token is enabled, else treated as a normal visitor
+if (in_array($detected_bot_type, array('google', 'bing', 'yandex', 'mailru')) && !in_array($detected_bot_type, $allowed)) {
+    $is_bot = false;
+    $detected_bot_type = '';
+}
+// AI answer bots: served only if 'ai' is enabled
+if (!empty($ai_kind) && $ai_kind === 'answer' && !in_array('ai', $allowed)) {
+    $is_bot = false;
+}
+// AI training bots: served only if 'ai-training' is enabled, else 403 (no doorway, no money redirect)
+if (!empty($ai_kind) && $ai_kind === 'training' && !in_array('ai-training', $allowed)) {
     send_log_ping(false, 403);
     header("HTTP/1.1 403 Forbidden");
     exit;
 }
 
-// Perform double DNS lookup (rDNS + Forward IP match) to verify search engines
+// Double DNS lookup (rDNS + Forward IP match) to verify real search engines
 if ($is_bot && STRICT_VERIFICATION && in_array($detected_bot_type, array('google', 'yandex', 'bing', 'mailru'))) {
     $is_bot = verify_bot_dns($ip, $detected_bot_type);
 }
@@ -200,19 +226,19 @@ function verify_bot_dns($ip, $bot_type) {
     // Step 2: Check domain patterns
     $is_valid_domain = false;
     if ($bot_type === 'google') {
-        if (preg_match('/\.googlebot\.com$/i', $hostname) || preg_match('/\.google\.com$/i', $hostname) || preg_match('/\.googleusercontent\.com$/i', $hostname)) {
+        if (preg_match('/\\.googlebot\\.com$/i', $hostname) || preg_match('/\\.google\\.com$/i', $hostname) || preg_match('/\\.googleusercontent\\.com$/i', $hostname)) {
             $is_valid_domain = true;
         }
     } elseif ($bot_type === 'yandex') {
-        if (preg_match('/\.yandex\.(ru|net|com)$/i', $hostname)) {
+        if (preg_match('/\\.yandex\\.(ru|net|com)$/i', $hostname)) {
             $is_valid_domain = true;
         }
     } elseif ($bot_type === 'bing') {
-        if (preg_match('/\.search\.msn\.com$/i', $hostname)) {
+        if (preg_match('/\\.search\\.msn\\.com$/i', $hostname)) {
             $is_valid_domain = true;
         }
     } elseif ($bot_type === 'mailru') {
-        if (preg_match('/\.mail\.ru$/i', $hostname)) {
+        if (preg_match('/\\.mail\\.ru$/i', $hostname)) {
             $is_valid_domain = true;
         }
     }
@@ -263,9 +289,9 @@ function send_log_ping($is_redirect, $status_code = 200) {
 define('API_URL', '${publicUrl.replace(/\/$/, "")}/api/indexer/webhook');
 define('API_KEY', '${selectedDomain?.apiKey || "YOUR_DOMAIN_API_KEY_HERE"}');
 define('REDIRECT_TARGET', '${selectedDomain?.moneyUrl || "https://your-money-site.com"}'); // money site linked to bots
-define('ALLOWED_BOTS', '${selectedDomain?.allowedBots || "google,bing,yandex,mailru,ai"}');
+// Tokens enforced below: google,bing,yandex,mailru,ai (AI answer/GEO), ai-training.
+define('ALLOWED_BOTS', '${effectiveAllowedBots}');
 define('STRICT_VERIFICATION', true);
-define('SERVE_AI_TRAINING', false); // false = block AI training-only crawlers (GPTBot, CCBot…) with 403
 
 // ─── BOT DETECTION LOGIC ───
 $user_agent = isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '';
@@ -301,16 +327,26 @@ if (strpos($ua_lower, 'googlebot') !== false || strpos($ua_lower, 'google-co') !
 } elseif (ua_matches_any($ua_lower, $ai_answer_bots)) {
     $is_bot = true;
     $detected_bot_type = 'ai';
+    $ai_kind = 'answer';
 } elseif (ua_matches_any($ua_lower, $ai_training_bots)) {
+    $is_bot = true;
     $detected_bot_type = 'ai';
-    if (SERVE_AI_TRAINING) { $is_bot = true; } else { $block_ai_training = true; }
+    $ai_kind = 'training';
 } elseif (strpos($ua_lower, 'bot') !== false || strpos($ua_lower, 'crawler') !== false || strpos($ua_lower, 'spider') !== false) {
     $is_bot = true;
     $detected_bot_type = 'other';
 }
 
-// Block AI training crawlers when disabled
-if (!empty($block_ai_training)) {
+// ─── ENFORCE ALLOWED_BOTS (panel checkboxes) ───
+$allowed = array_map('trim', explode(',', strtolower(ALLOWED_BOTS)));
+if (in_array($detected_bot_type, array('google', 'bing', 'yandex', 'mailru')) && !in_array($detected_bot_type, $allowed)) {
+    $is_bot = false;
+    $detected_bot_type = '';
+}
+if (!empty($ai_kind) && $ai_kind === 'answer' && !in_array('ai', $allowed)) {
+    $is_bot = false;
+}
+if (!empty($ai_kind) && $ai_kind === 'training' && !in_array('ai-training', $allowed)) {
     send_log_ping(false, 403);
     header("HTTP/1.1 403 Forbidden");
     exit;
@@ -378,13 +414,13 @@ function verify_bot_dns($ip, $bot_type) {
     
     $is_valid_domain = false;
     if ($bot_type === 'google') {
-        if (preg_match('/\.googlebot\.com$/i', $hostname) || preg_match('/\.google\.com$/i', $hostname)) $is_valid_domain = true;
+        if (preg_match('/\\.googlebot\\.com$/i', $hostname) || preg_match('/\\.google\\.com$/i', $hostname)) $is_valid_domain = true;
     } elseif ($bot_type === 'yandex') {
-        if (preg_match('/\.yandex\.(ru|net|com)$/i', $hostname)) $is_valid_domain = true;
+        if (preg_match('/\\.yandex\\.(ru|net|com)$/i', $hostname)) $is_valid_domain = true;
     } elseif ($bot_type === 'bing') {
-        if (preg_match('/\.search\.msn\.com$/i', $hostname)) $is_valid_domain = true;
+        if (preg_match('/\\.search\\.msn\\.com$/i', $hostname)) $is_valid_domain = true;
     } elseif ($bot_type === 'mailru') {
-        if (preg_match('/\.mail\.ru$/i', $hostname)) $is_valid_domain = true;
+        if (preg_match('/\\.mail\\.ru$/i', $hostname)) $is_valid_domain = true;
     }
     
     if (!$is_valid_domain) return false;
@@ -425,9 +461,8 @@ import dns from "dns/promises";
 const API_URL = "${publicUrl.replace(/\/$/, "")}/api/indexer/webhook";
 const API_KEY = "${selectedDomain?.apiKey || "YOUR_DOMAIN_API_KEY_HERE"}";
 const REDIRECT_TARGET = "${selectedDomain?.moneyUrl || "https://your-money-site.com"}";
-const ALLOWED_BOTS = "${selectedDomain?.allowedBots || "google,bing,yandex,mailru,ai"}";
+const ALLOWED_BOTS = "${effectiveAllowedBots}"; // tokens: google,bing,yandex,mailru,ai,ai-training
 const STRICT_VERIFICATION = true;
-const SERVE_AI_TRAINING = false; // false = block AI training-only crawlers (GPTBot, CCBot…) with 403
 // AI / GEO crawlers: "answer" bots cite live pages (traffic), "training" bots only ingest content.
 const AI_ANSWER_BOTS = ["oai-searchbot", "chatgpt-user", "perplexitybot", "perplexity-user", "claudebot", "claude-user", "duckassistbot", "google-extended"];
 const AI_TRAINING_BOTS = ["gptbot", "ccbot", "anthropic-ai", "bytespider", "meta-externalagent", "meta-externalfetcher", "applebot-extended", "cohere-ai", "cohere-training", "amazonbot", "diffbot", "imagesift", "omgili", "timpibot", "youbot"];
@@ -440,13 +475,13 @@ async function verifyBotDns(ip: string, botType: string): Promise<boolean> {
 
     let isValidDomain = false;
     if (botType === 'google') {
-      if (/\.googlebot\.com$/i.test(hostname) || /\.google\.com$/i.test(hostname)) isValidDomain = true;
+      if (/\\.googlebot\\.com$/i.test(hostname) || /\\.google\\.com$/i.test(hostname)) isValidDomain = true;
     } else if (botType === 'yandex') {
-      if (/\.yandex\.(ru|net|com)$/i.test(hostname)) isValidDomain = true;
+      if (/\\.yandex\\.(ru|net|com)$/i.test(hostname)) isValidDomain = true;
     } else if (botType === 'bing') {
-      if (/\.search\.msn\.com$/i.test(hostname)) isValidDomain = true;
+      if (/\\.search\\.msn\\.com$/i.test(hostname)) isValidDomain = true;
     } else if (botType === 'mailru') {
-      if (/\.mail\.ru$/i.test(hostname)) isValidDomain = true;
+      if (/\\.mail\\.ru$/i.test(hostname)) isValidDomain = true;
     }
 
     if (!isValidDomain) return false;
@@ -480,6 +515,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   let isBot = false;
   let detectedBotType = "";
+  let aiKind = "";
   const uaLower = userAgent.toLowerCase();
 
   if (uaLower.includes("googlebot") || uaLower.includes("google-co")) {
@@ -497,18 +533,29 @@ export const onRequest = defineMiddleware(async (context, next) => {
   } else if (AI_ANSWER_BOTS.some(b => uaLower.includes(b))) {
     isBot = true;
     detectedBotType = "ai";
+    aiKind = "answer";
   } else if (AI_TRAINING_BOTS.some(b => uaLower.includes(b))) {
+    isBot = true;
     detectedBotType = "ai";
-    if (SERVE_AI_TRAINING) {
-      isBot = true;
-    } else {
-      // Block AI training crawlers: no doorway, no money-site redirect
-      await sendLogPing({ apiKey: API_KEY, url: context.request.url, ip, userAgent, statusCode: 403, referer, isRedirect: false });
-      return new Response("Forbidden", { status: 403 });
-    }
+    aiKind = "training";
   } else if (uaLower.includes("bot") || uaLower.includes("crawler") || uaLower.includes("spider")) {
     isBot = true;
     detectedBotType = "other";
+  }
+
+  // ─── ENFORCE ALLOWED_BOTS (panel checkboxes) ───
+  const allowed = ALLOWED_BOTS.toLowerCase().split(",").map(s => s.trim());
+  if (["google", "bing", "yandex", "mailru"].includes(detectedBotType) && !allowed.includes(detectedBotType)) {
+    isBot = false;
+    detectedBotType = "";
+  }
+  if (aiKind === "answer" && !allowed.includes("ai")) {
+    isBot = false;
+  }
+  if (aiKind === "training" && !allowed.includes("ai-training")) {
+    // Block AI training crawlers: no doorway, no money-site redirect
+    await sendLogPing({ apiKey: API_KEY, url: context.request.url, ip, userAgent, statusCode: 403, referer, isRedirect: false });
+    return new Response("Forbidden", { status: 403 });
   }
 
   if (isBot && STRICT_VERIFICATION && ["google", "yandex", "bing", "mailru"].includes(detectedBotType)) {

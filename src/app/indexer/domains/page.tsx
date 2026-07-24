@@ -26,7 +26,7 @@ export default function IndexerDomainsPage() {
   const [newDomain, setNewDomain] = useState("");
   const [moneyUrl, setMoneyUrl] = useState("");
   const [template, setTemplate] = useState("ecommerce");
-  const [allowedBots, setAllowedBots] = useState({ google: true, bing: true, yandex: true });
+  const [allowedBots, setAllowedBots] = useState({ google: true, bing: true, yandex: true, mailru: true, ai: true, aiTraining: false });
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -64,11 +64,16 @@ export default function IndexerDomainsPage() {
     setSubmitting(true);
     setErrorMsg(null);
 
-    // Format allowed bots string
-    const botsArray = [];
+    // Format allowed bots string (tokens the doorway script enforces).
+    // "cfg" marks a record configured with the new checkboxes, so the script generator
+    // treats an absent "ai" token as an intentional OFF rather than a legacy default.
+    const botsArray = ["cfg"];
     if (allowedBots.google) botsArray.push("google");
     if (allowedBots.bing) botsArray.push("bing");
     if (allowedBots.yandex) botsArray.push("yandex");
+    if (allowedBots.mailru) botsArray.push("mailru");
+    if (allowedBots.ai) botsArray.push("ai");
+    if (allowedBots.aiTraining) botsArray.push("ai-training");
 
     try {
       const res = await fetch("/api/indexer/domains", {
@@ -256,23 +261,29 @@ export default function IndexerDomainsPage() {
             <label style={{ fontSize: "12px", color: "var(--color-text-secondary)", fontWeight: 600 }}>
               Allowed Crawlers
             </label>
-            <div style={{ display: "flex", gap: "16px", marginTop: "4px" }}>
+            <div style={{ display: "flex", gap: "14px 16px", marginTop: "4px", flexWrap: "wrap" }}>
               {[
-                { key: "google", label: "Googlebot" },
-                { key: "bing", label: "Bingbot" },
-                { key: "yandex", label: "YandexBot" },
+                { key: "google", label: "Googlebot", accent: "var(--color-accent-blue)" },
+                { key: "bing", label: "Bingbot", accent: "var(--color-accent-blue)" },
+                { key: "yandex", label: "YandexBot", accent: "var(--color-accent-blue)" },
+                { key: "mailru", label: "Mail.ru", accent: "var(--color-accent-blue)" },
+                { key: "ai", label: "AI Answer (GEO)", accent: "var(--color-accent-purple)" },
+                { key: "aiTraining", label: "AI Training", accent: "var(--color-accent-purple)" },
               ].map(bot => (
-                <label key={bot.key} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "var(--color-text-primary)", cursor: "pointer" }}>
+                <label key={bot.key} title={bot.key === "ai" ? "Serve doorway to AI answer/search crawlers (ChatGPT, Perplexity, Claude…) — drives GEO traffic" : bot.key === "aiTraining" ? "Feed AI training-only crawlers (GPTBot, CCBot…). Off = they get 403." : undefined} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "var(--color-text-primary)", cursor: "pointer" }}>
                   <input
                     type="checkbox"
                     checked={allowedBots[bot.key as keyof typeof allowedBots]}
                     onChange={e => setAllowedBots(prev => ({ ...prev, [bot.key]: e.target.checked }))}
-                    style={{ accentColor: "var(--color-accent-blue)" }}
+                    style={{ accentColor: bot.accent }}
                   />
                   {bot.label}
                 </label>
               ))}
             </div>
+            <span style={{ fontSize: "11px", color: "var(--color-text-tertiary)", marginTop: "2px" }}>
+              AI Answer = трафик из ИИ-поиска (рекомендую). AI Training по умолчанию выкл — тренировочные боты получают 403.
+            </span>
           </div>
 
           <button
