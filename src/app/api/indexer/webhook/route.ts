@@ -1,12 +1,21 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-// Helper to determine bot type from user agent
+// Valid bot types the doorway may report directly (kept in sync with the doorway script).
+const VALID_BOT_TYPES = ["google", "bing", "yandex", "mailru", "ai", "other"];
+
+// Helper to determine bot type from user agent.
+// IMPORTANT: this list must stay in sync with the doorway script's detection (indexer/settings),
+// otherwise crawls served by the doorway get mislabeled here (e.g. Google-InspectionTool → "redirect").
 function getBotType(ua: string): string {
   const l = ua.toLowerCase();
-  if (l.includes("googlebot") || l.includes("google-co")) return "google";
-  if (l.includes("bingbot") || l.includes("bingpreview")) return "bing";
-  if (l.includes("yandexbot") || l.includes("yandexmobilebot")) return "yandex";
+  // Google crawler family (all variants the doorway treats as Google)
+  if (
+    l.includes("googlebot") || l.includes("google-inspectiontool") || l.includes("googleother") ||
+    l.includes("storebot-google") || l.includes("google-site-verification") || l.includes("google-co")
+  ) return "google";
+  if (l.includes("bingbot") || l.includes("bingpreview") || l.includes("msnbot")) return "bing";
+  if (l.includes("yandex")) return "yandex";
   if (l.includes("mail.ru") || l.includes("mailru")) return "mailru";
   // AI crawlers & LLM training/answer bots — checked before the generic "bot" catch-all
   // since many of these contain the substring "bot" (ClaudeBot, GPTBot, Applebot-Extended…).
@@ -44,7 +53,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Domain not found" }, { status: 404 });
     }
 
-    const botType = isRedirect ? "redirect" : getBotType(userAgent || "");
+    // Prefer the bot type the doorway already computed (newer scripts send it); else parse the UA.
+    const reported = typeof body.botType === "string" ? body.botType.toLowerCase() : "";
+    const botType = isRedirect
+      ? "redirect"
+      : (VALID_BOT_TYPES.includes(reported) ? reported : getBotType(userAgent || ""));
 
     // Create log entry
     await prisma.indexerLog.create({

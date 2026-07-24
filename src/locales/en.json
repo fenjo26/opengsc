@@ -746,7 +746,7 @@
   "indexerNavTitle": "Indexer",
   "indexerSubtitle": "Subdomain bot farm, crawler statistics, queue, and content sandbox",
   "indexerTabStats": "Statistics",
-  "indexerTabLogs": "Google Logs",
+  "indexerTabLogs": "Logs",
   "indexerTabQueue": "Queue",
   "indexerTabDomains": "Domains",
   "indexerTabLinks": "Links",
