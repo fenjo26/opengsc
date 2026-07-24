@@ -299,9 +299,25 @@ export default function IndexerLogsPage() {
                         {log.ip}
                       </td>
                       <td style={{ padding: "0 16px" }}>
-                        <span style={{ fontSize: "11px", fontWeight: 700, color: bot.color }}>
-                          {bot.label}
-                        </span>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                          <span style={{ fontSize: "11px", fontWeight: 700, color: bot.color }}>
+                            {bot.label}
+                          </span>
+                          <span
+                            title={log.userAgent}
+                            style={{
+                              fontSize: "10px",
+                              color: "var(--color-text-tertiary)",
+                              maxWidth: "220px",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              fontFamily: "monospace"
+                            }}
+                          >
+                            {log.userAgent || "Unknown UA"}
+                          </span>
+                        </div>
                       </td>
                       <td style={{ padding: "0 16px" }}>
                         <span style={{
