@@ -33,6 +33,10 @@ export default function IndexerLogsPage() {
   const [liveMode, setLiveMode] = useState(false);
   const [loading, setLoading] = useState(true);
   const [fetchingMore, setFetchingMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -52,14 +56,21 @@ export default function IndexerLogsPage() {
     if (showLoading) setLoading(true);
     else setFetchingMore(true);
     try {
-      let url = "/api/indexer/logs?limit=50";
+      let url = `/api/indexer/logs?page=${page}&limit=${limit}`;
       if (domainId) url += `&domainId=${domainId}`;
       if (botType) url += `&botType=${botType}`;
 
       const res = await fetch(url);
       if (res.ok) {
-        const d = await res.json();
-        setLogs(d);
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setLogs(data);
+          setTotalCount(data.length);
+        } else {
+          setLogs(data.logs || []);
+          setTotalPages(data.totalPages || 1);
+          setTotalCount(data.total || 0);
+        }
       }
     } catch (e) {
       console.error(e);
@@ -74,8 +85,12 @@ export default function IndexerLogsPage() {
   }, []);
 
   useEffect(() => {
-    fetchLogs(true);
+    setPage(1);
   }, [domainId, botType]);
+
+  useEffect(() => {
+    fetchLogs(true);
+  }, [domainId, botType, page, limit]);
 
   // Live Mode polling
   useEffect(() => {
@@ -336,6 +351,77 @@ export default function IndexerLogsPage() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Pagination Bar */}
+        {totalCount > 0 && (
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "12px 16px",
+            borderTop: "1px solid var(--color-border)",
+            fontSize: "12px",
+            color: "var(--color-text-secondary)"
+          }}>
+            <div>
+              Total <strong>{totalCount}</strong> logs · Page <strong>{page}</strong> of <strong>{totalPages}</strong>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <select
+                value={limit}
+                onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}
+                style={{
+                  background: "var(--color-bg)",
+                  border: "1px solid var(--color-border)",
+                  borderRadius: "6px",
+                  padding: "4px 8px",
+                  fontSize: "12px",
+                  color: "var(--color-text-primary)",
+                  outline: "none"
+                }}
+              >
+                <option value={25}>25 per page</option>
+                <option value={50}>50 per page</option>
+                <option value={100}>100 per page</option>
+              </select>
+
+              <div style={{ display: "flex", gap: "6px" }}>
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid var(--color-border)",
+                    background: "var(--color-bg)",
+                    color: "var(--color-text-primary)",
+                    fontSize: "12px",
+                    cursor: page <= 1 ? "not-allowed" : "pointer",
+                    opacity: page <= 1 ? 0.5 : 1
+                  }}
+                >
+                  ← Prev
+                </button>
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid var(--color-border)",
+                    background: "var(--color-bg)",
+                    color: "var(--color-text-primary)",
+                    fontSize: "12px",
+                    cursor: page >= totalPages ? "not-allowed" : "pointer",
+                    opacity: page >= totalPages ? 0.5 : 1
+                  }}
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

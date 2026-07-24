@@ -67,8 +67,17 @@ define('ALLOWED_BOTS', '${selectedDomain?.allowedBots || "google,bing,yandex,mai
 define('STRICT_VERIFICATION', true); // Verify bots via Reverse & Forward DNS lookup to filter out fake User-Agents
 
 // ─── BOT DETECTION LOGIC ───
+function get_client_ip() {
+    if (!empty($_SERVER['HTTP_CF_CONNECTING_IP'])) return trim($_SERVER['HTTP_CF_CONNECTING_IP']);
+    if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+        $ips = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
+        return trim($ips[0]);
+    }
+    return isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '0.0.0.0';
+}
+
 $user_agent = isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '';
-$ip = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '0.0.0.0';
+$ip = get_client_ip();
 $uri = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '/';
 $host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : '';
 $referer = isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : '';
@@ -77,10 +86,10 @@ $is_bot = false;
 $detected_bot_type = '';
 $ua_lower = strtolower($user_agent);
 
-if (strpos($ua_lower, 'googlebot') !== false || strpos($ua_lower, 'google-co') !== false) {
+if (strpos($ua_lower, 'googlebot') !== false || strpos($ua_lower, 'google-inspectiontool') !== false || strpos($ua_lower, 'googleother') !== false || strpos($ua_lower, 'google-co') !== false || strpos($ua_lower, 'storebot-google') !== false || strpos($ua_lower, 'google-site-verification') !== false) {
     $is_bot = true;
     $detected_bot_type = 'google';
-} elseif (strpos($ua_lower, 'bingbot') !== false || strpos($ua_lower, 'bingpreview') !== false) {
+} elseif (strpos($ua_lower, 'bingbot') !== false || strpos($ua_lower, 'bingpreview') !== false || strpos($ua_lower, 'msnbot') !== false) {
     $is_bot = true;
     $detected_bot_type = 'bing';
 } elseif (strpos($ua_lower, 'yandex') !== false) {
@@ -151,7 +160,7 @@ function verify_bot_dns($ip, $bot_type) {
     // Step 2: Check domain patterns
     $is_valid_domain = false;
     if ($bot_type === 'google') {
-        if (preg_match('/\.googlebot\.com$/i', $hostname) || preg_match('/\.google\.com$/i', $hostname)) {
+        if (preg_match('/\.googlebot\.com$/i', $hostname) || preg_match('/\.google\.com$/i', $hostname) || preg_match('/\.googleusercontent\.com$/i', $hostname)) {
             $is_valid_domain = true;
         }
     } elseif ($bot_type === 'yandex') {
